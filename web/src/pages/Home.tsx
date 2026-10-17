@@ -82,7 +82,7 @@ export function Home() {
       <div className="grid3">
         <Feature to="/lodestar" title="Lodestar" kicker="Fee router">
           Takes over your token's Ascend creator role. The dev keeps the dev buy. Creator fees split by your
-          percentages into buyback and burn, holder rewards and Team Treasury, with a 72 hour timelock on changes.
+          percentages into buyback and burn, holder rewards and Team Treasury, with a 12 hour timelock on changes.
         </Feature>
         <Feature to="/exile" title="Exile" kicker="Locks + rewards">
           Lock ERC-20s, v2 LP, ERC-721s and ERC-1155s. Locks can be extended, never shortened or cancelled. Longer

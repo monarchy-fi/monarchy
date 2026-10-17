@@ -83,7 +83,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
 
     uint64 public constant BUCKET = 1 hours;
     uint64 public constant DRIP = 7 days;
-    uint64 public constant TIMELOCK = 72 hours;
+    uint64 public constant TIMELOCK = 12 hours;
     uint256 public constant MAX_BUCKETS_PER_CALL = 720;
     uint256 public constant MAX_TIERS = 8;
     uint256 internal constant BPS = 10_000;
