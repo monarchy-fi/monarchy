@@ -88,7 +88,7 @@ export function Home() {
         </ul>
       </section>
 
-      <FeeFlow drip={drip} burn={cfg?.burnBps} holders={cfg?.holdersBps} treasury={cfg?.treasuryBps} />
+      <FeeFlow drip={drip} burn={cfg?.burnBps} holders={cfg?.holdersBps} treasury={cfg?.treasuryBps} tokenToHolders={cfg?.tokenToHolders} />
 
       {!d && <NoDeployment inline />}
 
@@ -152,10 +152,12 @@ export function Home() {
 }
 
 /** Ascend pool fees, through Lodestar, out to the four places they can go. */
-function FeeFlow({ drip, burn, holders, treasury }: { drip: number; burn?: number; holders?: number; treasury?: number }) {
+function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { drip: number; burn?: number; holders?: number; treasury?: number; tokenToHolders?: boolean }) {
   const share = (bps?: number) => (bps === undefined ? "Quote share" : `${pct(bps)} of quote fees`);
   const dests = [
-    { key: "fire", title: "Burned", tag: "All token-side fees", body: "Sent straight to the burn address." },
+    tokenToHolders
+      ? { key: "fire", title: "Exile lockers", tag: "All token-side fees", body: `Paid to locked holders in the token itself, over ${drip} days.` }
+      : { key: "fire", title: "Burned", tag: "All token-side fees", body: "Sent straight to the burn address, or, if the creator chooses, paid to Exile lockers." },
     { key: "burn", title: "Buyback and burn", tag: share(burn), body: "Buys the token on Ascend, then burns it." },
     { key: "hold", title: "Exile holders", tag: share(holders), body: `Paid to locked holders by tier, over ${drip} days.` },
     { key: "treas", title: "Sandfall treasury", tag: share(treasury), body: "Streamed to the Team Treasury in the open." },

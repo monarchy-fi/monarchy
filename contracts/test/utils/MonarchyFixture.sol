@@ -82,7 +82,8 @@ abstract contract MonarchyFixture is Test {
         p.token = address(token);
         p.quote = address(usdc);
         p.cfg = ILodestar.Config({
-            burnBps: burn, holdersBps: holders, treasuryBps: treas, swapper: swapper_, maxSlippageBps: 300
+            burnBps: burn, holdersBps: holders, treasuryBps: treas, swapper: swapper_, maxSlippageBps: 300,
+            tokenToHolders: false
         });
         p.treasuryRecipient = treasury;
         p.treasuryWindow = 30 days;

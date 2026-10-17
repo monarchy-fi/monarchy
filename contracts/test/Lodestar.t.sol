@@ -391,7 +391,7 @@ contract LodestarTest is MonarchyFixture {
     function test_noSwapperKeepsReserve() public {
         Lodestar l = _activateDefault(false);
         vm.prank(dev);
-        l.proposeConfig(ILodestar.Config(4_000, 4_000, 2_000, address(0), 300));
+        l.proposeConfig(ILodestar.Config(4_000, 4_000, 2_000, address(0), 300, false));
         vm.warp(block.timestamp + 12 hours);
         l.executeConfig();
         // factory default only applies at deploy; a later config may set no swapper
@@ -405,7 +405,7 @@ contract LodestarTest is MonarchyFixture {
 
     function test_configTimelock() public {
         Lodestar l = _activateDefault(false);
-        ILodestar.Config memory c = ILodestar.Config(2_000, 6_000, 2_000, address(mockSwapper), 500);
+        ILodestar.Config memory c = ILodestar.Config(2_000, 6_000, 2_000, address(mockSwapper), 500, false);
 
         vm.prank(trader);
         vm.expectRevert(Lodestar.OnlySteward.selector);
@@ -440,7 +440,7 @@ contract LodestarTest is MonarchyFixture {
     function test_readyConfigExpires() public {
         Lodestar l = _activateDefault(false);
         vm.prank(dev);
-        l.proposeConfig(ILodestar.Config(2_000, 6_000, 2_000, address(mockSwapper), 500));
+        l.proposeConfig(ILodestar.Config(2_000, 6_000, 2_000, address(mockSwapper), 500, false));
         (, uint64 eta) = l.pendingConfig();
         vm.warp(eta + 7 days + 1);
         vm.expectRevert(Lodestar.ProposalExpired.selector);
@@ -451,7 +451,7 @@ contract LodestarTest is MonarchyFixture {
     function test_cancelConfig() public {
         Lodestar l = _activateDefault(false);
         vm.prank(dev);
-        l.proposeConfig(ILodestar.Config(0, 10_000, 0, address(mockSwapper), 300));
+        l.proposeConfig(ILodestar.Config(0, 10_000, 0, address(mockSwapper), 300, false));
         vm.prank(dev);
         l.cancelConfig();
         vm.warp(block.timestamp + 73 hours);
@@ -464,11 +464,11 @@ contract LodestarTest is MonarchyFixture {
         Lodestar l = _activateDefault(false);
         vm.startPrank(dev);
         vm.expectRevert(Lodestar.InvalidConfig.selector);
-        l.proposeConfig(ILodestar.Config(5_000, 5_000, 1, address(mockSwapper), 300));
+        l.proposeConfig(ILodestar.Config(5_000, 5_000, 1, address(mockSwapper), 300, false));
         vm.expectRevert(Lodestar.InvalidConfig.selector);
-        l.proposeConfig(ILodestar.Config(5_000, 5_000, 0, address(mockSwapper), 2_001));
+        l.proposeConfig(ILodestar.Config(5_000, 5_000, 0, address(mockSwapper), 2_001, false));
         vm.expectRevert(Lodestar.InvalidConfig.selector);
-        l.proposeConfig(ILodestar.Config(5_000, 5_000, 0, address(mockSwapper), 99)); // would block every buyback
+        l.proposeConfig(ILodestar.Config(5_000, 5_000, 0, address(mockSwapper), 99, false)); // would block every buyback
         vm.stopPrank();
     }
 
@@ -830,5 +830,101 @@ contract LodestarTest is MonarchyFixture {
         vm.warp(block.timestamp + 12 hours);
         exile.executeTiers(pid); // anyone, once ready
         assertEq(exile.poolInfo(pid).tiers[3].multiplierBps, 40_000);
+    }
+
+    // ---------------------------------------------------------------- 15. token-side fees to Exile lockers
+
+    function _lockToken(Lodestar l, address who, uint256 amount, uint256 duration) internal returns (uint256 id) {
+        token.mint(who, amount);
+        vm.startPrank(who);
+        token.approve(address(exile), amount);
+        id = exile.lockERC20(address(token), amount, uint64(block.timestamp + duration), l.exilePoolId());
+        vm.stopPrank();
+    }
+
+    /// @dev With `tokenToHolders` on, every token-side fee goes to Exile lockers as a 3 day drip paid in
+    /// the token, and nothing of it is burned. The quote side is untouched.
+    function test_tokenSideFeesCanGoToLockers() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        p.cfg.tokenToHolders = true;
+        Lodestar l = _activate(p);
+        address holder = makeAddr("holder");
+        uint256 id = _lockToken(l, holder, 1_000e18, 30 days);
+        launchpad.injectFees(poolId, 1000e18, 1000e6);
+        uint256 deadBefore = token.balanceOf(DEAD);
+
+        vm.expectEmit(false, false, false, true, address(l));
+        emit Lodestar.Distributed(0, 500e18, 500e6, 200e6, 200e6 * TOKENS_PER_QUOTE / 1e18, 200e6, 100e6);
+        l.distribute();
+
+        assertEq(l.totalTokenBurned(), 0, "nothing burned from the token side");
+        assertEq(l.totalTokenToHolders(), 500e18);
+        assertEq(token.balanceOf(DEAD) - deadBefore, l.totalBuybackTokensBurned(), "only the buyback burns");
+        assertEq(token.balanceOf(address(l)), 0);
+        assertEq(exile.poolInfo(l.exilePoolId()).stakeTotalDistributed, 500e18);
+        assertEq(l.totalHoldersQuote(), 200e6, "quote side as before");
+
+        vm.warp(block.timestamp + 3 days);
+        assertApproxEqRel(exile.pendingStakeRewards(id), 500e18, 1e12, "the locker gets all of it");
+        uint256 before = token.balanceOf(holder);
+        vm.prank(holder);
+        exile.claimRewards(id);
+        assertApproxEqRel(token.balanceOf(holder) - before, 500e18, 1e12);
+    }
+
+    /// @dev The default stays a burn.
+    function test_tokenSideFeesBurnByDefault() public {
+        Lodestar l = _activateDefault(false);
+        assertFalse(l.config().tokenToHolders);
+        launchpad.injectFees(poolId, 1000e18, 0);
+        l.distribute();
+        assertEq(l.totalTokenBurned(), 500e18);
+        assertEq(l.totalTokenToHolders(), 0);
+        assertEq(exile.poolInfo(l.exilePoolId()).stakeTotalDistributed, 0);
+    }
+
+    /// @dev If Exile refuses the token payout, the tokens stay in the router, the quote side still runs,
+    /// and the next distribute pays them out. Nothing is burned by mistake.
+    function test_tokenHoldersPayoutFailureRetries() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        p.cfg.tokenToHolders = true;
+        Lodestar l = _activate(p);
+        launchpad.injectFees(poolId, 1000e18, 1000e6);
+        vm.mockCallRevert(
+            address(exile), abi.encodeWithSelector(IExile.notifyStakeReward.selector), abi.encode("down")
+        );
+        vm.expectEmit(false, false, false, true, address(l));
+        emit Lodestar.TokenHoldersPayoutFailed(500e18);
+        l.distribute();
+        assertEq(token.balanceOf(address(l)), 500e18, "tokens wait in the router");
+        assertEq(token.allowance(address(l), address(exile)), 0, "approval cleared");
+        assertEq(l.totalTokenBurned(), 0);
+        assertEq(l.totalHoldersQuote(), 200e6, "the quote side still paid holders");
+
+        vm.clearMockedCalls();
+        vm.warp(block.timestamp + 3 hours);
+        l.distribute();
+        assertEq(token.balanceOf(address(l)), 0);
+        assertEq(l.totalTokenToHolders(), 500e18, "paid on the retry");
+    }
+
+    /// @dev Switching between burning and paying lockers is a config change, behind the 12 hour timelock.
+    function test_tokenRouteChangeWaitsForTheTimelock() public {
+        Lodestar l = _activateDefault(false);
+        ILodestar.Config memory c = l.config();
+        c.tokenToHolders = true;
+        vm.prank(dev);
+        l.proposeConfig(c);
+
+        launchpad.injectFees(poolId, 1000e18, 0);
+        l.distribute();
+        assertEq(l.totalTokenBurned(), 500e18, "still burning while the change waits");
+
+        vm.warp(block.timestamp + 12 hours);
+        l.executeConfig();
+        launchpad.injectFees(poolId, 1000e18, 0);
+        l.distribute();
+        assertEq(l.totalTokenBurned(), 500e18);
+        assertEq(l.totalTokenToHolders(), 500e18, "now paid to lockers");
     }
 }

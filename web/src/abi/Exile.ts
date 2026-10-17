@@ -54,6 +54,19 @@ export const exileAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_EXPIRING_PER_CALL",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_MULTIPLIER_BPS",
     "inputs": [],
     "outputs": [
@@ -145,6 +158,30 @@ export const exileAbi = [
   {
     "type": "function",
     "name": "claimRewardsTo",
+    "inputs": [
+      {
+        "name": "lockId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "claimStakeRewardsTo",
     "inputs": [
       {
         "name": "lockId",
@@ -476,6 +513,16 @@ export const exileAbi = [
             "name": "rewardsAccrued",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "stakeRewardPerPointPaid",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "stakeRewardsAccrued",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -485,6 +532,24 @@ export const exileAbi = [
   {
     "type": "function",
     "name": "notifyReward",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "notifyStakeReward",
     "inputs": [
       {
         "name": "poolId",
@@ -615,6 +680,25 @@ export const exileAbi = [
   {
     "type": "function",
     "name": "pendingRewards",
+    "inputs": [
+      {
+        "name": "lockId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingStakeRewards",
     "inputs": [
       {
         "name": "lockId",
@@ -772,6 +856,26 @@ export const exileAbi = [
             "name": "carry",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "stakeRewardRate",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "stakePeriodFinish",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "stakeTotalDistributed",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "stakeCarry",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -831,6 +935,25 @@ export const exileAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "stakeEarningRatePerSecond",
+    "inputs": [
+      {
+        "name": "lockId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1068,6 +1191,68 @@ export const exileAbi = [
   {
     "type": "event",
     "name": "RewardsClaimed",
+    "inputs": [
+      {
+        "name": "lockId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "StakeRewardAdded",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "rewardRate",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "periodFinish",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "StakeRewardsClaimed",
     "inputs": [
       {
         "name": "lockId",

@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {BaseScript} from "./Base.s.sol";
 import {console2} from "forge-std/Script.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {LodestarFactory} from "../src/LodestarFactory.sol";
 import {ILodestar} from "../src/interfaces/ILodestar.sol";
 import {IAscendLaunchpad} from "../src/interfaces/IAscendLaunchpad.sol";
@@ -12,7 +13,7 @@ import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 /// 40% buyback and burn / 40% holders / 20% Team Treasury, Peasant-Knight-Duke-Monarch tiers,
 /// a 7-day rolling treasury stream, listing set-aside on (5,000 USDC cap), creator role locked a year.
 /// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER, MAX_SLIPPAGE_BPS, ENROL_LISTING,
-/// LISTING_CAP, LOCK_DAYS (0 = no lock). The buyback route is the AscendSwapper recorded in
+/// LISTING_CAP (in the quote's units; required unless the quote has 6 decimals), LOCK_DAYS (0 = no lock). The buyback route is the AscendSwapper recorded in
 /// deployments/<chainId>.json unless SWAPPER names another one. It is never left to the factory's default
 /// silently: the factory owner can change that default (12 hours after setDefaultSwapper), and a re-run of
 /// this script would otherwise pick the new one up without warning. To keep buybacks in reserve instead,
@@ -43,12 +44,18 @@ contract ActivateLodestar is BaseScript {
             holdersBps: uint16(vm.envOr("HOLDERS_BPS", uint256(4_000))),
             treasuryBps: uint16(vm.envOr("TREASURY_BPS", uint256(2_000))),
             swapper: swapper,
-            maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(1_000)))
+            maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(1_000))),
+            // token-side fees: burn them (default) or send them all to Exile lockers
+            tokenToHolders: vm.envOr("TOKEN_TO_HOLDERS", false)
         });
         p.treasuryRecipient = vm.envAddress("TREASURY");
         p.treasuryWindow = 7 days;
         p.tiers = MonarchTiers.defaults();
         p.enrolListing = vm.envOr("ENROL_LISTING", true);
+        // LISTING_CAP is in the quote asset's own units. 5,000 is a sensible default only for a 6-decimal
+        // dollar quote (USDC); for anything else (WHYPE, a tokenized stock) it must be given.
+        bool usdcLike = IERC20Metadata(d.quote).decimals() == 6;
+        require(!p.enrolListing || usdcLike || vm.envExists("LISTING_CAP"), "set LISTING_CAP in the quote's units");
         p.listingCap = vm.envOr("LISTING_CAP", uint256(5_000e6));
         uint256 lockDays = vm.envOr("LOCK_DAYS", uint256(365));
         p.creatorLockUntil = lockDays == 0 ? 0 : uint64(block.timestamp + lockDays * 1 days);

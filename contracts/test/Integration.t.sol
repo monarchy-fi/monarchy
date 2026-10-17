@@ -84,7 +84,7 @@ contract IntegrationTest is MonarchyFixture {
 
         // split change waits 12 hours
         vm.prank(dev);
-        l.proposeConfig(ILodestar.Config(2_000, 6_000, 2_000, address(swapper), 300));
+        l.proposeConfig(ILodestar.Config(2_000, 6_000, 2_000, address(swapper), 300, false));
         vm.expectRevert(Lodestar.TimelockActive.selector);
         l.executeConfig();
         vm.warp(block.timestamp + 12 hours);

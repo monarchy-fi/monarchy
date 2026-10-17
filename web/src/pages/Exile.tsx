@@ -38,6 +38,11 @@ export function ExilePage() {
   const dripPerDay = pool.data ? (Number(pool.data.periodFinish) > now ? (pool.data.rewardRate * 86400n) / 10n ** 18n : 0n) : undefined;
   const rd = rewardMeta?.decimals ?? 6;
   const drip = useDripDays();
+  // token-side fees paid in the token itself, when the creator chose to send them to lockers
+  const stakeMeta = core.tokenMeta;
+  const sd = stakeMeta?.decimals ?? 18;
+  const stakeDripPerDay = pool.data ? (Number(pool.data.stakePeriodFinish) > now ? (pool.data.stakeRewardRate * 86400n) / 10n ** 18n : 0n) : undefined;
+  const hasStakeRewards = !!pool.data && (pool.data.stakeTotalDistributed > 0n || pool.data.stakeCarry > 0n);
 
   if (!d) return <NoDeployment />;
   return (
@@ -64,6 +69,12 @@ export function ExilePage() {
           <Stat label="Locked points" value={<Amt value={pool.data?.totalPoints} decimals={core.tokenMeta?.decimals ?? 18} digits={0} />} hint="Amount times multiplier" />
           <Stat label="Drip ends" value={pool.data ? (Number(pool.data.periodFinish) > now ? duration(Number(pool.data.periodFinish) - now) : "Idle") : <Skel w="5em" />} hint="Refills on every distribute" />
         </div>
+        {hasStakeRewards && (
+          <div className="stats stats-4">
+            <Stat label="Token rewards dripping" value={<><Amt value={stakeDripPerDay} decimals={sd} digits={0} symbol={stakeMeta?.symbol} /><span className="amt-sym"> a day</span></>} hint="Token-side fees, paid to lockers" />
+            <Stat label="Token rewards paid in" value={<Amt value={pool.data?.stakeTotalDistributed} decimals={sd} digits={0} symbol={stakeMeta?.symbol} />} hint="Sent here by Lodestar" />
+          </div>
+        )}
         <p className="small cadence">{DISTRIBUTE_NOTE}</p>
       </Card>
 
@@ -82,7 +93,7 @@ export function ExilePage() {
         <LockNfts exile={d.exile} />
       )}
 
-      <MyLocks exile={d.exile} tiers={tiers} rewardMeta={rewardMeta} />
+      <MyLocks exile={d.exile} tiers={tiers} rewardMeta={rewardMeta} stakeMeta={stakeMeta} />
     </div>
   );
 }
@@ -292,7 +303,7 @@ function LockNfts({ exile }: { exile: Address }) {
   );
 }
 
-function MyLocks({ exile, tiers, rewardMeta }: { exile: Address; tiers: readonly Tier[]; rewardMeta?: TokenMeta }) {
+function MyLocks({ exile, tiers, rewardMeta, stakeMeta }: { exile: Address; tiers: readonly Tier[]; rewardMeta?: TokenMeta; stakeMeta?: TokenMeta }) {
   const { address } = useConnection();
   const ids = useReadContract({
     address: exile,
@@ -313,14 +324,14 @@ function MyLocks({ exile, tiers, rewardMeta }: { exile: Address; tiers: readonly
       {address && ids.data && list.length === 0 && <Empty title="No locks yet">Everyone starts somewhere. Pick a tier above to make your first lock.</Empty>}
       <div className="locks">
         {list.map((id) => (
-          <LockCard key={id.toString()} exile={exile} id={id} tiers={tiers} rewardMeta={rewardMeta} />
+          <LockCard key={id.toString()} exile={exile} id={id} tiers={tiers} rewardMeta={rewardMeta} stakeMeta={stakeMeta} />
         ))}
       </div>
     </Card>
   );
 }
 
-function LockCard({ exile, id, tiers, rewardMeta }: { exile: Address; id: bigint; tiers: readonly Tier[]; rewardMeta?: TokenMeta }) {
+function LockCard({ exile, id, tiers, rewardMeta, stakeMeta }: { exile: Address; id: bigint; tiers: readonly Tier[]; rewardMeta?: TokenMeta; stakeMeta?: TokenMeta }) {
   const base = { address: exile, abi: exileAbi } as const;
   const r = useReadContracts({
     allowFailure: false,
@@ -328,11 +339,14 @@ function LockCard({ exile, id, tiers, rewardMeta }: { exile: Address; id: bigint
       { ...base, functionName: "lockInfo", args: [id] },
       { ...base, functionName: "pendingRewards", args: [id] },
       { ...base, functionName: "earningRatePerSecond", args: [id] },
+      { ...base, functionName: "pendingStakeRewards", args: [id] },
+      { ...base, functionName: "stakeEarningRatePerSecond", args: [id] },
     ],
     query: POLL.query,
   });
-  const [lock, pending, rate] = r.data ?? [];
+  const [lock, pending, rate, pendingStake, stakeRate] = r.data ?? [];
   const live = useTicking(pending, rate);
+  const liveStake = useTicking(pendingStake, stakeRate);
   const now = useNow();
   const [extendDays, setExtendDays] = useState(30);
   const dec = useReadContract({
@@ -351,6 +365,8 @@ function LockCard({ exile, id, tiers, rewardMeta }: { exile: Address; id: bigint
   const newUnlock = Math.max(unlockAt, now) + extendDays * 86400;
   const newTier = pickTier(tiers, newUnlock - now);
   const rd = rewardMeta?.decimals ?? 6;
+  const sd = stakeMeta?.decimals ?? 18;
+  const showStake = !!pendingStake || (!!stakeRate && stakeRate > 0n);
   const amountDec = lock.kind === 0 ? Number(dec.data ?? 18) : 0;
 
   return (
@@ -380,12 +396,25 @@ function LockCard({ exile, id, tiers, rewardMeta }: { exile: Address; id: bigint
               }
             />
             <Row k="Earning" v={rate && rate > 0n ? `${fmt((rate * 86400n) / 10n ** 18n, rd, 4)} ${rewardMeta?.symbol}/day` : ended ? "stopped at unlock" : "waiting for the next drip"} />
+            {showStake && (
+              <>
+                <Row
+                  k="Token rewards"
+                  v={
+                    <span className={stakeRate && stakeRate > 0n ? "ticking gold" : ""}>
+                      {fmt(liveStake, sd, 4)} {stakeMeta?.symbol}
+                    </span>
+                  }
+                />
+                <Row k="Earning" v={stakeRate && stakeRate > 0n ? `${fmt((stakeRate * 86400n) / 10n ** 18n, sd, 2)} ${stakeMeta?.symbol}/day` : ended ? "stopped at unlock" : "waiting for the next drip"} />
+              </>
+            )}
           </>
         )}
       </div>
       <div className="lock-actions">
         {lock.poolId !== 0n && (
-          <TxButton className="btn btn-sm" disabledReason={!pending ? "Nothing to claim" : undefined} request={() => ({ ...base, functionName: "claimRewards", args: [id] })}>
+          <TxButton className="btn btn-sm" disabledReason={!pending && !pendingStake ? "Nothing to claim" : undefined} request={() => ({ ...base, functionName: "claimRewards", args: [id] })}>
             Claim
           </TxButton>
         )}

@@ -9,11 +9,14 @@
 #   transaction fails this script, where `cast send` alone exits 0 and the run would look green.
 # - Recovery: Exile walks every idle hour of its reward pool inside notifyReward, so after a long
 #   keeper outage distribute() can need more gas than one block allows, and nothing in distribute()
-#   itself can fix that. A read-only poke first says whether the pool is more than 720 hours behind;
-#   if so this script calls Exile.poke(poolId, 720) until the pool reports it is caught up (at most 40
-#   times) before distributing. If distribute() still fails, or its receipt says the holders' share was
-#   parked (HoldersPayoutFailed), it catches up again and tries once more. If that still fails, the
-#   script fails: red is the point.
+#   itself can fix that. A read-only poke first says whether the pool is more than a few hours behind
+#   (CURRENT_WITHIN); if so this script pokes Exile.MAX_BUCKETS_PER_CALL buckets at a time until the pool
+#   reports it is caught up (at most 40 times) before distributing. Catching up first also keeps the
+#   payouts inside distribute() light, so cast's gas estimate can't land where a payout runs out of gas
+#   inside its try/catch while the outer call succeeds. If distribute() still
+#   fails, or its receipt says a holder payout was parked (HoldersPayoutFailed or
+#   TokenHoldersPayoutFailed), it catches up again and tries once more. If that still fails, the script
+#   fails: red is the point.
 set -euo pipefail
 
 FILE=${1:-deployments/99801.json}
@@ -38,7 +41,10 @@ if [ "$(cast code "$LODESTAR" --rpc-url "$RPC_URL")" = "0x" ]; then
 fi
 EXILE=$(cast call "$LODESTAR" "exile()(address)" --rpc-url "$RPC_URL")
 PID=$(cast to-dec "$(cast call "$LODESTAR" "exilePoolId()" --rpc-url "$RPC_URL")")
+CURRENT_WITHIN=6 # hours; the keeper runs every 3, so a healthy pool is never further behind
+MAXB=$(cast to-dec "$(cast call "$EXILE" "MAX_BUCKETS_PER_CALL()" --rpc-url "$RPC_URL")")
 PARKED_TOPIC=$(cast sig-event "HoldersPayoutFailed(uint256)")
+TOKEN_PARKED_TOPIC=$(cast sig-event "TokenHoldersPayoutFailed(uint256)")
 LAST_RECEIPT=""
 
 # send <to> <signature> [args...]: cast estimates the gas; the receipt must say success.
@@ -63,17 +69,19 @@ distribute() {
   send "$LODESTAR" "distribute()"
 }
 
-# True when the last receipt carries HoldersPayoutFailed: the holders' share stayed in the router.
+# True when the last receipt carries HoldersPayoutFailed or TokenHoldersPayoutFailed: a holder payout
+# stayed in the router.
 holders_parked() {
-  jq -e --arg t "$PARKED_TOPIC" '[.logs[].topics[0]] | index($t) != null' <<<"$LAST_RECEIPT" >/dev/null
+  jq -e --arg a "$PARKED_TOPIC" --arg b "$TOKEN_PARKED_TOPIC" \
+    '[.logs[].topics[0]] | (index($a) != null) or (index($b) != null)' <<<"$LAST_RECEIPT" >/dev/null
 }
 
-# A read-only poke: true when one call of 720 buckets reaches the present.
+# A read-only poke: true when the pool is at most CURRENT_WITHIN hours behind.
 pool_is_current() {
-  [ "$(cast call "$EXILE" "poke(uint256,uint256)(bool)" "$PID" 720 --rpc-url "$RPC_URL")" = "true" ]
+  [ "$(cast call "$EXILE" "poke(uint256,uint256)(bool)" "$PID" "$CURRENT_WITHIN" --rpc-url "$RPC_URL")" = "true" ]
 }
 
-# Poke the router's Exile pool forward, 720 hour buckets at a time, until it reports caught up.
+# Poke the router's Exile pool forward, MAXB hour buckets at a time, until it reports caught up.
 catch_up() {
   local i
   for i in $(seq 1 40); do
@@ -82,13 +90,13 @@ catch_up() {
       return 0
     fi
     echo "Exile pool $PID is behind: poke $i of at most 40"
-    send "$EXILE" "poke(uint256,uint256)" "$PID" 720
+    send "$EXILE" "poke(uint256,uint256)" "$PID" "$MAXB"
   done
   echo "::warning::Exile pool $PID is still behind after 40 pokes"
 }
 
 if ! pool_is_current; then
-  echo "Exile pool $PID is more than 720 hours behind; catching it up before distributing"
+  echo "Exile pool $PID is more than $CURRENT_WITHIN hours behind; catching it up before distributing"
   catch_up
 fi
 
@@ -96,12 +104,16 @@ if ! distribute; then
   echo "distribute() failed; catching Exile up, then one retry"
   catch_up
   distribute
+  if holders_parked; then
+    echo "::error::a holder payout was parked on the retry"
+    exit 1
+  fi
 elif holders_parked; then
-  echo "::warning::the holders' share was parked (Exile payout failed); catching Exile up, then one retry"
+  echo "::warning::a holder payout was parked (Exile payout failed); catching Exile up, then one retry"
   catch_up
   distribute
   if holders_parked; then
-    echo "::error::the holders' share is still parked after a retry"
+    echo "::error::a holder payout is still parked after a retry"
     exit 1
   fi
 fi

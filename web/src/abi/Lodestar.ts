@@ -257,6 +257,11 @@ export const lodestarAbi = [
             "name": "maxSlippageBps",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "tokenToHolders",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       }
@@ -466,6 +471,11 @@ export const lodestarAbi = [
                 "name": "maxSlippageBps",
                 "type": "uint16",
                 "internalType": "uint16"
+              },
+              {
+                "name": "tokenToHolders",
+                "type": "bool",
+                "internalType": "bool"
               }
             ]
           }
@@ -613,6 +623,11 @@ export const lodestarAbi = [
             "name": "maxSlippageBps",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "tokenToHolders",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       },
@@ -669,7 +684,7 @@ export const lodestarAbi = [
     "inputs": [],
     "outputs": [
       {
-        "name": "tokenToBurn",
+        "name": "tokenSide",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -729,6 +744,11 @@ export const lodestarAbi = [
             "name": "maxSlippageBps",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "tokenToHolders",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       }
@@ -909,6 +929,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "totalTokenToHolders",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "totalTreasuryQuote",
     "inputs": [],
     "outputs": [
@@ -1043,6 +1076,11 @@ export const lodestarAbi = [
             "name": "maxSlippageBps",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "tokenToHolders",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       }
@@ -1083,6 +1121,11 @@ export const lodestarAbi = [
             "name": "maxSlippageBps",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "tokenToHolders",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       },
@@ -1133,6 +1176,12 @@ export const lodestarAbi = [
     "inputs": [
       {
         "name": "tokenBurned",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "tokenToHolders",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1241,6 +1290,11 @@ export const lodestarAbi = [
             "name": "maxSlippageBps",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "tokenToHolders",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       }
@@ -1288,6 +1342,19 @@ export const lodestarAbi = [
   {
     "type": "event",
     "name": "TokenBurnFailed",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TokenHoldersPayoutFailed",
     "inputs": [
       {
         "name": "amount",

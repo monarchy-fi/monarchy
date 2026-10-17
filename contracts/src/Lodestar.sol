@@ -16,7 +16,7 @@ import {ILodestar} from "./interfaces/ILodestar.sol";
 /// @title Lodestar
 /// @notice Fee router for one Ascend token. Once it holds the token's creator role on Ascend, every
 /// creator fee lands here, and anyone can call `distribute()` to route it:
-///   - project-token fees are burned;
+///   - project-token fees are burned, or, if the creator chose so, paid in full to Exile lockers;
 ///   - quote fees are split by the creator's chosen percentages between buyback and burn,
 ///     Exile holder rewards and the Team Treasury (a Sandfall stream).
 /// Split changes wait behind a 12 hour timelock. The creator role can be locked here so the router
@@ -69,6 +69,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     bool internal _initialized;
 
     uint256 public totalTokenBurned; // token-side fees burned directly
+    uint256 public totalTokenToHolders; // token-side fees paid to Exile lockers
     uint256 public totalBuybackQuote;
     uint256 public totalBuybackTokensBurned;
     uint256 public totalHoldersQuote;
@@ -89,6 +90,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     event Initialized(bytes32 indexed poolId, address indexed token, address quote, address steward, Config config);
     event Distributed(
         uint256 tokenBurned,
+        uint256 tokenToHolders,
         uint256 quoteRouted,
         uint256 buybackQuote,
         uint256 buybackTokensBurned,
@@ -97,6 +99,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     );
     event BuybackSkipped(uint256 amount, uint256 minOut);
     event TokenBurnFailed(uint256 amount);
+    event TokenHoldersPayoutFailed(uint256 amount);
     event CollectFailed();
     event ClaimFailed();
     event HoldersPayoutFailed(uint256 amount);
@@ -191,19 +194,32 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         (ok,) = address(launchpad).call(abi.encodeCall(IAscendLaunchpad.claim, (poolId)));
         if (!ok) emit ClaimFailed();
 
-        // project-token side: burn all of it
+        Config memory c = _cfg;
+
+        // project-token side: all of it is burned, or all of it goes to Exile lockers. Balance based, so a
+        // payout that failed last time is simply part of the next one (under whatever the config says then).
         uint256 t = token.balanceOf(address(this));
+        uint256 tBurned;
+        uint256 tHolders;
         if (t > 0) {
-            if (_tryTransfer(token, DEAD, t)) {
+            if (c.tokenToHolders) {
+                token.forceApprove(address(exile), t);
+                try exile.notifyStakeReward(exilePoolId, t) {
+                    tHolders = t;
+                    totalTokenToHolders += t;
+                } catch {
+                    token.forceApprove(address(exile), 0);
+                    emit TokenHoldersPayoutFailed(t);
+                }
+            } else if (_tryTransfer(token, DEAD, t)) {
+                tBurned = t;
                 totalTokenBurned += t;
             } else {
                 emit TokenBurnFailed(t);
-                t = 0;
             }
         }
 
         // quote side: balance based, so fees claimed by anyone else and listing refunds are routed too
-        Config memory c = _cfg;
         uint256 q = quote.balanceOf(address(this)) - buybackReserve - holdersReserve - treasuryReserve;
         uint256 burnQ = q * c.burnBps / BPS;
         uint256 holdQ = q * c.holdersBps / BPS;
@@ -252,7 +268,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         }
 
         lastDistributeAt = uint64(block.timestamp);
-        emit Distributed(t, q, spent, bought, holdQ, treasQ);
+        emit Distributed(tBurned, tHolders, q, spent, bought, holdQ, treasQ);
     }
 
     function _buyback(Config memory c, uint256 buyAmt) internal returns (uint256 spent, uint256 bought) {
@@ -463,13 +479,14 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     }
 
     /// @notice What a distribute would route from fees already claimable on Ascend plus this router's balance.
-    /// Fees still sitting in the pool (not yet collected) are not included.
+    /// Fees still sitting in the pool (not yet collected) are not included. `tokenSide` is burned, or paid to
+    /// Exile lockers when `config().tokenToHolders` is set.
     function previewDistribute()
         external
         view
-        returns (uint256 tokenToBurn, uint256 quoteTotal, uint256 burnQ, uint256 holdQ, uint256 treasQ)
+        returns (uint256 tokenSide, uint256 quoteTotal, uint256 burnQ, uint256 holdQ, uint256 treasQ)
     {
-        tokenToBurn = token.balanceOf(address(this)) + launchpad.creatorOwedToken(poolId);
+        tokenSide = token.balanceOf(address(this)) + launchpad.creatorOwedToken(poolId);
         quoteTotal = quote.balanceOf(address(this)) - buybackReserve - holdersReserve - treasuryReserve
             + launchpad.creatorOwedQuote(poolId);
         burnQ = quoteTotal * _cfg.burnBps / BPS;
