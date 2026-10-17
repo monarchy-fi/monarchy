@@ -19,4 +19,10 @@ interface IExile {
 
     /// @notice Add rewards to a pool. They drip out over 3 days. Anyone may call.
     function notifyReward(uint256 poolId, uint256 amount) external;
+
+    /// @notice Queue a new tier table (admin only); anyone can execute it after the timelock.
+    function proposeTiers(uint256 poolId, Tier[] calldata tiers) external;
+
+    /// @notice Drop a queued tier table (admin only).
+    function cancelTiers(uint256 poolId) external;
 }

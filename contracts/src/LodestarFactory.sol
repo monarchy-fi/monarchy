@@ -66,6 +66,7 @@ contract LodestarFactory {
     error ZeroAddress();
     error WrongTokenOrder();
     error DefaultSwapperJustChanged();
+    error AlreadyDeployed();
 
     constructor(
         address implementation_,
@@ -105,9 +106,13 @@ contract LodestarFactory {
         if (p.treasuryRecipient == address(0)) revert ZeroAddress();
         // the pool id sorts the pair, so check token and quote weren't passed the wrong way round
         if (launchpad.poolTokenIs0(poolId) != (p.token < p.quote)) revert WrongTokenOrder();
+        // a second deploy would collide on CREATE2, which burns all the gas sent; fail cheaply instead.
+        // To take the role back after it left, hand it to the existing router and call its acceptCreator.
+        if (lodestar.code.length != 0) revert AlreadyDeployed();
 
         Clones.cloneDeterministic(implementation, poolId);
-        uint256 exilePoolId = exile.createPool(p.token, p.quote, p.tiers, msg.sender);
+        // the router administers the reward pool, so tier changes stay with whoever is steward
+        uint256 exilePoolId = exile.createPool(p.token, p.quote, p.tiers, lodestar);
         uint256 streamId = sandfall.createRolling(p.quote, p.treasuryRecipient, p.treasuryWindow, lodestar, false);
 
         ILodestar.Config memory cfg = p.cfg;

@@ -102,9 +102,9 @@ contract ExileFuzzTest is Test {
         vm.warp(block.timestamp + 30 days);
 
         uint256 got = _claim(alice, sniper);
-        // at most its share of the time it was actually locked, out of the 7 day drip
+        // at most its share of the time it was actually locked, out of the 3 day drip
         uint256 lockedFor = exile.lockInfo(sniper).unlockAt - exile.lockInfo(sniper).createdAt;
-        assertLe(got, payout * lockedFor / 7 days, "sniper earned past its lock");
+        assertLe(got, payout * lockedFor / 3 days, "sniper earned past its lock");
     }
 
     /// Extending re-tiers the lock by what is still committed from now.

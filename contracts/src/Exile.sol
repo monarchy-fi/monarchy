@@ -79,6 +79,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         uint256 totalDistributed;
         Tier[] tiers;
         Tier[] pendingTiers;
+        uint256 carry; // rewards that dripped while nobody was locked; they re-drip with the next payout
     }
 
     uint64 public constant BUCKET = 1 hours;
@@ -88,6 +89,9 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     uint64 public constant EXECUTION_WINDOW = 7 days;
     uint256 public constant MAX_BUCKETS_PER_CALL = 720;
     uint256 public constant MAX_TIERS = 8;
+    /// @dev Bounds on what a tier can promise, so a pool admin can't add a tier that earns several times a
+    /// 30 day lock's weight for a commitment of seconds. A tier can't be shorter than one bucket.
+    uint16 public constant MAX_MULTIPLIER_BPS = 50_000;
     uint256 internal constant BPS = 10_000;
     uint256 internal constant RATE_PREC = 1e18;
     uint256 internal constant ACC_PREC = 1e18;
@@ -139,6 +143,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     error PoolNeedsPoke();
     error ProposalExpired();
     error UnexpectedNFT();
+    error NotAnERC20();
 
     // ================================================================ pools
 
@@ -245,6 +250,11 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         if (amount == 0) revert InvalidAmount();
         if (unlockAt <= block.timestamp) revert InvalidUnlock();
         if (poolId != 0 && _pool(poolId).stakeToken != asset) revert WrongStakeToken();
+        // an NFT collection pasted into the token path would be pulled with transferFrom(from, to, id) and
+        // could never be withdrawn, so refuse anything that says it is ERC-721
+        (bool isNft, bytes memory ret) =
+            asset.staticcall{gas: 30_000}(abi.encodeCall(IERC165.supportsInterface, (type(IERC721).interfaceId)));
+        if (isNft && ret.length == 32 && bytes32(ret) == bytes32(uint256(1))) revert NotAnERC20();
 
         IERC20 token = IERC20(asset);
         uint256 before = token.balanceOf(address(this));
@@ -344,12 +354,18 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     }
 
     function claimRewards(uint256 lockId) public nonReentrant returns (uint256 amount) {
-        amount = _claim(lockId);
+        amount = _claim(lockId, msg.sender);
+    }
+
+    /// @notice Claim to another address, for an owner the reward token won't pay (a blocklisted wallet).
+    function claimRewardsTo(uint256 lockId, address to) external nonReentrant returns (uint256 amount) {
+        if (to == address(0)) revert NotOwner();
+        amount = _claim(lockId, to);
     }
 
     function claimRewardsBatch(uint256[] calldata lockIds) external nonReentrant returns (uint256 total) {
         for (uint256 i; i < lockIds.length; ++i) {
-            total += _claim(lockIds[i]);
+            total += _claim(lockIds[i], msg.sender);
         }
     }
 
@@ -371,7 +387,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         if (l.poolId == 0 || l.withdrawn || block.timestamp >= l.unlockAt) return 0;
         Pool storage p = _pools[l.poolId];
         if (block.timestamp >= p.periodFinish) return 0;
-        (,,, uint256 totalPoints) = _simulateFull(p, 0);
+        (,,, uint256 totalPoints,) = _simulateFull(p, 0);
         if (totalPoints == 0) return 0;
         return Math.mulDiv(l.points, p.rewardRate, totalPoints);
     }
@@ -386,7 +402,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
 
     function poolInfo(uint256 poolId) external view returns (PoolView memory v) {
         Pool storage p = _pool(poolId);
-        (,,, uint256 totalPoints) = _simulateFull(p, 0);
+        (,,, uint256 totalPoints, uint256 carry) = _simulateFull(p, 0);
         v.stakeToken = p.stakeToken;
         v.rewardToken = p.rewardToken;
         v.admin = p.admin;
@@ -397,6 +413,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         v.totalDistributed = p.totalDistributed;
         v.tiers = p.tiers;
         v.pendingTiers = p.pendingTiers;
+        v.carry = carry / RATE_PREC;
     }
 
     function lockInfo(uint256 lockId) external view returns (Lock memory) {
@@ -454,7 +471,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         _lockIdsOf[msg.sender].push(lockId);
     }
 
-    function _claim(uint256 lockId) internal returns (uint256 amount) {
+    function _claim(uint256 lockId, address to) internal returns (uint256 amount) {
         Lock storage l = _lock(lockId);
         if (msg.sender != l.owner) revert NotOwner();
         if (l.poolId == 0) return 0;
@@ -463,8 +480,8 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         amount = l.rewardsAccrued;
         if (amount == 0) return 0;
         l.rewardsAccrued = 0;
-        IERC20(p.rewardToken).safeTransfer(l.owner, amount);
-        emit RewardsClaimed(lockId, l.owner, amount);
+        IERC20(p.rewardToken).safeTransfer(to, amount);
+        emit RewardsClaimed(lockId, to, amount);
     }
 
     function _settle(Pool storage p, Lock storage l) internal {
@@ -532,25 +549,29 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         returns (uint256 rppNow, uint256 rppAtUnlock, bool unlockReached)
     {
         if (unlockAt <= p.cursor) {
-            (rppNow,,,) = _simulateFull(p, 0);
+            (rppNow,,,,) = _simulateFull(p, 0);
             return (rppNow, p.rppAtBucket[unlockAt], true);
         }
         uint256 totalPoints;
-        (rppNow, rppAtUnlock, unlockReached, totalPoints) = _simulateFull(p, unlockAt);
+        (rppNow, rppAtUnlock, unlockReached, totalPoints,) = _simulateFull(p, unlockAt);
     }
 
     function _simulateFull(Pool storage p, uint64 watch)
         internal
         view
-        returns (uint256 rpp, uint256 rppAtWatch, bool watchReached, uint256 totalPoints)
+        returns (uint256 rpp, uint256 rppAtWatch, bool watchReached, uint256 totalPoints, uint256 carry)
     {
         rpp = p.rewardPerPoint;
         totalPoints = p.totalPoints;
+        carry = p.unallocated;
         uint64 last = p.lastUpdate;
         uint64 b = p.cursor + BUCKET;
         while (b <= block.timestamp) {
             uint256 amt = _dripped(p.rewardRate, p.periodFinish, last, b);
-            if (amt != 0 && totalPoints != 0) rpp += Math.mulDiv(amt, ACC_PREC, totalPoints);
+            if (amt != 0) {
+                if (totalPoints != 0) rpp += Math.mulDiv(amt, ACC_PREC, totalPoints);
+                else carry += amt;
+            }
             last = b;
             if (b == watch) {
                 rppAtWatch = rpp;
@@ -560,7 +581,10 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
             b += BUCKET;
         }
         uint256 tail = _dripped(p.rewardRate, p.periodFinish, last, uint64(block.timestamp));
-        if (tail != 0 && totalPoints != 0) rpp += Math.mulDiv(tail, ACC_PREC, totalPoints);
+        if (tail != 0) {
+            if (totalPoints != 0) rpp += Math.mulDiv(tail, ACC_PREC, totalPoints);
+            else carry += tail;
+        }
     }
 
     function _tierMultiplier(Tier[] storage tiers, uint256 duration) internal view returns (uint16) {
@@ -573,7 +597,8 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     function _validateTiers(Tier[] calldata tiers) internal pure {
         if (tiers.length == 0 || tiers.length > MAX_TIERS) revert InvalidTiers();
         for (uint256 i; i < tiers.length; ++i) {
-            if (tiers[i].multiplierBps == 0 || tiers[i].minDuration == 0) revert InvalidTiers();
+            if (tiers[i].multiplierBps == 0 || tiers[i].multiplierBps > MAX_MULTIPLIER_BPS) revert InvalidTiers();
+            if (tiers[i].minDuration < BUCKET) revert InvalidTiers();
             // longer locks never earn a lower multiplier than shorter ones
             if (
                 i > 0

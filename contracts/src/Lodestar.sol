@@ -34,9 +34,15 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// @dev After a skipped buyback the next attempt halves, down to 1/256 of the amount due.
     uint8 public constant MAX_BUYBACK_SHIFT = 8;
     /// @dev Each buyback spends at most this share of the quote side of the pool's active liquidity
-    /// (valued at the EMA price). A buy that small moves the price about 1%, which is less than the
-    /// 1% fee a sandwich pays each way, so sandwiching it doesn't pay.
+    /// (valued at the EMA price, or at spot when that gives a smaller depth). A buy that small moves
+    /// the price about 1%, which is less than the 1% fee a sandwich pays each way, so sandwiching it
+    /// doesn't pay.
     uint256 public constant MAX_BUY_DEPTH_BPS = 50;
+    /// @dev At most one buyback per hour. The depth cap bounds one buy; without a gap between buys a
+    /// caller could push several capped pieces through in one transaction, between their own buy and
+    /// sell, and collect about 1% per piece for one 2% round trip in fees. The keeper runs every 3 hours,
+    /// so the gap costs nothing in the normal flow.
+    uint64 public constant BUYBACK_INTERVAL = 1 hours;
     /// @dev Burn sink. Ascend's launch tokens reject transfers to address(0) and to 0x…dEaD, so burns go
     /// to this widely used dead address instead. Nobody holds its key.
     address public constant DEAD = 0xdEAD000000000000000042069420694206942069;
@@ -74,6 +80,8 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// @notice Holder rewards or treasury top-ups that couldn't be paid out yet; retried on the next distribute.
     uint256 public holdersReserve;
     uint256 public treasuryReserve;
+    /// @notice When the last buyback went through; the next one waits `BUYBACK_INTERVAL`.
+    uint64 public lastBuybackAt;
 
     event Initialized(bytes32 indexed poolId, address indexed token, address quote, address steward, Config config);
     event Distributed(
@@ -94,13 +102,13 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     event ConfigExecuted(Config config);
     event ConfigCancelled();
     event CreatorRoleLocked(uint64 until);
+    event CreatorAccepted();
     event CreatorTransferOutStarted(address next);
     event ListingEnrolled(uint256 cap);
     event ListingClosed();
     event StewardTransferred(address indexed previous, address indexed next);
 
     error AlreadyInitialized();
-    error OnlyFactory();
     error OnlySteward();
     error InvalidConfig();
     error NoPendingConfig();
@@ -116,11 +124,6 @@ contract Lodestar is ILodestar, ReentrancyGuard {
 
     constructor() {
         _initialized = true; // the implementation itself can never be initialized
-    }
-
-    modifier onlyFactory() {
-        if (msg.sender != factory) revert OnlyFactory();
-        _;
     }
 
     modifier onlySteward() {
@@ -157,19 +160,23 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         emit Initialized(p.poolId, p.token, p.quote, p.steward, p.config);
     }
 
-    /// @notice Second half of Ascend's two-step creator handover. The dev must have called
-    /// `transferCreator(poolId, thisLodestar)` on Ascend first.
-    function acceptCreator() external onlyFactory {
+    /// @notice Second half of Ascend's two-step creator handover. The current creator must have called
+    /// `transferCreator(poolId, thisLodestar)` on Ascend first; that call is the consent, so anyone may
+    /// finish the hand-off. The factory calls this at deploy, and it works again later if the role ever
+    /// left (an expired lock, a hand-out the steward reverses), so a token can come back to Monarchy.
+    function acceptCreator() external {
         if (launchpad.pendingCreator(poolId) != address(this)) revert CreatorNotPending();
         launchpad.acceptCreator(poolId);
+        emit CreatorAccepted();
     }
 
     // ================================================================ routing (anyone)
 
     /// @notice Collect and claim this token's creator fees from Ascend and route everything this
-    /// router holds. Permissionless. The buyback's minimum output comes from Ascend's EMA price, and
-    /// each buy is capped at a small share of the pool's depth so sandwiching it doesn't pay. Any
-    /// step that fails keeps its amount here and retries next time; the other steps still run.
+    /// router holds. Permissionless. The buyback's minimum output comes from Ascend's EMA price (or
+    /// spot, whichever asks for more), each buy is capped at a small share of the pool's depth, and
+    /// buys are at least an hour apart, so sandwiching them doesn't pay. Any step that fails keeps its
+    /// amount here and retries next time; the other steps still run.
     function distribute() external nonReentrant {
         // low-level calls, so even a changed return shape can't block routing
         (bool ok,) = address(launchpad).call(abi.encodeCall(IAscendLaunchpad.collect, (poolId)));
@@ -242,13 +249,14 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     }
 
     function _buyback(Config memory c, uint256 buyAmt) internal returns (uint256 spent, uint256 bought) {
-        if (buyAmt > 0 && c.swapper != address(0)) {
+        if (buyAmt > 0 && c.swapper != address(0) && block.timestamp >= lastBuybackAt + BUYBACK_INTERVAL) {
             uint256 ema = _ema();
-            uint256 cap = _maxBuyback(ema);
+            uint256 spot = _spot();
+            uint256 cap = _maxBuyback(ema, spot);
             uint256 full = cap != 0 && buyAmt > cap ? cap : buyAmt;
             uint256 attempt = full >> buybackShift;
             if (attempt == 0) attempt = full;
-            uint256 minOut = _minOut(ema, attempt, c.maxSlippageBps);
+            uint256 minOut = _minOut(ema, spot, attempt, c.maxSlippageBps);
             bool ok;
             if (minOut > 0) {
                 try this.buybackStep(c.swapper, attempt, minOut) returns (uint256 s_, uint256 b_) {
@@ -256,12 +264,16 @@ contract Lodestar is ILodestar, ReentrancyGuard {
                 } catch {}
             }
             if (ok) {
+                lastBuybackAt = uint64(block.timestamp);
                 totalBuybackQuote += spent;
                 totalBuybackTokensBurned += bought;
                 if (buybackShift > 0) --buybackShift;
             } else {
-                // dust attempts don't count, so a few wei can't shrink the next real buyback
-                if (buybackShift < MAX_BUYBACK_SHIFT && (cap == 0 || attempt * 256 >= cap)) ++buybackShift;
+                // only a real attempt counts: with no EMA nothing was tried, and dust attempts are exempt,
+                // so neither an EMA-less first day nor a few wei can shrink the next real buyback
+                if (ema != 0 && buybackShift < MAX_BUYBACK_SHIFT && (cap == 0 || attempt * 256 >= cap)) {
+                    ++buybackShift;
+                }
                 emit BuybackSkipped(attempt, minOut);
             }
         }
@@ -286,16 +298,23 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         if (burned < minOut || spent > amountIn) revert BuybackShort();
     }
 
-    /// @notice Minimum tokens to accept when buying with `quoteIn`, from Ascend's EMA price minus the
-    /// pool fee and the slippage allowance. Returns 0 (no buyback) when there is no EMA: the spot
-    /// price is never used, since a sandwich can move it in the same transaction.
+    /// @notice Minimum tokens to accept when buying with `quoteIn`: the stricter of the floors at Ascend's
+    /// EMA price and at the pool's spot price, minus the pool fee and the slippage allowance. Returns 0
+    /// (no buyback) when there is no EMA: spot alone is never trusted, since a sandwich can move it in
+    /// the same transaction. Spot can only tighten the floor, so a dump (which leaves the EMA stale and
+    /// high) can't loosen it either.
     function quoteMinOut(uint256 quoteIn, uint256 slippageBps) public view returns (uint256) {
-        return _minOut(_ema(), quoteIn, slippageBps);
+        return _minOut(_ema(), _spot(), quoteIn, slippageBps);
     }
 
     /// @notice Largest single buyback right now (0 = the pool doesn't report its liquidity, no cap).
     function maxBuyback() external view returns (uint256) {
-        return _maxBuyback(_ema());
+        return _maxBuyback(_ema(), _spot());
+    }
+
+    /// @notice Earliest time the next buyback can go through.
+    function nextBuybackAt() external view returns (uint64) {
+        return lastBuybackAt + BUYBACK_INTERVAL;
     }
 
     function _ema() internal view returns (uint256 sp) {
@@ -304,10 +323,17 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         } catch {}
     }
 
-    /// @dev Quote side of the active liquidity at the EMA price (not spot, which a sandwich can move):
-    /// L * sqrtP for currency1, L / sqrtP for currency0.
-    function _maxBuyback(uint256 sp) internal view returns (uint256) {
-        if (sp == 0) return 0;
+    function _spot() internal view returns (uint256 sp) {
+        try poolManager.getSlot0(poolId) returns (uint160 s, int24, uint24, uint24) {
+            sp = s;
+        } catch {}
+    }
+
+    /// @dev Quote side of the active liquidity: L * sqrtP for currency1, L / sqrtP for currency0. Valued
+    /// at whichever of the EMA and spot prices gives the smaller depth: a pump raises spot and the EMA
+    /// stays in charge, a dump lowers spot and the cap shrinks with it instead of trusting a stale EMA.
+    function _maxBuyback(uint256 ema, uint256 spot) internal view returns (uint256) {
+        if (ema == 0) return 0;
         uint256 liq;
         try poolManager.getLiquidity(poolId) returns (uint128 l_) {
             liq = l_;
@@ -315,12 +341,23 @@ contract Lodestar is ILodestar, ReentrancyGuard {
             return 0;
         }
         if (liq == 0) return 0;
+        uint256 sp = ema;
+        if (spot != 0) sp = tokenIs0 ? Math.min(ema, spot) : Math.max(ema, spot);
         uint256 depth = tokenIs0 ? Math.mulDiv(liq, sp, 1 << 96) : Math.mulDiv(liq, 1 << 96, sp);
         uint256 cap = depth * MAX_BUY_DEPTH_BPS / BPS;
         return cap == 0 ? 1 : cap;
     }
 
-    function _minOut(uint256 sp, uint256 quoteIn, uint256 slippageBps) internal view returns (uint256) {
+    function _minOut(uint256 ema, uint256 spot, uint256 quoteIn, uint256 slippageBps)
+        internal
+        view
+        returns (uint256)
+    {
+        if (ema == 0) return 0;
+        return Math.max(_floor(ema, quoteIn, slippageBps), _floor(spot, quoteIn, slippageBps));
+    }
+
+    function _floor(uint256 sp, uint256 quoteIn, uint256 slippageBps) internal view returns (uint256) {
         if (sp == 0) return 0;
         // price = (sp / 2^96)^2 = currency1 per currency0
         uint256 expected = tokenIs0
@@ -388,6 +425,17 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         if (next == address(0)) revert ZeroAddress();
         emit StewardTransferred(steward, next);
         steward = next;
+    }
+
+    /// @notice Queue a new tier table for this token's Exile pool. This router is the pool's admin, so
+    /// tier changes follow the steward (and move with `transferSteward`) and wait out Exile's 12 hour
+    /// timelock; anyone can execute them on Exile once ready.
+    function proposeTiers(IExile.Tier[] calldata tiers) external onlySteward {
+        exile.proposeTiers(exilePoolId, tiers);
+    }
+
+    function cancelTiers() external onlySteward {
+        exile.cancelTiers(exilePoolId);
     }
 
     // ================================================================ views
