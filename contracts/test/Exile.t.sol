@@ -324,6 +324,37 @@ contract ExileTest is Test {
         assertEq(exile.lockInfo(old).multiplierBps, 30000, "old locks keep theirs");
     }
 
+    function test_readyTiersExpire() public {
+        vm.prank(admin);
+        exile.proposeTiers(poolId, MonarchTiers.defaults());
+        _skip(12 hours + 7 days + 1);
+        vm.expectRevert(Exile.ProposalExpired.selector);
+        exile.executeTiers(poolId);
+    }
+
+    function test_dustNotifyDoesNotDelayTheDrip() public {
+        _lock(alice, 1000e18, 30 days);
+        _notify(7000e18);
+        uint64 finish = exile.poolInfo(poolId).periodFinish;
+        _skip(1 days);
+        _notify(1); // dust: joins the running drip
+        uint64 finishAfterDust = exile.poolInfo(poolId).periodFinish;
+        assertEq(finishAfterDust, finish, "dust pushed the drip back");
+        _notify(100e18); // a real payout restarts the 7 days
+        uint64 finishAfterReal = exile.poolInfo(poolId).periodFinish;
+        assertEq(finishAfterReal, block.timestamp + 7 days);
+    }
+
+    function test_expiredLockIsReTieredOnExtend() public {
+        uint256 id = _lock(alice, 1000e18, 30 days);
+        assertEq(exile.lockInfo(id).multiplierBps, 30000);
+        _skip(31 days);
+        exile.poke(poolId, 744);
+        vm.prank(alice);
+        exile.extend(id, uint64(block.timestamp + 1 days));
+        assertEq(exile.lockInfo(id).multiplierBps, 5000, "an hour-long re-lock doesn't keep Monarch");
+    }
+
     function test_cancelTiers() public {
         IExile.Tier[] memory t = MonarchTiers.defaults();
         vm.startPrank(admin);

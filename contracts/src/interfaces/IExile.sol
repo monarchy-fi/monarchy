@@ -12,7 +12,7 @@ interface IExile {
     }
 
     /// @notice Start a reward pool for lockers of `stakeToken`, paid in `rewardToken`. Tiers must be
-    /// sorted by minDuration ascending. `admin` may change tiers behind a 72 hour timelock.
+    /// sorted by minDuration ascending. `admin` may change tiers behind a 12 hour timelock.
     function createPool(address stakeToken, address rewardToken, Tier[] calldata tiers, address admin)
         external
         returns (uint256 poolId);

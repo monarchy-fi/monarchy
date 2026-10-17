@@ -60,13 +60,13 @@ contract SandfallHandler is Test {
         uint256 id = ids[seed % ids.length];
         Sandfall.Stream memory s = sf.stream(id);
         if (!s.cancellable || s.cancelled) return;
-        uint256 owedBefore = uint256(s.total) - s.claimed;
+        uint256 unvested = uint256(s.total) - sf.vestedAmount(id);
         uint256 balBefore = token.balanceOf(address(sf));
         vm.prank(creator);
         sf.cancel(id);
-        // cancelling pays out exactly what the stream still held, split between recipient and creator
-        assertEq(balBefore - token.balanceOf(address(sf)), owedBefore, "cancel paid the wrong total");
-        ghostOut += owedBefore;
+        // cancelling returns exactly the unvested rest; what vested stays claimable
+        assertEq(balBefore - token.balanceOf(address(sf)), unvested, "cancel paid the wrong total");
+        ghostOut += unvested;
     }
 
     function warp(uint256 secs) external {

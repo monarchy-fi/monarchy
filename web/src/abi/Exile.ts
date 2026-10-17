@@ -28,6 +28,19 @@ export const exileAbi = [
   },
   {
     "type": "function",
+    "name": "EXECUTION_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_BUCKETS_PER_CALL",
     "inputs": [],
     "outputs": [
@@ -1142,6 +1155,11 @@ export const exileAbi = [
   {
     "type": "error",
     "name": "PoolNeedsPoke",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ProposalExpired",
     "inputs": []
   },
   {

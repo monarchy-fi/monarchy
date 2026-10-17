@@ -44,6 +44,9 @@ contract Sandfall is ReentrancyGuard {
     }
 
     uint256 internal constant RATE_PREC = 1e18;
+    /// @dev A top-up under 1/100 of what is still unvested joins the current window instead of restarting
+    /// it, so dust top-ups can't keep pushing the recipient's vesting back.
+    uint256 internal constant RESTART_MIN_DIVISOR = 100;
     uint32 public constant MIN_WINDOW = 1 days;
     uint32 public constant MAX_WINDOW = 365 days;
 
@@ -160,10 +163,15 @@ contract Sandfall is ReentrancyGuard {
 
         uint128 received = _pull(s.asset, amount);
         _accrueRolling(s);
-        uint256 unvested = uint256(s.total) - s.accrued + received;
+        uint256 stillVesting = uint256(s.total) - s.accrued;
+        uint256 unvested = stillVesting + received;
         s.total += received;
-        s.rate = unvested * RATE_PREC / s.window;
-        s.periodFinish = uint64(block.timestamp) + s.window;
+        if (uint256(received) * RESTART_MIN_DIVISOR < stillVesting && s.periodFinish > block.timestamp) {
+            s.rate = unvested * RATE_PREC / (s.periodFinish - block.timestamp);
+        } else {
+            s.rate = unvested * RATE_PREC / s.window;
+            s.periodFinish = uint64(block.timestamp) + s.window;
+        }
         emit ToppedUp(id, msg.sender, received, s.rate, s.periodFinish);
     }
 
@@ -179,7 +187,8 @@ contract Sandfall is ReentrancyGuard {
         emit Claimed(id, s.recipient, due);
     }
 
-    /// @notice Stop a cancellable stream. What has vested goes to the recipient now; the rest returns to the creator.
+    /// @notice Stop a cancellable stream. The unvested rest returns to the creator; what has vested stays
+    /// claimable by the recipient, so a recipient that can't receive can't block the cancel.
     function cancel(uint256 id) external nonReentrant {
         Stream storage s = _get(id);
         if (msg.sender != s.creator) revert NotCreator();
@@ -192,7 +201,6 @@ contract Sandfall is ReentrancyGuard {
 
         s.cancelled = true;
         s.total = uint128(vested);
-        s.claimed = uint128(vested);
         if (s.kind == Kind.ROLLING) {
             s.accrued = uint128(vested);
             s.rate = 0;
@@ -200,7 +208,6 @@ contract Sandfall is ReentrancyGuard {
             s.lastUpdate = uint64(block.timestamp);
         }
 
-        if (toRecipient > 0) _send(s.asset, s.recipient, toRecipient);
         if (toCreator > 0) _send(s.asset, s.creator, toCreator);
         emit Cancelled(id, toRecipient, toCreator);
     }

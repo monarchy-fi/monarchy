@@ -108,9 +108,11 @@ contract SandfallTest is Test {
         uint256 creatorBefore = usdc.balanceOf(creator);
         vm.prank(creator);
         sf.cancel(id);
-        assertEq(usdc.balanceOf(alice), 500e6, "vested goes to recipient");
         assertEq(usdc.balanceOf(creator) - creatorBefore, 500e6, "rest back to creator");
+        assertEq(sf.claimable(id), 500e6, "vested stays claimable");
         vm.warp(t0 + 100 days);
+        vm.prank(alice);
+        assertEq(sf.claim(id), 500e6, "vested goes to recipient");
         vm.prank(alice);
         assertEq(sf.claim(id), 0, "frozen after cancel");
         vm.prank(creator);
@@ -213,6 +215,34 @@ contract SandfallTest is Test {
         vm.warp(t0 + 1 days);
         vm.expectRevert(Sandfall.NativeTransferFailed.selector);
         r.claimFrom(id);
+    }
+
+    function test_cancelWorksEvenIfRecipientCannotReceive() public {
+        RejectingRecipient r = new RejectingRecipient(sf);
+        vm.prank(creator);
+        uint256 id = sf.createFixed{value: 10 ether}(address(0), address(r), 10 ether, t0, t0, t0 + 10 days, 0, true);
+        vm.warp(t0 + 5 days);
+        uint256 before = creator.balance;
+        vm.prank(creator);
+        sf.cancel(id);
+        assertEq(creator.balance - before, 5 ether, "unvested back to creator");
+        assertEq(sf.claimable(id), 5 ether, "vested left for the recipient");
+    }
+
+    function test_dustTopUpDoesNotDelayVesting() public {
+        uint256 id = sf.createRolling(address(usdc), alice, 30 days, creator, false);
+        vm.prank(creator);
+        sf.topUp(id, 3000e6);
+        uint64 finish = sf.stream(id).periodFinish;
+        vm.warp(block.timestamp + 10 days);
+        vm.prank(creator);
+        sf.topUp(id, 1); // a dust amount
+        assertEq(sf.stream(id).periodFinish, finish, "dust pushed vesting back");
+        vm.warp(finish);
+        assertEq(sf.vestedAmount(id), 3000e6 + 1);
+        vm.prank(creator);
+        sf.topUp(id, 100e6); // a real top-up starts a fresh window
+        assertEq(sf.stream(id).periodFinish, block.timestamp + 30 days);
     }
 
     function test_listings() public {

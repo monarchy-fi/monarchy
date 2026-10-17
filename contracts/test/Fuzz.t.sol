@@ -172,7 +172,7 @@ contract SandfallFuzzTest is Test {
         assertEq(sf.vestedAmount(id), amount, "not fully vested at the end");
     }
 
-    /// Cancelling splits exactly what is left between recipient and creator.
+    /// Cancelling returns exactly the unvested rest to the creator and leaves the vested part claimable.
     function testFuzz_cancelSplitsExactly(uint128 amount, uint32 at, uint32 claimAt) public {
         amount = uint128(bound(amount, 1, 1e30));
         uint64 start = uint64(block.timestamp);
@@ -185,12 +185,12 @@ contract SandfallFuzzTest is Test {
         vm.warp(block.timestamp + bound(at, 0, 100 days));
         uint256 vested = sf.vestedAmount(id);
 
-        uint256 aliceBefore = token.balanceOf(alice);
         uint256 creatorBefore = token.balanceOf(creator);
         vm.prank(creator);
         sf.cancel(id);
-        assertEq(token.balanceOf(alice) - aliceBefore, vested - claimed, "recipient got the wrong amount");
         assertEq(token.balanceOf(creator) - creatorBefore, amount - vested, "creator got the wrong amount");
+        vm.prank(alice);
+        assertEq(sf.claim(id), vested - claimed, "recipient can't claim the vested part");
         assertEq(token.balanceOf(address(sf)), 0, "dust left behind");
     }
 

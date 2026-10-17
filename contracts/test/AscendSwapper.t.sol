@@ -79,7 +79,8 @@ abstract contract AscendSwapperTestBase is MonarchyFixture {
 
         launchpad.setEma(poolId, 0); // back to spot
         _buy(poolId, trader, 10_000e6);
-        l.distribute();
+        l.distribute(); // half size after the skip
+        l.distribute(); // the rest
         assertEq(l.buybackReserve(), 0);
         assertGt(l.totalBuybackTokensBurned(), 0);
         assertEq(usdc.balanceOf(address(l)), 0);
