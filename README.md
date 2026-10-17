@@ -34,14 +34,14 @@ flowchart LR
     A[Ascend pool<br/>creator fees] --> L(Lodestar)
     L -->|token side| B[Burned]
     L -->|quote, burn share| S[AscendSwapper] --> B
-    L -->|quote, holder share| E[Exile<br/>7 day drip to lockers]
+    L -->|quote, holder share| E[Exile<br/>3 day drip to lockers]
     L -->|quote, treasury share| T[Sandfall<br/>rolling Team Treasury stream]
 ```
 
 | | What it does |
 |---|---|
-| **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`: token-side fees are burned, and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. |
-| **Exile** | Locks ERC-20s (including v2 LP), ERC-721s and ERC-1155s. Locks can be extended, never shortened, cancelled or transferred. ERC-20 locks earn holder rewards by tier, paid as a 7 day drip, and stop earning the second they unlock. |
+| **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`, and the team's keeper calls it every 3 hours so fees never pile up into one big payout: token-side fees are burned, and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. |
+| **Exile** | Locks ERC-20s (including v2 LP), ERC-721s and ERC-1155s. Locks can be extended, never shortened, cancelled or transferred. ERC-20 locks earn holder rewards by tier, paid as a 3 day drip, and stop earning the second they unlock. |
 | **Sandfall** | Vesting streams (linear, cliff or monthly steps) in any non-rebasing ERC-20 or native HYPE. The creator decides at creation whether a stream can be cancelled, and the site badges it. Rolling streams back Lodestar's Team Treasury. |
 
 ### Exile tiers
@@ -69,19 +69,17 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [SECURI
 
 ## Live on Elysium testnet
 
-Demo Token (DEMO) is launched on Ascend's live testnet launchpad, with its creator role held by a Lodestar. Burns and buybacks through the real PancakeSwap Infinity pool are confirmed on chain.
+Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its creator role held by a Lodestar. Every feature has been exercised on chain through the real PancakeSwap Infinity pool: fee burns, an EMA-guarded buyback, holder rewards dripping to Exile locks at several tiers, the Team Treasury stream, lock extension and a config change waiting out its 12 hour timelock. Contract sources are verified on the explorer.
 
 | Contract | Address |
 |---|---|
-| LodestarFactory | [`0x0A9941FBe3cC5f4904AA24D5831ABE073415E1d9`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x0A9941FBe3cC5f4904AA24D5831ABE073415E1d9) |
-| Lodestar implementation | [`0x3bD19E9da740c7BE6395a96C23951721D091524A`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x3bD19E9da740c7BE6395a96C23951721D091524A) |
-| Exile | [`0x60226465AEf0E05c286E62663431011105A43D23`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x60226465AEf0E05c286E62663431011105A43D23) |
-| Sandfall | [`0x6E9f51d47Bbc86BeEafDC90dF725e7B1A2FeAD74`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x6E9f51d47Bbc86BeEafDC90dF725e7B1A2FeAD74) |
-| AscendSwapper | [`0x9b9d6A57c2aEd9Bc11e736D5FBa8076458e909bE`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x9b9d6A57c2aEd9Bc11e736D5FBa8076458e909bE) |
-| Demo Token (DEMO) | [`0xE224bBb3e7438F096301C7a980402A67cf77BD94`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xE224bBb3e7438F096301C7a980402A67cf77BD94) |
-| DEMO Lodestar | [`0x47b8f12CB6ccA74ee14313ade86A15719cc335c7`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x47b8f12CB6ccA74ee14313ade86A15719cc335c7) |
-
-These were deployed before the timelocks moved from 72 to 12 hours, so they still use 72 hours. The next testnet deploy picks up 12.
+| LodestarFactory | [`0x9B6B1166469431587bF4d0ADf4eB7b7da2079716`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x9B6B1166469431587bF4d0ADf4eB7b7da2079716) |
+| Lodestar implementation | [`0x153f4efAe53791120Bc34e09D2333e7bA1B09508`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x153f4efAe53791120Bc34e09D2333e7bA1B09508) |
+| Exile | [`0x92a87165f0F4C8C288Cd57918b89274e21394125`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x92a87165f0F4C8C288Cd57918b89274e21394125) |
+| Sandfall | [`0xC119BEcefaF9711B1F7311943aeA9E4f0669EFf1`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xC119BEcefaF9711B1F7311943aeA9E4f0669EFf1) |
+| AscendSwapper | [`0xDab7bD5CfA4021Fd604948EbF4616690Daaed658`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xDab7bD5CfA4021Fd604948EbF4616690Daaed658) |
+| Sample Token (SMPL) | [`0xe43F98f8A8D724609243D5abAB15bBaF072BC633`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xe43F98f8A8D724609243D5abAB15bBaF072BC633) |
+| SMPL Lodestar | [`0x618D5678287fdFC0ee83cB35221cCc1F138098F5`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x618D5678287fdFC0ee83cB35221cCc1F138098F5) |
 
 <details>
 <summary>Ascend addresses used</summary>
@@ -148,7 +146,7 @@ npm run launch:testnet
 npm run launch:testnet -- --broadcast
 
 # 3. Hand the creator role to the token's Lodestar and activate it (40/40/20 split, the four
-#    tiers, 30 day treasury stream, listing set-aside on, creator role locked for a year).
+#    tiers, 7 day treasury stream, listing set-aside on, creator role locked for a year).
 #    TREASURY is the address that receives the Team Treasury stream.
 TREASURY=0xYourTreasury npm run activate:testnet
 
@@ -166,7 +164,7 @@ If buybacks through the Infinity vault misbehave, Lodestar keeps the buyback sha
 | | |
 |---|---|
 | **Working** | Lodestar, Exile and Sandfall live on Elysium testnet; burns and buybacks proven on Ascend's pool; web app for all three; CI on every change |
-| **In progress** | monarchy.fi and public docs, testnet redeploy with 12 hour timelocks, site design |
+| **In progress** | monarchy.fi and public docs, site design |
 | **Before launch** | Security audit, mainnet deploy, Monarchy token launch on Ascend |
 | **Next** | kHYPE treasury option, TWAP buybacks, Ascend NFT holder bonus in Exile, other launchpads, an indexer for history and APR charts |
 
