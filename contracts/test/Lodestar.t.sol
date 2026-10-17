@@ -8,6 +8,10 @@ import {ILodestar} from "../src/interfaces/ILodestar.sol";
 import {Sandfall} from "../src/Sandfall.sol";
 import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {MockSwapper} from "../src/mocks/MockSwapper.sol";
+import {IExile} from "../src/interfaces/IExile.sol";
+import {Exile} from "../src/Exile.sol";
+import {IAscendLaunchpad} from "../src/interfaces/IAscendLaunchpad.sol";
+import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract LodestarTest is MonarchyFixture {
@@ -46,7 +50,7 @@ contract LodestarTest is MonarchyFixture {
         assertEq(s.creator, address(l));
         assertEq(s.recipient, treasury);
         assertFalse(s.cancellable);
-        assertEq(exile.poolInfo(l.exilePoolId()).admin, dev);
+        assertEq(exile.poolInfo(l.exilePoolId()).admin, address(l), "the router administers the reward pool");
     }
 
     function test_deployRequiresTransferFirst() public {
@@ -277,6 +281,7 @@ contract LodestarTest is MonarchyFixture {
         assertEq(l.totalHoldersQuote(), 400e6, "reserve is not split again");
 
         for (uint256 i; i < 5 && l.buybackReserve() > 0; ++i) {
+            vm.warp(block.timestamp + 1 hours); // buybacks are at least an hour apart
             l.distribute();
         }
         assertEq(l.totalBuybackQuote(), 400e6, "everything bought back in pieces");
@@ -298,6 +303,7 @@ contract LodestarTest is MonarchyFixture {
         mockSwapper.setMaxIn(500e6);
 
         for (uint256 i; i < 40 && l.buybackReserve() > 0; ++i) {
+            vm.warp(block.timestamp + 1 hours);
             l.distribute();
         }
         assertEq(l.buybackReserve(), 0, "reserve unstuck");
@@ -309,6 +315,7 @@ contract LodestarTest is MonarchyFixture {
         Lodestar l = _activate(_params(token, 10_000, 0, 0, address(mockSwapper), false));
         launchpad.injectFees(poolId, 0, 4_000e6); // 2,000 USDC to buy back
         uint256 cap = l.maxBuyback();
+        assertEq(l.nextBuybackAt(), 0, "nothing bought yet: no wait");
         l.distribute();
         assertEq(l.totalBuybackQuote(), cap, "one capped piece per distribute");
         assertEq(l.buybackReserve(), 2_000e6 - cap);
@@ -531,7 +538,12 @@ contract LodestarTest is MonarchyFixture {
         l.lockCreatorRole(type(uint64).max);
         vm.expectRevert(Lodestar.OnlySteward.selector);
         l.transferSteward(trader);
-        vm.expectRevert(Lodestar.OnlyFactory.selector);
+        vm.expectRevert(Lodestar.OnlySteward.selector);
+        l.proposeTiers(MonarchTiers.defaults());
+        vm.expectRevert(Lodestar.OnlySteward.selector);
+        l.cancelTiers();
+        // accepting the role is open to anyone, but only completes a hand-off Ascend already holds
+        vm.expectRevert(Lodestar.CreatorNotPending.selector);
         l.acceptCreator();
         vm.stopPrank();
 
@@ -587,5 +599,231 @@ contract LodestarTest is MonarchyFixture {
         assertLt(first, 1_200_000);
         assertLt(steady, 1_000_000);
         assertGt(l.totalBuybackTokensBurned(), 0);
+    }
+
+    // ---------------------------------------------------------------- 13. second review: buyback timing and prices
+
+    /// @dev The depth cap bounds one buy. Buys are also at least an hour apart, so calling distribute
+    /// many times in one block moves one capped piece, not the whole reserve.
+    function test_buybacksAreAtLeastAnHourApart() public {
+        Lodestar l = _activate(_params(token, 10_000, 0, 0, address(mockSwapper), false));
+        launchpad.injectFees(poolId, 0, 4_000e6); // 2,000 USDC to buy back
+        uint256 cap = l.maxBuyback();
+        assertEq(l.nextBuybackAt(), 0, "nothing bought yet: no wait");
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), cap);
+        assertEq(l.nextBuybackAt(), block.timestamp + 1 hours);
+        assertEq(l.buybackShift(), 0);
+
+        l.distribute();
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), cap, "one buyback per hour, however often distribute is called");
+        assertEq(l.buybackReserve(), 2_000e6 - cap);
+        assertEq(l.buybackShift(), 0, "waiting is not a skip");
+
+        vm.warp(block.timestamp + 1 hours - 1);
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), cap, "still inside the hour");
+        vm.warp(block.timestamp + 1);
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), 2 * cap, "the next piece goes out an hour later");
+    }
+
+    /// @dev Buy, call distribute twenty times, sell, all in one block, against the real swapper and the
+    /// production 10% slippage: exactly one capped buyback happens and the round trip loses money.
+    function test_sandwichAroundRepeatedDistributesGetsOneBuyback() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(swapper), false);
+        p.cfg.maxSlippageBps = 1_000;
+        Lodestar l = _activate(p);
+        launchpad.injectFees(poolId, 0, 30_000e6); // a busy window: 6k USDC of buyback share
+        l.distribute(); // keeper: first capped piece, the rest waits in buybackReserve
+        assertGt(l.buybackReserve(), 20 * l.maxBuyback(), "precondition: a reserve worth many capped pieces");
+        vm.warp(block.timestamp + 1 hours); // the next piece is due
+
+        address attacker = makeAddr("attacker");
+        uint256 stake = 5_000e6;
+        _buy(poolId, attacker, stake);
+        uint256 buybacks;
+        for (uint256 i; i < 20; ++i) {
+            uint256 before = l.totalBuybackQuote();
+            l.distribute();
+            if (l.totalBuybackQuote() > before) ++buybacks;
+        }
+        _sell(poolId, token, attacker, token.balanceOf(attacker));
+
+        assertEq(buybacks, 1, "twenty distributes in one block move one capped piece");
+        assertLt(usdc.balanceOf(attacker), stake, "the sandwich loses money");
+    }
+
+    /// @dev After a dump the EMA is stale and high. The cap follows the smaller real depth and the
+    /// floor follows spot, so the buyback can't be oversized or underpaid against a stale EMA.
+    function test_dumpShrinksTheCapAndKeepsTheFloorAtSpot() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(swapper), false);
+        p.cfg.maxSlippageBps = 1_000;
+        Lodestar l = _activate(p);
+        (uint160 emaBefore,,,) = pool.getSlot0(poolId);
+        uint256 capBefore = l.maxBuyback();
+
+        // a whale dumps 800M tokens; Ascend's hook recorded the pre-dump price into the EMA
+        address whale = makeAddr("whale");
+        token.mint(whale, 800_000_000e18);
+        _sell(poolId, token, whale, 800_000_000e18);
+        launchpad.setEma(poolId, emaBefore);
+
+        (uint256 r0, uint256 r1,,) = pool.reserves(poolId);
+        (uint256 tokenR, uint256 quoteR) = launchpad.poolTokenIs0(poolId) ? (r0, r1) : (r1, r0);
+        uint256 cap = l.maxBuyback();
+        assertLt(cap, capBefore * 6 / 10, "the cap shrank with the real depth");
+        assertApproxEqRel(cap, quoteR * 50 / 10_000, 1e15, "0.5% of the depth that is really there");
+        // floor: tokens at spot, less the 1% fee and the 10% slippage allowance
+        uint256 minOut = l.quoteMinOut(cap, 1_000);
+        assertApproxEqRel(minOut, cap * tokenR / quoteR * 89 / 100, 1e15, "the floor follows spot, not the stale EMA");
+
+        // and a buyback at that cap moves the price by about 1%, as the cap is sized for
+        launchpad.injectFees(poolId, 0, 10_000e6);
+        uint256 p0 = quoteR * 1e36 / tokenR;
+        l.distribute();
+        (r0, r1,,) = pool.reserves(poolId);
+        (tokenR, quoteR) = launchpad.poolTokenIs0(poolId) ? (r0, r1) : (r1, r0);
+        uint256 p1 = quoteR * 1e36 / tokenR;
+        assertGt(l.totalBuybackQuote(), 0, "the buyback went through at the spot floor");
+        assertLt((p1 - p0) * 10_000 / p0, 120, "one capped buyback moves the price about 1%");
+    }
+
+    /// @dev A pump can't loosen anything: spot only ever tightens the floor and the cap stays at the
+    /// EMA's depth, so a buyback at a pumped price is still refused.
+    function test_pumpLeavesTheEmaInCharge() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(swapper), false);
+        p.cfg.maxSlippageBps = 1_000;
+        Lodestar l = _activate(p);
+        (uint160 emaBefore,,,) = pool.getSlot0(poolId);
+        uint256 capBefore = l.maxBuyback();
+        uint256 floorBefore = l.quoteMinOut(capBefore, 1_000);
+
+        address attacker = makeAddr("attacker");
+        _buy(poolId, attacker, 10_000e6); // price up about 40%
+        launchpad.setEma(poolId, emaBefore);
+        assertApproxEqRel(l.maxBuyback(), capBefore, 1e12, "the cap stays at the EMA depth");
+        assertEq(l.quoteMinOut(capBefore, 1_000), floorBefore, "the floor stays at the EMA floor");
+
+        launchpad.injectFees(poolId, 0, 1_000e6);
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), 0, "no buyback at the pumped price");
+        assertEq(l.buybackReserve(), 220e6, "40% of 500, plus 40% of the pump's own 50 USDC creator fee");
+    }
+
+    /// @dev A pump that blocks the buyback can't be milked for halvings: however many times distribute is
+    /// called during it, the attempt size halves once an hour, the same rate at which successes double it back.
+    function test_halvingIsAtMostHourly() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(swapper), false);
+        p.cfg.maxSlippageBps = 1_000;
+        Lodestar l = _activate(p);
+        launchpad.injectFees(poolId, 0, 10_000e6);
+        (uint160 emaBefore,,,) = pool.getSlot0(poolId);
+        address attacker = makeAddr("attacker");
+        _buy(poolId, attacker, 3_500e6); // +14%, past the fee plus 10% slippage
+        launchpad.setEma(poolId, emaBefore); // the EMA has not seen the pump yet, so the floor holds
+
+        for (uint256 i; i < 8; ++i) {
+            l.distribute();
+        }
+        assertEq(l.totalBuybackQuote(), 0, "the pumped price is refused");
+        assertEq(l.buybackShift(), 1, "eight failed calls in one block halve once");
+        assertEq(l.lastHalvingAt(), block.timestamp);
+
+        vm.warp(block.timestamp + 1 hours);
+        l.distribute();
+        assertEq(l.buybackShift(), 2, "an hour later it can halve again");
+    }
+
+    /// @dev The steward can't hand the role to the router itself: that would let anyone "accept" a no-op
+    /// hand-off and clear the listing election.
+    function test_cannotHandTheRoleToTheRouterItself() public {
+        Lodestar l = _activateDefault(false);
+        vm.prank(dev);
+        vm.expectRevert(Lodestar.SelfTransfer.selector);
+        l.transferCreatorOut(address(l));
+    }
+
+    /// @dev Skips with no EMA (a fresh pool, or the read failing) don't count as attempts, so a day of
+    /// EMA-less keeper runs leaves the first priced buyback at full size.
+    function test_emaLessSkipsDoNotHalve() public {
+        Lodestar l = _activateDefault(false);
+        vm.mockCall(
+            address(launchpad), abi.encodeWithSelector(IAscendLaunchpad.emaSqrtPrice.selector, poolId), abi.encode(uint160(0))
+        );
+        for (uint256 i; i < 8; ++i) {
+            launchpad.injectFees(poolId, 0, 100e6);
+            vm.warp(block.timestamp + 3 hours);
+            l.distribute();
+        }
+        assertEq(l.buybackShift(), 0, "nothing was attempted, so nothing halves");
+        assertEq(l.buybackReserve(), 160e6);
+        vm.clearMockedCalls();
+
+        uint256 cap = l.maxBuyback();
+        uint256 full = 160e6 < cap ? 160e6 : cap;
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), full, "the first priced buyback is full size");
+    }
+
+    // ---------------------------------------------------------------- 14. second review: roles
+
+    /// @dev The creator role can come back: once the current creator hands it to the router on Ascend,
+    /// anyone can complete the hand-off, and a second deploy fails cheaply instead of burning its gas.
+    function test_creatorRoleCanComeBack() public {
+        Lodestar l = _activateDefault(false); // no lock
+        vm.startPrank(dev);
+        l.transferCreatorOut(dev);
+        launchpad.acceptCreator(poolId);
+        assertFalse(l.isCreator());
+        launchpad.transferCreator(poolId, address(l)); // handed straight back
+        vm.stopPrank();
+
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        vm.prank(dev);
+        vm.expectRevert(LodestarFactory.AlreadyDeployed.selector);
+        factory.deploy{gas: 300_000}(p);
+
+        vm.prank(trader);
+        vm.expectEmit(address(l));
+        emit Lodestar.CreatorAccepted();
+        l.acceptCreator();
+        assertTrue(l.isCreator(), "back with the router");
+
+        launchpad.injectFees(poolId, 0, 1_000e6);
+        l.distribute();
+        assertEq(l.totalHoldersQuote(), 200e6, "fees route again");
+    }
+
+    /// @dev The router is the Exile pool's admin, so tier changes belong to whoever is steward and move
+    /// with the role; the activating key alone has no say.
+    function test_tierChangesFollowTheSteward() public {
+        Lodestar l = _activateDefault(false);
+        uint256 pid = l.exilePoolId();
+        IExile.Tier[] memory t = MonarchTiers.defaults();
+        t[3].multiplierBps = 40_000;
+
+        vm.prank(dev);
+        vm.expectRevert(Exile.NotAdmin.selector);
+        exile.proposeTiers(pid, t);
+
+        vm.prank(dev);
+        l.proposeTiers(t);
+        assertEq(exile.poolInfo(pid).tiersEta, block.timestamp + 12 hours);
+        vm.prank(dev);
+        l.cancelTiers();
+        assertEq(exile.poolInfo(pid).tiersEta, 0);
+
+        vm.prank(dev);
+        l.transferSteward(trader);
+        vm.prank(dev);
+        vm.expectRevert(Lodestar.OnlySteward.selector);
+        l.proposeTiers(t);
+        vm.prank(trader);
+        l.proposeTiers(t);
+        vm.warp(block.timestamp + 12 hours);
+        exile.executeTiers(pid); // anyone, once ready
+        assertEq(exile.poolInfo(pid).tiers[3].multiplierBps, 40_000);
     }
 }

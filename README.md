@@ -7,7 +7,7 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 131 passing](https://img.shields.io/badge/Foundry-131%20tests%20passing-2E7D5B.svg)](contracts/test)
+[![Tests: 143 passing](https://img.shields.io/badge/Foundry-143%20tests%20passing-2E7D5B.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
 [![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-6930EA.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-C9A24A.svg)](#how-it-works)
@@ -61,7 +61,7 @@ No lock, no rewards. With four holders each locking 10,000 tokens and fees dripp
 - **No sweep.** There is no rescue or withdraw function. Funds can only go to the burn address, Exile, Sandfall or the swapper. Locked tokens and vesting streams can only go to their owners.
 - **Slow changes.** Split, swapper and slippage changes, and Exile tier changes, wait behind a 12 hour timelock and expire if not executed within 7 days after it. Settings chosen at activation apply immediately.
 - **Locked router.** The creator role can be locked to the Lodestar for a chosen period, so the router can't be swapped out. A lock can't be placed while a hand-off is pending.
-- **Guarded buybacks.** The minimum output comes from Ascend's on-chain EMA price, never the spot price, less the pool fee and a slippage allowance (default 10%, min 1%, max 20%). Each buy spends at most 0.5% of the pool's quote depth, so it moves the price less than a sandwich pays in fees. Bigger amounts and skipped buys wait in reserve and go out in pieces; holders and treasury are still paid. Every buyback must actually deliver its minimum to the burn address. The swapper is chosen by the steward behind the timelock, and a dishonest one could keep the margin above that minimum, so swapper changes are worth watching.
+- **Guarded buybacks.** The minimum output is the stricter of a floor at Ascend's on-chain EMA price and one at spot, less the pool fee and a slippage allowance (default 10%, min 1%, max 20%); spot alone is never trusted. Each buy spends at most 0.5% of the pool's quote depth, so it moves the price less than a sandwich pays in fees, and buys are at least an hour apart, so calling `distribute` many times in one block can't push the whole reserve through between a buy and a sell. Bigger amounts and skipped buys wait in reserve and go out in pieces; holders and treasury are still paid. Every buyback must actually deliver its minimum to the burn address. The swapper is chosen by the steward behind the timelock, and a dishonest one could keep the margin above that minimum, so swapper changes are worth watching.
 - **Front-run safe activation.** Only the pool's current creator can deploy its Lodestar, at an address derived from the pool id.
 - **Fuzz and invariant tested.** Random sequences of locks, payouts, claims, top-ups, cancels, fees and failed buybacks check that Exile stays solvent and never pays out more than it received, that every Sandfall stream stays fully backed, and that every unit of quote a Lodestar handles ends up burned, locked, streamed or held in its buyback reserve.
 
@@ -147,8 +147,10 @@ Use a **fresh burner wallet**, never your main wallet. Get testnet HYPE from the
 cp .env.example .env     # set PRIVATE_KEY (the burner), keep the Ascend addresses as they are
 set -a; source .env; set +a
 
-# 1. Monarchy core: Exile, Sandfall, Lodestar implementation, AscendSwapper, LodestarFactory
-npm run deploy:testnet          # writes deployments/99801.json
+# 1. Monarchy core: Exile, Sandfall, Lodestar implementation, AscendSwapper, LodestarFactory.
+#    The script refuses to replace a core that deployments/99801.json already records (this repo
+#    ships the live testnet one), so a fresh deploy from a clone needs OVERWRITE_DEPLOYMENT=1.
+OVERWRITE_DEPLOYMENT=1 npm run deploy:testnet   # writes deployments/99801.json
 
 # 2. A token on Ascend. Either launch on Ascend's site and record it:
 TOKEN=0xYourToken npm run launch:testnet
@@ -158,7 +160,8 @@ npm run launch:testnet -- --broadcast
 
 # 3. Hand the creator role to the token's Lodestar and activate it (40/40/20 split, the four
 #    tiers, 7 day treasury stream, listing set-aside on, creator role locked for a year).
-#    TREASURY is the address that receives the Team Treasury stream.
+#    TREASURY is the address that receives the Team Treasury stream; it can never be changed.
+#    Buybacks go through the AscendSwapper from deployments/99801.json unless SWAPPER is set.
 TREASURY=0xYourTreasury npm run activate:testnet
 
 # 4. The website reads deployments/99801.json
@@ -168,7 +171,9 @@ npm run abis && npm run web
 Mock USDC on Elysium has a public `mint`, so you can fund wallets for trading with
 `cast send $QUOTE "mint(address,uint256)" $YOUR_ADDRESS 1000000000000 --rpc-url $RPC_URL --private-key $PRIVATE_KEY`.
 
-If buybacks through the Infinity vault misbehave, Lodestar keeps the buyback share in `buybackReserve` and still pays holders and the treasury. To activate with no buyback route at all, have the factory owner run `setDefaultSwapper(0x0)` at least 12 hours before step 3 (a new default only applies after 12 hours).
+If buybacks through the Infinity vault misbehave, Lodestar keeps the buyback share in `buybackReserve` and still pays holders and the treasury. To activate with no buyback route at all, have the factory owner run `setDefaultSwapper(0x0)` at least 12 hours before step 3 (a new default only applies after 12 hours), then run step 3 with `SWAPPER=0x0000000000000000000000000000000000000000`, which asks for the factory's default instead of the deployed AscendSwapper.
+
+The keeper (`.github/workflows/distribute.yml`) calls `distribute()` every 3 hours from a wallet that holds only gas money, set as the `KEEPER_PRIVATE_KEY` Actions secret. Each run checks that `RPC_URL` serves chain 99801, lets `cast` estimate the gas, and fails when the receipt shows a revert, so a broken distribute is a red run rather than a green one. If the call fails after a long outage, the run first catches Exile's reward pool up with `poke(poolId, 720)` until it is current, then tries `distribute()` once more.
 
 ## Status and roadmap
 

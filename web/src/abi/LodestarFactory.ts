@@ -464,6 +464,11 @@ export const lodestarFactoryAbi = [
   },
   {
     "type": "error",
+    "name": "AlreadyDeployed",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "DefaultSwapperJustChanged",
     "inputs": []
   },

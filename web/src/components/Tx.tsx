@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useChainId, useConnection, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
-import { maxUint256, type Abi, type Address } from "viem";
+import type { Abi, Address } from "viem";
 import { useReadContract } from "wagmi";
 import { mockERC20Abi } from "../abi";
-import { explorerTx } from "../lib/chains";
+import { chainName, explorerTx } from "../lib/chains";
 import { short } from "../lib/format";
+import { useNetwork } from "../lib/network";
 import { Spinner } from "./Ui";
 
 // Loose on purpose: each call site passes a typed abi + functionName; wagmi checks args there.
@@ -24,6 +25,7 @@ type Props = {
 export function TxButton({ request, children, disabledReason, onDone, className }: Props) {
   const chainId = useChainId();
   const { isConnected } = useConnection();
+  const { wrongNetwork, target } = useNetwork();
   const qc = useQueryClient();
   const write = useWriteContract();
   const [hash, setHash] = useState<`0x${string}`>();
@@ -39,7 +41,8 @@ export function TxButton({ request, children, disabledReason, onDone, className 
   }, [receipt.isSuccess]);
 
   const busy = write.isPending || (!!hash && receipt.isLoading);
-  const reason = !isConnected ? "Connect a wallet" : disabledReason;
+  // Nothing is sent while the wallet sits on another chain; the notice under the nav offers the switch.
+  const reason = !isConnected ? "Connect a wallet" : wrongNetwork ? `Switch your wallet to ${chainName(target.id)} first` : disabledReason;
 
   async function send() {
     setError(undefined);
@@ -47,8 +50,10 @@ export function TxButton({ request, children, disabledReason, onDone, className 
     const req = request();
     if (!req) return;
     try {
+      // Pinned to the chain the page reads from: if the wallet moved in the meantime, wagmi refuses to send
+      // instead of sending the transaction somewhere else.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const h = await write.mutateAsync(req as any);
+      const h = await write.mutateAsync({ chainId, ...req } as any);
       setHash(h);
     } catch (e) {
       setError(shortError(e));
@@ -110,7 +115,10 @@ export function TxButton({ request, children, disabledReason, onDone, className 
   );
 }
 
-/** Shows an Approve button until `spender` may move `amount` of `token`, then the action button. */
+/**
+ * Shows an Approve button until `spender` may move `amount` of `token`, then the action button.
+ * The approval is for exactly `amount`, never an unlimited allowance.
+ */
 export function WithApproval({
   token,
   spender,
@@ -134,7 +142,7 @@ export function WithApproval({
   if (allowance.data !== undefined && allowance.data >= amount) return <>{children}</>;
   return (
     <TxButton
-      request={() => ({ address: token, abi: mockERC20Abi, functionName: "approve", args: [spender, maxUint256] })}
+      request={() => ({ address: token, abi: mockERC20Abi, functionName: "approve", args: [spender, amount] })}
       disabledReason={amount === 0n ? "Enter an amount" : undefined}
     >
       Approve

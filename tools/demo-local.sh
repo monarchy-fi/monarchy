@@ -8,6 +8,8 @@ export RPC_URL=${RPC_URL:-http://127.0.0.1:8545}
 # anvil's first account; never use this key anywhere else
 export PRIVATE_KEY=${PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}
 export ASCEND_MODE=mock
+# the Team Treasury recipient (anvil's second account); ActivateLodestar requires it to be set explicitly
+export TREASURY=${TREASURY:-0x70997970C51812dc3A010C7d01b54f0D7d0dC79C}
 PROFILE=${FOUNDRY_PROFILE:-default}
 
 if ! cast chain-id --rpc-url "$RPC_URL" >/dev/null 2>&1; then

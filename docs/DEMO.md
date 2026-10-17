@@ -15,6 +15,6 @@ Talking points:
 
 - No fees on any feature. MONARCH runs on its own product.
 - The dev launches on Ascend's site and keeps the dev buy; only the creator fee stream moves to Lodestar.
-- `distribute()` is permissionless and safe to spam: the buyback is priced from Ascend's EMA and capped at a small share of pool depth so sandwiching it doesn't pay, and anything that can't go out yet waits in reserve.
+- `distribute()` is permissionless and safe to spam: the buyback is priced from the stricter of Ascend's EMA and spot, capped at a small share of pool depth and at most hourly, so sandwiching it doesn't pay, and anything that can't go out yet waits in reserve.
 - Exile rewards drip over 3 days and stop at unlock, so sniping a payout or chaining 1 day locks earns far less than a real Monarch lock.
 - Our own buyback pays the 1% pool fee, half of which comes straight back to Lodestar on the next collect.

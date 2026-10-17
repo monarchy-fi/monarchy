@@ -286,12 +286,12 @@ contract ExileTest is Test {
     }
 
     function test_emptyPoolCarryIsNotSqueezedIntoTheLastSecond() public {
-        _notify(7000e18); // drips with nobody locked, so it all goes to the carry
-        _skip(7 days - 1);
+        _notify(3000e18); // drips with nobody locked, so it all goes to the carry
+        _skip(3 days - 1);
         uint256 jit = _lock(bob, 1000e18, 1 days);
         _notify(1); // dust right before the drip ends
         _skip(1);
-        // the carry re-drips over about 7 days, so the late locker gets a sliver, not all of it
+        // the carry re-drips over about 3 days, so the late locker gets a sliver, not all of it
         assertLt(exile.pendingRewards(jit), 10e18, "just-in-time lock scooped the carry");
     }
 
@@ -408,6 +408,60 @@ contract ExileTest is Test {
         t[1] = IExile.Tier({minDuration: 3 days, multiplierBps: 10000, label: "B"});
         vm.expectRevert(Exile.InvalidTiers.selector);
         exile.createPool(address(monarch), address(reward), t, admin);
+        // a tier can't be shorter than a bucket or promise more than 5x, so an admin can't add a tier
+        // that farms the drip with capital committed for seconds
+        t[0] = IExile.Tier({minDuration: 1, multiplierBps: 5000, label: "A"});
+        t[1] = IExile.Tier({minDuration: 3 days, multiplierBps: 10000, label: "B"});
+        vm.expectRevert(Exile.InvalidTiers.selector);
+        exile.createPool(address(monarch), address(reward), t, admin);
+        t[0] = IExile.Tier({minDuration: 1 hours, multiplierBps: 5000, label: "A"});
+        t[1] = IExile.Tier({minDuration: 3 days, multiplierBps: 50_001, label: "B"});
+        vm.expectRevert(Exile.InvalidTiers.selector);
+        exile.createPool(address(monarch), address(reward), t, admin);
+        t[1].multiplierBps = 50_000;
+        exile.createPool(address(monarch), address(reward), t, admin); // the bounds themselves are fine
+    }
+
+    function test_erc721CannotGoThroughTheTokenPath() public {
+        MockERC721 nft = new MockERC721();
+        nft.mint(alice, 7);
+        vm.startPrank(alice);
+        nft.setApprovalForAll(address(exile), true);
+        vm.expectRevert(Exile.NotAnERC20.selector);
+        exile.lockERC20(address(nft), 7, uint64(block.timestamp + 3 days), 0);
+        vm.stopPrank();
+        assertEq(nft.ownerOf(7), alice, "the NFT never left");
+    }
+
+    function test_claimRewardsToAnotherAddress() public {
+        uint256 a = _lock(alice, 1000e18, 30 days);
+        _notify(3000e18);
+        _skip(3 days);
+        vm.prank(bob);
+        vm.expectRevert(Exile.NotOwner.selector);
+        exile.claimRewardsTo(a, bob);
+        vm.prank(alice);
+        vm.expectRevert(Exile.ZeroAddress.selector);
+        exile.claimRewardsTo(a, address(0));
+        vm.prank(alice);
+        uint256 got = exile.claimRewardsTo(a, carol);
+        assertApproxEqAbs(got, 3000e18, 1e6);
+        assertEq(reward.balanceOf(carol), got, "paid to the chosen address");
+        assertEq(reward.balanceOf(alice), 0);
+        assertEq(exile.pendingRewards(a), 0);
+    }
+
+    function test_emptyPoolCarryIsVisible() public {
+        _notify(3000e18); // nobody locked
+        _skip(1 days);
+        assertApproxEqAbs(exile.poolInfo(poolId).carry, 1000e18, 1e6, "the carry shows as it accrues");
+        _skip(2 days);
+        assertApproxEqAbs(exile.poolInfo(poolId).carry, 3000e18, 1e6, "all of it once the drip is over");
+        _lock(bob, 1000e18, 30 days);
+        _notify(1);
+        assertEq(exile.poolInfo(poolId).carry, 0, "the next payout picks it up and re-drips it");
+        _skip(3 days);
+        assertApproxEqAbs(exile.pendingRewards(1), 3000e18, 1e6);
     }
 
     // ---------------------------------------------------------------- misc

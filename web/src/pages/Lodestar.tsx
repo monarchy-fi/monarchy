@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { isAddress, parseUnits, stringToHex, type Address } from "viem";
 import { iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
-import { TAGLINES } from "../components/Tiers";
+import { tagline } from "../components/Tiers";
 import { TxButton } from "../components/Tx";
 import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
 import { DEFAULT_TREASURY_WINDOW_DAYS, DISTRIBUTE_NOTE } from "../lib/constants";
@@ -275,7 +275,10 @@ function Activate({ d, token, predicted, poolId }: { d: Deployment; token: Addre
   const you = !!address && creator.toLowerCase() === address.toLowerCase();
   const handedOver = pendingCreator.toLowerCase() === predicted.toLowerCase();
   const sum = split.burn + split.holders + split.treasury;
-  const recipient = isAddress(treasury) ? treasury : address;
+  // The stream's recipient can never be changed, so it is never filled in silently: the creator types it
+  // or presses "Use my wallet", and the button stays off until the field holds a valid address.
+  const recipient = isAddress(treasury) ? treasury : undefined;
+  const badTreasury = treasury !== "" && !isAddress(treasury);
 
   return (
     <Card title="Activate Lodestar" right={<Badge tone="grey">2 transactions</Badge>}>
@@ -314,15 +317,27 @@ function Activate({ d, token, predicted, poolId }: { d: Deployment; token: Addre
                   <input className="input input-sm" type="number" value={t.days} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, days: Number(e.target.value) } : x)))} />
                   <span className="muted small">days</span>
                   <input className="input input-sm" type="number" step="0.1" value={t.mult} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, mult: Number(e.target.value) } : x)))} />
-                  <span className="muted small">x {TAGLINES[t.name] ? `· ${TAGLINES[t.name]}` : ""}</span>
+                  <span className="muted small">x {tagline(t.name) ? `· ${tagline(t.name)}` : ""}</span>
                 </div>
               ))}
             </div>
             <div className="form">
               <label>
                 Team Treasury recipient
-                <input className="input" placeholder={address ?? "0x…"} value={treasury} onChange={(e) => setTreasury(e.target.value.trim())} />
+                <div className="input-row">
+                  <input className="input mono-input" placeholder="0x…" value={treasury} onChange={(e) => setTreasury(e.target.value.trim())} spellCheck={false} autoComplete="off" />
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={!address} onClick={() => address && setTreasury(address)}>
+                    Use my wallet
+                  </button>
+                </div>
               </label>
+            </div>
+            <p className={badTreasury ? "warn small" : "muted small"}>
+              {badTreasury
+                ? "That isn't a valid address yet."
+                : "This address receives the Team Treasury stream. It can never be changed, not even by the steward, so check it twice."}
+            </p>
+            <div className="form">
               <label>
                 Treasury stream window (days)
                 <input className="input" type="number" min={1} max={365} value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} />
@@ -345,9 +360,9 @@ function Activate({ d, token, predicted, poolId }: { d: Deployment; token: Addre
           </div>
           <TxButton
             disabledReason={
-              !you ? "Only the current creator can activate" : !handedOver ? "Do step 1 first" : sum !== 100 ? `Splits add up to ${sum}%` : !recipient ? "Set a treasury recipient" : deskOk.data && deskOk.data !== d.desk ? "Listing desk mismatch" : undefined
+              !you ? "Only the current creator can activate" : !handedOver ? "Do step 1 first" : sum !== 100 ? `Splits add up to ${sum}%` : !recipient ? "Enter the Team Treasury recipient" : deskOk.data && deskOk.data !== d.desk ? "Listing desk mismatch" : undefined
             }
-            request={() => ({
+            request={() => recipient && ({
               address: d.factory,
               abi: lodestarFactoryAbi,
               functionName: "deploy",
@@ -356,8 +371,9 @@ function Activate({ d, token, predicted, poolId }: { d: Deployment; token: Addre
                 {
                   token,
                   quote: d.quote,
-                  cfg: { burnBps: split.burn * 100, holdersBps: split.holders * 100, treasuryBps: split.treasury * 100, swapper: ZERO, maxSlippageBps: 1000 },
-                  treasuryRecipient: recipient!,
+                  // the buyback route is the AscendSwapper this deployment recorded, never the factory's default of the day
+                  cfg: { burnBps: split.burn * 100, holdersBps: split.holders * 100, treasuryBps: split.treasury * 100, swapper: d.swapper, maxSlippageBps: 1000 },
+                  treasuryRecipient: recipient,
                   treasuryWindow: windowDays * 86400,
                   tiers: tiers.map((t) => ({ minDuration: Math.round(t.days * 86400), multiplierBps: Math.round(t.mult * 10_000), label: stringToHex(t.name, { size: 32 }) })),
                   enrolListing: listing,

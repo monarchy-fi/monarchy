@@ -11,6 +11,7 @@ import {MockListingDesk} from "../src/mocks/MockListingDesk.sol";
 /// for anvil or as a testnet fallback. Run DeployCore with ASCEND_MODE=mock afterwards.
 contract DeployMocks is BaseScript {
     function run() external {
+        _guardOverwrite(_load());
         vm.startBroadcast(_deployerKey());
         MockAscendPool pool = new MockAscendPool();
         MockAscendLaunchpad launchpad = new MockAscendLaunchpad(pool);

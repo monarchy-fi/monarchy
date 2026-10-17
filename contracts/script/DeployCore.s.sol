@@ -21,6 +21,7 @@ contract DeployCore is BaseScript {
     function run() external {
         string memory mode = vm.envOr("ASCEND_MODE", string("real"));
         Deployment memory d = _load();
+        _guardOverwrite(d);
 
         if (keccak256(bytes(mode)) == keccak256("real")) {
             d.mode = "real";
