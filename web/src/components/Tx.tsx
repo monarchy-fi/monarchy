@@ -5,6 +5,8 @@ import { maxUint256, type Abi, type Address } from "viem";
 import { useReadContract } from "wagmi";
 import { mockERC20Abi } from "../abi";
 import { explorerTx } from "../lib/chains";
+import { short } from "../lib/format";
+import { Spinner } from "./Ui";
 
 // Loose on purpose: each call site passes a typed abi + functionName; wagmi checks args there.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,24 +56,56 @@ export function TxButton({ request, children, disabledReason, onDone, className 
   }
 
   const link = hash ? explorerTx(chainId, hash) : undefined;
+  const txRef = hash && (
+    link ? (
+      <a className="tx-link" href={link} target="_blank" rel="noreferrer">
+        View transaction <span aria-hidden="true">↗</span>
+      </a>
+    ) : (
+      <span className="mono muted" title={hash}>
+        {short(hash)}
+      </span>
+    )
+  );
+  const done = !!hash && receipt.isSuccess;
   return (
     <div className="tx">
-      <button className={className ?? "btn"} disabled={!!reason || busy} onClick={send} title={reason}>
-        {busy ? "Confirming…" : children}
+      <button
+        className={`${className ?? "btn"} ${busy ? "is-busy" : ""} ${done && !busy ? "is-done" : ""}`}
+        disabled={!!reason || busy}
+        onClick={send}
+        title={reason}
+        aria-busy={busy}
+      >
+        {write.isPending ? (
+          <>
+            <Spinner /> Confirm in wallet
+          </>
+        ) : busy ? (
+          <>
+            <Spinner /> Confirming
+          </>
+        ) : (
+          children
+        )}
       </button>
       {reason && !busy && <span className="tx-note">{reason}</span>}
-      {hash && receipt.isSuccess && (
-        <span className="tx-ok">
-          Confirmed{" "}
-          {link && (
-            <a href={link} target="_blank" rel="noreferrer">
-              view tx
-            </a>
-          )}
+      {busy && !write.isPending && hash && <span className="tx-pending">Waiting for the block. {txRef}</span>}
+      {done && (
+        <span className="tx-ok" role="status">
+          <span aria-hidden="true">✓</span> Confirmed. {txRef}
         </span>
       )}
-      {receipt.isError && <span className="tx-err">Transaction failed</span>}
-      {error && <span className="tx-err">{error}</span>}
+      {receipt.isError && (
+        <span className="tx-err" role="alert">
+          Transaction failed. {txRef}
+        </span>
+      )}
+      {error && (
+        <span className="tx-err" role="alert">
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -112,5 +146,7 @@ export function shortError(e: unknown): string {
   const err = e as { shortMessage?: string; message?: string; cause?: { reason?: string; data?: { errorName?: string } } };
   const name = err.cause?.data?.errorName;
   if (name) return name;
-  return err.shortMessage ?? err.message?.split("\n")[0] ?? "Something went wrong";
+  const msg = err.shortMessage ?? err.message?.split("\n")[0] ?? "Something went wrong.";
+  if (/user (rejected|denied)/i.test(msg)) return "You cancelled it in your wallet.";
+  return msg;
 }

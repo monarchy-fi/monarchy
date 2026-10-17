@@ -1,52 +1,129 @@
-import { NavLink, Route, Routes } from "react-router-dom";
-import { useChainId } from "wagmi";
+import { useEffect, useState } from "react";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { useConnect, useConnection, useConnectors } from "wagmi";
 import { Connect } from "./components/Connect";
 import { Crown } from "./components/Crown";
-import { useDeployment } from "./lib/deployments";
+import { NetworkNotice, TestnetStrip } from "./components/States";
+import { chainName } from "./lib/chains";
+import { useNetwork } from "./lib/network";
+import { useMock } from "./lib/wagmi";
 import { ExilePage } from "./pages/Exile";
 import { Home } from "./pages/Home";
 import { LodestarPage } from "./pages/Lodestar";
+import { NotFound } from "./pages/NotFound";
 import { SandfallPage } from "./pages/Sandfall";
 
+const LINKS = [
+  { to: "/lodestar", label: "Lodestar", hint: "Fee router" },
+  { to: "/exile", label: "Exile", hint: "Locks and rewards" },
+  { to: "/sandfall", label: "Sandfall", hint: "Vesting" },
+];
+
 export function App() {
-  const d = useDeployment();
-  const chainId = useChainId();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname } = useLocation();
+  const { walletChainId, isConnected, target } = useNetwork();
+  useMockAutoConnect();
+
+  // close the phone menu and go to the top on every navigation
+  useEffect(() => {
+    setMenuOpen(false);
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   return (
     <div className="app">
-      <nav className="nav">
-        <NavLink to="/" className="brand">
-          <Crown size={26} />
-          <span>Monarchy</span>
-        </NavLink>
-        <div className="nav-links">
-          <NavLink to="/lodestar">Lodestar</NavLink>
-          <NavLink to="/exile">Exile</NavLink>
-          <NavLink to="/sandfall">Sandfall</NavLink>
-        </div>
-        <div className="nav-right">
-          <span className="net">
-            {chainId === 99801 ? "Elysium Testnet" : chainId === 31337 ? "Local" : `Chain ${chainId}`}
-            {d?.mode === "mock" && " · mock Ascend"}
-          </span>
-          <Connect />
-        </div>
-      </nav>
+      <TestnetStrip />
+      <header className="nav-wrap">
+        <nav className="nav" aria-label="Main">
+          <NavLink to="/" className="brand" aria-label="Monarchy home">
+            <Crown size={26} />
+            <span>Monarchy</span>
+          </NavLink>
+          <div className="nav-links">
+            {LINKS.map((l) => (
+              <NavLink key={l.to} to={l.to}>
+                {l.label}
+              </NavLink>
+            ))}
+          </div>
+          <div className="nav-right">
+            <span className="net" title="Network">
+              <i className="net-dot" />
+              {chainName(isConnected && walletChainId ? walletChainId : target.id)}
+            </span>
+            <Connect className="nav-connect" />
+            <button
+              className="menu-btn"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-menu"
+              onClick={() => setMenuOpen((o) => !o)}
+            >
+              <span className={`burger ${menuOpen ? "open" : ""}`} aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+            </button>
+          </div>
+        </nav>
+        {menuOpen && (
+          <div className="menu" id="mobile-menu">
+            {LINKS.map((l) => (
+              <NavLink key={l.to} to={l.to} className="menu-link">
+                <span>{l.label}</span>
+                <span className="menu-hint">{l.hint}</span>
+              </NavLink>
+            ))}
+            <div className="menu-net">
+              <i className="net-dot" /> {chainName(isConnected && walletChainId ? walletChainId : target.id)}
+            </div>
+          </div>
+        )}
+      </header>
+      <NetworkNotice />
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/lodestar" element={<LodestarPage />} />
           <Route path="/exile" element={<ExilePage />} />
           <Route path="/sandfall" element={<SandfallPage />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <footer className="foot">
-        <span>
-          <Crown size={14} /> Monarchy · built on Ascend, Elysium testnet · no fees
-        </span>
-        <a href="https://github.com/monarchy-fi/monarchy" target="_blank" rel="noreferrer">
-          GitHub
-        </a>
+        <div className="foot-brand">
+          <Crown size={16} />
+          <span>Monarchy</span>
+          <span className="foot-sep" aria-hidden="true" />
+          <span className="muted">Built on Ascend. No fees.</span>
+        </div>
+        <div className="foot-links">
+          <a href="https://docs.monarchy.fi" target="_blank" rel="noreferrer">
+            Docs
+          </a>
+          <a href="https://github.com/monarchy-fi/monarchy" target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+          <a href="https://x.com/monarchyfi" target="_blank" rel="noreferrer">
+            X
+          </a>
+        </div>
       </footer>
     </div>
   );
+}
+
+/** With `?mock` on a dev server, connect anvil's first account as soon as the page loads. */
+function useMockAutoConnect() {
+  const { status } = useConnection();
+  const connectors = useConnectors();
+  const connect = useConnect();
+  useEffect(() => {
+    if (!useMock || status !== "disconnected" || connect.isPending) return;
+    const c = connectors[0];
+    if (c) connect.mutate({ connector: c });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, connectors]);
 }

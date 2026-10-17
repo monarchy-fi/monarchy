@@ -24,3 +24,12 @@ export function explorerAddress(chainId: number, address: string): string | unde
   if (chainId === elysiumTestnet.id) return `${elysiumTestnet.blockExplorers.default.url}/address/${address}`;
   return undefined;
 }
+
+/** A short, human name for a chain id. */
+export function chainName(chainId: number | undefined): string {
+  if (chainId === elysiumTestnet.id) return "Elysium testnet";
+  if (chainId === localChain.id) return "Local demo chain";
+  if (chainId === 1) return "Ethereum";
+  if (chainId === 999) return "HyperEVM";
+  return chainId ? `Chain ${chainId}` : "an unknown network";
+}

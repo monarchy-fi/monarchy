@@ -1,0 +1,77 @@
+import { useBlockNumber, useConnection } from "wagmi";
+import { chainName } from "../lib/chains";
+import { useNetwork } from "../lib/network";
+import { Connect, SwitchButton } from "./Connect";
+import { Card, Empty } from "./Ui";
+
+/** A slim strip above the nav: which network this is, and that tokens here are test tokens. */
+export function TestnetStrip() {
+  const { target } = useNetwork();
+  const local = target.id === 31337;
+  return (
+    <div className="strip" role="note">
+      <span className="strip-dot" />
+      {local ? (
+        <span>
+          <b>Local demo chain.</b> Mock Ascend on anvil, for development.
+        </span>
+      ) : (
+        <span>
+          <b>Elysium testnet.</b> Test tokens only, with no real value.
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Shown under the nav when the wallet is on a network Monarchy doesn't run on, or the RPC is down. */
+export function NetworkNotice() {
+  const { wrongNetwork, walletChainId, target } = useNetwork();
+  const block = useBlockNumber({ chainId: target.id, query: { refetchInterval: 15_000, retry: 1 } });
+  if (wrongNetwork) {
+    return (
+      <div className="notice notice-warn" role="alert">
+        <div>
+          <b>Wrong network.</b> Your wallet is on {chainName(walletChainId)}. Monarchy runs on {chainName(target.id)}.
+        </div>
+        <SwitchButton className="btn-sm" />
+      </div>
+    );
+  }
+  if (block.isError && block.data === undefined) {
+    return (
+      <div className="notice" role="status">
+        <div>
+          <b>Can't reach {chainName(target.id)} right now.</b> Numbers will fill in as soon as the network answers.
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+/** For pages that need a Monarchy deployment on the current chain. */
+export function NoDeployment({ inline }: { inline?: boolean }) {
+  const { isConnected } = useConnection();
+  const { target } = useNetwork();
+  const card = (
+      <Card>
+        <Empty
+          title="Monarchy isn't on this network"
+          action={isConnected ? <SwitchButton /> : <Connect />}
+        >
+          Switch your wallet to {chainName(target.id)} to use Lodestar, Exile and Sandfall.
+        </Empty>
+      </Card>
+  );
+  return inline ? card : <div className="page">{card}</div>;
+}
+
+/** Empty state for wallet-specific lists. */
+export function ConnectPrompt({ children }: { children: string }) {
+  return (
+    <Empty title="No wallet connected" action={<Connect />}>
+      {children}
+    </Empty>
+  );
+}

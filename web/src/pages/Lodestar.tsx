@@ -4,35 +4,54 @@ import { isAddress, parseUnits, stringToHex, type Address } from "viem";
 import { iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
 import { TAGLINES } from "../components/Tiers";
 import { TxButton } from "../components/Tx";
-import { Addr, Badge, Card, Row, Stat } from "../components/Ui";
+import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
+import { DEFAULT_TREASURY_WINDOW_DAYS, DISTRIBUTE_NOTE } from "../lib/constants";
 import { isSet, useDeployment, ZERO, type Deployment } from "../lib/deployments";
 import { date, duration, fmt, pct } from "../lib/format";
-import { POLL, useNow } from "../lib/hooks";
-import { useLodestarCore } from "../lib/monarchy";
-import { NoDeployment } from "./Exile";
+import { POLL, useNow, usePageTitle } from "../lib/hooks";
+import { useLodestarCore, useTokenMeta } from "../lib/monarchy";
+import { NoDeployment } from "../components/States";
 
 export function LodestarPage() {
+  usePageTitle("Lodestar");
   const d = useDeployment();
   const [input, setInput] = useState("");
+  const defaultToken = d && isSet(d.token) ? d.token : undefined;
+  const [defaultMeta] = useTokenMeta([defaultToken]);
   if (!d) return <NoDeployment />;
-  const token = isAddress(input) ? input : isSet(d.token) ? d.token : undefined;
+  const token = isAddress(input) ? input : defaultToken;
+  const badInput = input !== "" && !isAddress(input);
   return (
     <div className="page">
       <header className="page-head">
         <h1>Lodestar</h1>
         <p className="muted">
-          A fee router for one Ascend token. It holds the token's creator role, so every creator fee lands here, and
-          anyone can route it: token-side fees are burned, and the quote side splits between buyback and burn, holder
-          rewards in Exile and a Team Treasury streamed through Sandfall. No fees.
+          A fee router for one Ascend token. It holds the token's creator role, so every creator fee lands here. Anyone
+          can route it. Token-side fees are burned. Quote-side fees split between buyback and burn, holder rewards in
+          Exile and a Team Treasury streamed through Sandfall. No fees.
         </p>
       </header>
       <Card title="Token">
-        <input
-          className="input"
-          placeholder={`Token address (default ${isSet(d.token) ? "MONARCH " + d.token : "none"})`}
-          value={input}
-          onChange={(e) => setInput(e.target.value.trim())}
-        />
+        <label className="field">
+          <span className="field-label">Ascend token address</span>
+          <input
+            className="input mono-input"
+            placeholder={defaultToken ? `${defaultToken}${defaultMeta ? ` (${defaultMeta.symbol})` : ""}` : "0x…"}
+            value={input}
+            onChange={(e) => setInput(e.target.value.trim())}
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </label>
+        <p className="muted small field-help">
+          {badInput
+            ? "That isn't a valid address yet."
+            : input
+              ? "Showing the token you pasted."
+              : defaultToken
+                ? <>Showing <b className="text">{defaultMeta?.symbol ?? "the demo token"}</b>. Paste another Ascend token to view or activate its Lodestar.</>
+                : "Paste an Ascend token to view or activate its Lodestar."}
+        </p>
       </Card>
       {token && <ForToken d={d} token={token} />}
     </div>
@@ -48,7 +67,7 @@ function ForToken({ d, token }: { d: Deployment; token: Address }) {
     ],
     query: POLL.query,
   });
-  if (!r.data) return null;
+  if (!r.data) return <LoadingCard />;
   const [deployed, [predicted, poolId]] = r.data;
   return deployed !== ZERO ? (
     <Router d={d} lodestar={deployed} />
@@ -90,12 +109,12 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
     ],
     query: { enabled: !!core.poolId, ...POLL.query },
   });
-  if (!r.data) return <Card>Loading router…</Card>;
+  if (!r.data) return <LoadingCard />;
   const [cfg, [pending, eta], preview, tokenBurned, buyQ, buyBurned, holdQ, treasQ, reserve, lockedUntil, isCreator, lastAt] = r.data;
   const [election, owed] = listing.data ?? [0n, 0n];
   const qd = core.quoteMeta?.decimals ?? 6;
-  const qs = core.quoteMeta?.symbol ?? "";
-  const ts = core.tokenMeta?.symbol ?? "";
+  const qs = core.quoteMeta?.symbol;
+  const ts = core.tokenMeta?.symbol;
   const listingLive = election !== 0n && (election & ((1n << 160n) - 1n)) === BigInt(lodestar);
   const isSteward = !!address && address.toLowerCase() === core.steward?.toLowerCase();
   const lockForever = lockedUntil >= 2n ** 63n;
@@ -103,7 +122,11 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
   return (
     <>
       <Card
-        title={`${ts} Lodestar`}
+        title={
+          <>
+            <Sym s={ts} /> Lodestar
+          </>
+        }
         right={
           <div className="lock-badges">
             {isCreator ? <Badge tone="green">Holds the creator role</Badge> : <Badge tone="red">Not the creator</Badge>}
@@ -113,11 +136,11 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         }
       >
         <SplitBar burn={cfg.burnBps} holders={cfg.holdersBps} treasury={cfg.treasuryBps} />
-        <div className="stats">
-          <Stat label="Token fees burned" value={`${fmt(tokenBurned, 18, 0)} ${ts}`} />
-          <Stat label="Bought back and burned" value={`${fmt(buyBurned, 18, 0)} ${ts}`} hint={`${fmt(buyQ, qd)} ${qs} spent`} />
-          <Stat label="To holders (Exile)" value={`${fmt(holdQ, qd)} ${qs}`} />
-          <Stat label="To Team Treasury" value={`${fmt(treasQ, qd)} ${qs}`} />
+        <div className="stats stats-4">
+          <Stat label="Token fees burned" value={<Amt value={tokenBurned} digits={0} symbol={ts} />} hint="Sent to the burn address" />
+          <Stat label="Bought back and burned" value={<Amt value={buyBurned} digits={0} symbol={ts} />} hint={`${fmt(buyQ, qd)} ${qs ?? ""} spent`} />
+          <Stat label="To holders (Exile)" value={<Amt value={holdQ} decimals={qd} symbol={qs} />} hint="Dripped to lockers" />
+          <Stat label="To Team Treasury" value={<Amt value={treasQ} decimals={qd} symbol={qs} />} hint="Streamed through Sandfall" />
         </div>
         <div className="summary">
           <Row k="Router" v={<Addr address={lodestar} />} />
@@ -129,15 +152,16 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         </div>
       </Card>
 
-      <Card title="Distribute" right={<span className="muted">anyone can call this</span>}>
+      <Card title="Distribute" right={<span className="muted small">Anyone can call this</span>}>
         <p className="muted small">Collects and claims this token's creator fees from Ascend, then routes everything the router holds.</p>
-        <div className="stats">
-          <Stat label="To burn" value={`${fmt(preview[0], 18, 0)} ${ts}`} />
-          <Stat label="Buyback" value={`${fmt(preview[2] + reserve, qd)} ${qs}`} hint={reserve > 0n ? `includes ${fmt(reserve, qd)} waiting in reserve` : undefined} />
-          <Stat label="Holders" value={`${fmt(preview[3], qd)} ${qs}`} />
-          <Stat label="Treasury" value={`${fmt(preview[4], qd)} ${qs}`} />
+        <div className="stats stats-4">
+          <Stat label="To burn" value={<Amt value={preview[0]} digits={0} symbol={ts} />} />
+          <Stat label="Buyback" value={<Amt value={preview[2] + reserve} decimals={qd} symbol={qs} />} hint={reserve > 0n ? `Includes ${fmt(reserve, qd)} waiting in reserve` : undefined} />
+          <Stat label="Holders" value={<Amt value={preview[3]} decimals={qd} symbol={qs} />} />
+          <Stat label="Treasury" value={<Amt value={preview[4]} decimals={qd} symbol={qs} />} />
         </div>
         <p className="muted small">Plus any fees still sitting in the pool, which distribute collects first.</p>
+        <p className="small cadence">{DISTRIBUTE_NOTE}</p>
         <TxButton request={() => ({ ...l, functionName: "distribute" })}>Distribute</TxButton>
       </Card>
 
@@ -172,7 +196,7 @@ function Steward({ lodestar, cfg, lockedUntil, listingLive }: { lodestar: Addres
   const sum = split.burn + split.holders + split.treasury;
   const until = BigInt(Math.floor(Date.now() / 1000) + lockDays * 86400);
   return (
-    <Card title="Steward controls" right={<span className="muted">only you see this</span>}>
+    <Card title="Steward controls" right={<span className="muted small">Only the steward sees this</span>}>
       <h4>Change the split</h4>
       <SplitInputs split={split} setSplit={setSplit} />
       <TxButton
@@ -234,15 +258,20 @@ function Activate({ d, token, predicted, poolId }: { d: Deployment; token: Addre
   const deskOk = useReadContract({ ...lp, functionName: "listingDesk" });
   const [split, setSplit] = useState({ burn: 40, holders: 40, treasury: 20 });
   const [treasury, setTreasury] = useState("");
-  const [windowDays, setWindowDays] = useState(30);
+  const [windowDays, setWindowDays] = useState(DEFAULT_TREASURY_WINDOW_DAYS);
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
   const [listing, setListing] = useState(true);
   const [cap, setCap] = useState("5000");
   const [lockDays, setLockDays] = useState(365);
 
-  if (!r.data) return null;
+  if (!r.data) return <LoadingCard />;
   const [creator, pendingCreator, owedQ, owedT] = r.data;
-  if (creator === ZERO) return <Card>No Ascend pool found for this token and quote.</Card>;
+  if (creator === ZERO)
+    return (
+      <Card>
+        <Empty title="No Ascend pool found">This token has no Ascend pool with this quote asset. Check the address and try again.</Empty>
+      </Card>
+    );
   const you = !!address && creator.toLowerCase() === address.toLowerCase();
   const handedOver = pendingCreator.toLowerCase() === predicted.toLowerCase();
   const sum = split.burn + split.holders + split.treasury;
@@ -347,6 +376,19 @@ function Activate({ d, token, predicted, poolId }: { d: Deployment; token: Addre
 }
 
 // ==================================================================== shared
+
+function LoadingCard() {
+  return (
+    <Card title={<Skel w="9em" h="1.1em" />}>
+      <Skel block h="12px" w="100%" style={{ borderRadius: 999, marginBottom: 16 }} />
+      <div className="stats stats-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Skel key={i} block h="84px" w="auto" />
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 function SplitBar({ burn, holders, treasury }: { burn: number; holders: number; treasury: number }) {
   return (

@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useChainId } from "wagmi";
 import { explorerAddress } from "../lib/chains";
-import { short } from "../lib/format";
+import { compact as compactFmt, fmt, short } from "../lib/format";
+import { Crown } from "./Crown";
 
 export function Card({ title, children, right, className }: { title?: ReactNode; children: ReactNode; right?: ReactNode; className?: string }) {
   return (
@@ -17,14 +18,49 @@ export function Card({ title, children, right, className }: { title?: ReactNode;
   );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: ReactNode }) {
+export function Stat({ label, value, hint, className }: { label: string; value: ReactNode; hint?: ReactNode; className?: string }) {
   return (
-    <div className="stat">
+    <div className={`stat ${className ?? ""}`}>
       <div className="stat-label">{label}</div>
       <div className="stat-value">{value}</div>
-      {hint && <div className="stat-hint">{hint}</div>}
+      {hint !== undefined && <div className="stat-hint">{hint}</div>}
     </div>
   );
+}
+
+/** A shimmering placeholder for a value that is still loading. */
+export function Skel({ w = "5em", h, block, style }: { w?: string; h?: string; block?: boolean; style?: CSSProperties }) {
+  return <span className={`skel ${block ? "skel-block" : ""}`} style={{ width: w, height: h, ...style }} aria-hidden="true" />;
+}
+
+/** A token amount with its symbol, or a placeholder while it loads. */
+export function Amt({
+  value,
+  decimals = 18,
+  symbol,
+  digits = 2,
+  compact,
+  w,
+}: {
+  value: bigint | undefined;
+  decimals?: number;
+  symbol?: string;
+  digits?: number;
+  compact?: boolean;
+  w?: string;
+}) {
+  if (value === undefined) return <Skel w={w ?? "6em"} />;
+  return (
+    <span className="amt">
+      {compact ? compactFmt(value, decimals) : fmt(value, decimals, digits)}
+      {symbol && <span className="amt-sym"> {symbol}</span>}
+    </span>
+  );
+}
+
+/** A token symbol read from the chain, or a placeholder while it loads. */
+export function Sym({ s, w = "3.5em" }: { s?: string; w?: string }) {
+  return s ? <>{s}</> : <Skel w={w} />;
 }
 
 export function Badge({ tone, children }: { tone: "gold" | "green" | "amber" | "red" | "grey" | "silver" | "purple"; children: ReactNode }) {
@@ -33,7 +69,7 @@ export function Badge({ tone, children }: { tone: "gold" | "green" | "amber" | "
 
 export function Addr({ address }: { address?: string }) {
   const chainId = useChainId();
-  if (!address) return <span className="mono">…</span>;
+  if (!address) return <Skel w="7em" />;
   const link = explorerAddress(chainId, address);
   return link ? (
     <a className="mono" href={link} target="_blank" rel="noreferrer" title={address}>
@@ -55,6 +91,18 @@ export function Row({ k, v }: { k: ReactNode; v: ReactNode }) {
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="empty">{children}</p>;
+/** A friendly empty state: a faint crown, a line of text and an optional action. */
+export function Empty({ title, children, action }: { title?: ReactNode; children?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="empty">
+      <Crown size={28} className="empty-crown" />
+      {title && <div className="empty-title">{title}</div>}
+      {children && <p className="empty-body">{children}</p>}
+      {action && <div className="empty-action">{action}</div>}
+    </div>
+  );
+}
+
+export function Spinner() {
+  return <span className="spinner" aria-hidden="true" />;
 }

@@ -4,11 +4,13 @@ import { erc721Abi, isAddress, parseUnits, type Address } from "viem";
 import { exileAbi, mockERC20Abi } from "../abi";
 import { TAGLINES, TierBadge } from "../components/Tiers";
 import { TxButton, WithApproval } from "../components/Tx";
-import { Addr, Badge, Card, Empty, Row, Stat } from "../components/Ui";
+import { ConnectPrompt, NoDeployment } from "../components/States";
+import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
 import { useDeployment } from "../lib/deployments";
 import { date, duration, fmt, label, mult } from "../lib/format";
-import { POLL, useNow, useTicking } from "../lib/hooks";
-import { useLodestarCore, type TokenMeta } from "../lib/monarchy";
+import { POLL, useNow, usePageTitle, useTicking } from "../lib/hooks";
+import { DISTRIBUTE_NOTE } from "../lib/constants";
+import { dayLabel, useDripDays, useLodestarCore, type TokenMeta } from "../lib/monarchy";
 import { days } from "./Home";
 
 type Tier = { minDuration: number; multiplierBps: number; label: `0x${string}` };
@@ -16,6 +18,7 @@ type Tier = { minDuration: number; multiplierBps: number; label: `0x${string}` }
 const BUFFER = 10 * 60;
 
 export function ExilePage() {
+  usePageTitle("Exile");
   const d = useDeployment();
   const core = useLodestarCore();
   const [tab, setTab] = useState<"tokens" | "nfts">("tokens");
@@ -28,10 +31,13 @@ export function ExilePage() {
     query: { enabled: !!d && poolId !== undefined, ...POLL.query },
   });
   const tiers = (pool.data?.tiers ?? []) as readonly Tier[];
+  // Until the pool is read, say "loading" rather than guessing which tier a lock lands in.
+  const tiersLoading = !pool.data && (core.isLoading || poolId !== undefined || !!core.lodestar);
   const now = useNow();
   const rewardMeta = core.quoteMeta;
-  const dripPerDay =
-    pool.data && Number(pool.data.periodFinish) > now ? (pool.data.rewardRate * 86400n) / 10n ** 18n : 0n;
+  const dripPerDay = pool.data ? (Number(pool.data.periodFinish) > now ? (pool.data.rewardRate * 86400n) / 10n ** 18n : 0n) : undefined;
+  const rd = rewardMeta?.decimals ?? 6;
+  const drip = useDripDays();
 
   if (!d) return <NoDeployment />;
   return (
@@ -44,26 +50,34 @@ export function ExilePage() {
         </p>
       </header>
 
-      <Card title={`${core.tokenMeta?.symbol ?? "MONARCH"} holder rewards`}>
-        <div className="stats">
-          <Stat label="Dripping now" value={`${fmt(dripPerDay, rewardMeta?.decimals ?? 6)} ${rewardMeta?.symbol ?? ""}/day`} hint="each deposit drips out over 7 days" />
-          <Stat label="Paid in so far" value={`${fmt(pool.data?.totalDistributed, rewardMeta?.decimals ?? 6)} ${rewardMeta?.symbol ?? ""}`} />
-          <Stat label="Locked points" value={fmt(pool.data?.totalPoints, core.tokenMeta?.decimals ?? 18, 0)} hint="amount × multiplier" />
-          <Stat label="Drip ends" value={pool.data ? (Number(pool.data.periodFinish) > now ? duration(Number(pool.data.periodFinish) - now) : "idle") : "…"} hint="refills on every Lodestar distribute" />
+      <Card
+        title={
+          <>
+            <Sym s={core.tokenMeta?.symbol} /> holder rewards
+          </>
+        }
+        right={<span className="muted small">Paid as a {dayLabel(drip)} drip</span>}
+      >
+        <div className="stats stats-4">
+          <Stat label="Dripping now" value={<><Amt value={dripPerDay} decimals={rd} symbol={rewardMeta?.symbol} /><span className="amt-sym"> a day</span></>} hint={`Each deposit drips out over ${drip} days`} />
+          <Stat label="Paid in so far" value={<Amt value={pool.data?.totalDistributed} decimals={rd} symbol={rewardMeta?.symbol} />} hint="Sent here by Lodestar" />
+          <Stat label="Locked points" value={<Amt value={pool.data?.totalPoints} decimals={core.tokenMeta?.decimals ?? 18} digits={0} />} hint="Amount times multiplier" />
+          <Stat label="Drip ends" value={pool.data ? (Number(pool.data.periodFinish) > now ? duration(Number(pool.data.periodFinish) - now) : "Idle") : <Skel w="5em" />} hint="Refills on every distribute" />
         </div>
+        <p className="small cadence">{DISTRIBUTE_NOTE}</p>
       </Card>
 
-      <div className="tabs">
-        <button className={tab === "tokens" ? "tab active" : "tab"} onClick={() => setTab("tokens")}>
+      <div className="tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "tokens"} className={tab === "tokens" ? "tab active" : "tab"} onClick={() => setTab("tokens")}>
           Lock tokens
         </button>
-        <button className={tab === "nfts" ? "tab active" : "tab"} onClick={() => setTab("nfts")}>
+        <button role="tab" aria-selected={tab === "nfts"} className={tab === "nfts" ? "tab active" : "tab"} onClick={() => setTab("nfts")}>
           Lock NFTs
         </button>
       </div>
 
       {tab === "tokens" ? (
-        <LockTokens exile={d.exile} token={core.token} tokenMeta={core.tokenMeta} poolId={poolId} tiers={tiers} />
+        <LockTokens exile={d.exile} token={core.token} tokenMeta={core.tokenMeta} poolId={poolId} tiers={tiers} tiersLoading={tiersLoading} />
       ) : (
         <LockNfts exile={d.exile} />
       )}
@@ -79,18 +93,21 @@ function LockTokens({
   tokenMeta,
   poolId,
   tiers,
+  tiersLoading,
 }: {
   exile: Address;
   token?: Address;
   tokenMeta?: TokenMeta;
   poolId?: bigint;
   tiers: readonly Tier[];
+  tiersLoading: boolean;
 }) {
   const { address } = useConnection();
   const [custom, setCustom] = useState("");
   const [amount, setAmount] = useState("");
   const [lockDays, setLockDays] = useState(30);
   const [plain, setPlain] = useState(false);
+  const drip = useDripDays();
   const token = plain && isAddress(custom) ? custom : defaultToken;
   const meta = useReadContracts({
     allowFailure: false,
@@ -116,13 +133,20 @@ function LockTokens({
       {plain && (
         <input className="input" placeholder="Token or LP address 0x…" value={custom} onChange={(e) => setCustom(e.target.value.trim())} />
       )}
-      {!plain && (
+      {!plain && tiersLoading && (
+        <div className="tiers pick" aria-busy="true">
+          {[0, 1, 2, 3].map((i) => (
+            <Skel key={i} block h="118px" w="auto" />
+          ))}
+        </div>
+      )}
+      {!plain && !tiersLoading && (
         <div className="tiers pick">
           {tiers.map((t) => {
             const name = label(t.label);
             const active = tier?.label === t.label;
             return (
-              <button key={name} className={`tier tier-${name.toLowerCase()} ${active ? "active" : ""}`} onClick={() => setLockDays(t.minDuration / 86400)}>
+              <button key={name} type="button" aria-pressed={active} className={`tier tier-${name.toLowerCase()} ${active ? "active" : ""}`} onClick={() => setLockDays(t.minDuration / 86400)}>
                 <TierBadge name={name} />
                 <div className="tier-mult">{mult(t.multiplierBps)}</div>
                 <div className="tier-len">{days(t.minDuration)}</div>
@@ -134,7 +158,7 @@ function LockTokens({
       )}
       <div className="form">
         <label>
-          Amount {symbol && <span className="muted">({symbol})</span>}
+          <span>Amount {symbol && <span className="faint">({symbol})</span>}</span>
           <div className="input-row">
             <input className="input" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} />
             {balance !== undefined && (
@@ -151,13 +175,30 @@ function LockTokens({
       </div>
       <div className="summary">
         <Row k="Unlocks" v={date(unlockAt)} />
-        {!plain && <Row k="Tier" v={tier ? <><TierBadge name={label(tier.label)} /> {mult(tier.multiplierBps)}</> : <Badge tone="red">Below the first tier: no rewards</Badge>} />}
+        {!plain && (
+          <Row
+            k="Tier"
+            v={
+              tiersLoading ? (
+                <Skel w="8em" />
+              ) : tier ? (
+                <>
+                  <TierBadge name={label(tier.label)} /> {mult(tier.multiplierBps)}
+                </>
+              ) : tiers.length === 0 ? (
+                <Badge tone="grey">No reward pool for this token</Badge>
+              ) : (
+                <Badge tone="red">Shorter than the first tier, so no rewards</Badge>
+              )
+            }
+          />
+        )}
         {!plain && value > 0n && tier && <Row k="Points" v={fmt((value * BigInt(tier.multiplierBps)) / 10_000n, Number(decimals))} />}
         <Row k="Cancellable" v={<Badge tone="green">Not cancellable</Badge>} />
       </div>
       <WithApproval token={token} spender={exile} amount={value}>
         <TxButton
-          disabledReason={!token ? "Pick a token" : value === 0n ? "Enter an amount" : lockDays <= 0 ? "Pick a lock length" : undefined}
+          disabledReason={!token ? "Pick a token" : !plain && tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : lockDays <= 0 ? "Pick a lock length" : undefined}
           request={() =>
             token && {
               address: exile,
@@ -168,10 +209,10 @@ function LockTokens({
           }
           onDone={() => setAmount("")}
         >
-          Lock {symbol}
+          {symbol ? `Lock ${symbol}` : "Lock"}
         </TxButton>
       </WithApproval>
-      <p className="muted small">Unlock times round up to the next hour. Rewards drip in over 7 days and stop the second a lock ends.</p>
+      <p className="muted small">Unlock times round up to the next hour. Rewards drip in over {drip} days and stop the second a lock ends.</p>
     </Card>
   );
 }
@@ -254,9 +295,14 @@ function MyLocks({ exile, tiers, rewardMeta }: { exile: Address; tiers: readonly
   });
   const list = useMemo(() => [...(ids.data ?? [])].reverse(), [ids.data]);
   return (
-    <Card title="My locks">
-      {!address && <Empty>Connect a wallet to see your locks.</Empty>}
-      {address && list.length === 0 && <Empty>No locks yet. Everyone starts somewhere.</Empty>}
+    <Card title="My locks" right={address && ids.data ? <span className="muted small">{list.length} {list.length === 1 ? "lock" : "locks"}</span> : undefined}>
+      {!address && <ConnectPrompt>Connect a wallet to see your locks and claim rewards.</ConnectPrompt>}
+      {address && !ids.data && (
+        <div className="locks">
+          <div className="lock skeleton" />
+        </div>
+      )}
+      {address && ids.data && list.length === 0 && <Empty title="No locks yet">Everyone starts somewhere. Pick a tier above to make your first lock.</Empty>}
       <div className="locks">
         {list.map((id) => (
           <LockCard key={id.toString()} exile={exile} id={id} tiers={tiers} rewardMeta={rewardMeta} />
@@ -378,16 +424,6 @@ function fmtPlain(v: bigint, decimals: number): string {
   const whole = s.slice(0, s.length - decimals);
   const frac = s.slice(s.length - decimals).replace(/0+$/, "");
   return frac ? `${whole}.${frac}` : whole;
-}
-
-export function NoDeployment() {
-  return (
-    <div className="page">
-      <Card>
-        <Empty>No Monarchy deployment on this network. Switch to Elysium Testnet, or run the local demo and switch to Localhost 8545.</Empty>
-      </Card>
-    </div>
-  );
 }
 
 export { safeParse, fmtPlain };

@@ -13,7 +13,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        <BrowserRouter basename={String(import.meta.env.VITE_ROUTER_BASE ?? "/").replace(/\/+$/, "") || "/"}>
           <App />
         </BrowserRouter>
       </QueryClientProvider>

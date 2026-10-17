@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en" class="staticrypt-html">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Monarchy</title>
+    <meta name="description" content="Fee routing, locks and vesting for tokens launched on Ascend, with no fees." />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#0b0a0f" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23E8B84A' d='M8 46 4 18l15 12 13-20 13 20 15-12-4 28z'/%3E%3Crect x='8' y='49' width='48' height='7' rx='2' fill='%23E8B84A'/%3E%3Ccircle cx='4' cy='16' r='4' fill='%23F6D77A'/%3E%3Ccircle cx='32' cy='8' r='4' fill='%23F6D77A'/%3E%3Ccircle cx='60' cy='16' r='4' fill='%23F6D77A'/%3E%3C/svg%3E" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Monarchy" />
+    <meta property="og:title" content="Monarchy | Ascend to Monarchy" />
+    <meta property="og:description" content="Fee routing, locks and vesting for tokens launched on Ascend. No fees. Dethrone the Duke. Become the Monarch." />
+    <meta property="og:url" content="https://monarchy.fi/" />
+    <meta property="og:image" content="https://monarchy.fi/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://monarchy.fi/og.png" />
+
+    <!-- do not cache this page -->
+    <meta http-equiv="cache-control" content="max-age=0" />
+    <meta http-equiv="cache-control" content="no-cache" />
+    <meta http-equiv="expires" content="0" />
+    <meta http-equiv="pragma" content="no-cache" />
+
+    <style>
+      :root {
+        --bg: #0b0a0f;
+        --card: #17141f;
+        --bg-2: #13111a;
+        --line: #2a2533;
+        --line-2: #3a3345;
+        --text: #f3eee4;
+        --muted: #9d95a8;
+        --faint: #6f6879;
+        --gold: #e8b84a;
+        --gold-2: #f6d77a;
+        --gold-3: #c9922e;
+        --red: #ef6b6b;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background:
+          radial-gradient(900px 520px at 50% -160px, rgba(232, 184, 74, 0.16), transparent 70%),
+          var(--bg);
+      }
+      .hidden { display: none !important; }
+      .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 16px; }
+      .gate {
+        width: 100%;
+        max-width: 400px;
+        padding: 36px 32px 30px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: linear-gradient(180deg, var(--card), var(--bg-2));
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+        text-align: center;
+      }
+      .crown { filter: drop-shadow(0 8px 28px rgba(232, 184, 74, 0.5)); }
+      h1 {
+        margin: 16px 0 6px;
+        font-family: "Cinzel", Georgia, "Times New Roman", serif;
+        font-size: 34px;
+        letter-spacing: 0.03em;
+        background: linear-gradient(180deg, var(--gold-2) 10%, var(--gold) 55%, var(--gold-3));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .sub { margin: 0 0 6px; font-family: "Cinzel", Georgia, serif; color: var(--gold-2); font-size: 15px; letter-spacing: 0.02em; }
+      .note { margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+      form { text-align: left; }
+      label.field { display: block; font-size: 13px; color: var(--muted); margin-bottom: 7px; font-weight: 500; }
+      .pw { position: relative; }
+      .pw input {
+        width: 100%;
+        padding: 12px 64px 12px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--line-2);
+        background: rgba(0, 0, 0, 0.3);
+        color: var(--text);
+        font: inherit;
+        font-size: 16px;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      .pw input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(232, 184, 74, 0.18); }
+      .pw input[aria-invalid="true"] { border-color: var(--red); }
+      .toggle {
+        position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+        border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+        padding: 6px 10px; border-radius: 7px; cursor: pointer;
+      }
+      .toggle:hover { color: var(--gold-2); }
+      .toggle:focus-visible, .remember input:focus-visible, .submit:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--gold); }
+      .error { min-height: 20px; margin: 8px 0 4px; color: var(--red); font-size: 13px; }
+      .remember { display: flex; align-items: center; gap: 10px; margin: 4px 0 20px; font-size: 14px; color: var(--text); cursor: pointer; }
+      .remember input { accent-color: var(--gold); width: 16px; height: 16px; margin: 0; }
+      .remember span { color: var(--muted); font-size: 12.5px; }
+      .submit {
+        width: 100%;
+        padding: 13px 18px;
+        border: 0;
+        border-radius: 11px;
+        background: linear-gradient(180deg, var(--gold-2), var(--gold));
+        color: #1a1408;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 8px 22px rgba(232, 184, 74, 0.22);
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      }
+      .submit:hover { filter: brightness(1.06); }
+      .submit:disabled { opacity: 0.8; cursor: progress; }
+      .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 0.7s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .foot { margin-top: 22px; color: var(--faint); font-size: 12.5px; text-align: center; }
+      .loading { min-height: 100%; display: flex; align-items: center; justify-content: center; }
+      .loading .crown { animation: pulse 1.4s ease-in-out infinite; }
+      @keyframes pulse { 50% { opacity: 0.45; transform: scale(0.96); } }
+      @media (max-width: 420px) { .gate { padding: 30px 20px 24px; } h1 { font-size: 30px; } }
+      @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+    </style>
+  </head>
+
+  <body class="staticrypt-body">
+    <div id="staticrypt_loading" class="loading" aria-label="Loading">
+      <svg class="crown" width="56" height="56" viewBox="0 0 64 64" aria-hidden="true"><path fill="#E8B84A" d="M8 46 4 18l15 12 13-20 13 20 15-12-4 28z"/><rect x="8" y="49" width="48" height="7" rx="2" fill="#E8B84A"/><circle cx="4" cy="16" r="4" fill="#F6D77A"/><circle cx="32" cy="8" r="4" fill="#F6D77A"/><circle cx="60" cy="16" r="4" fill="#F6D77A"/></svg>
+    </div>
+
+    <div id="staticrypt_content" class="wrap hidden">
+      <main class="gate">
+        <svg class="crown" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+          <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6D77A"/><stop offset="1" stop-color="#C9922E"/></linearGradient></defs>
+          <path fill="url(#g)" d="M8 46 4 18l15 12 13-20 13 20 15-12-4 28z"/><rect x="8" y="49" width="48" height="7" rx="2" fill="url(#g)"/><circle cx="4" cy="16" r="4" fill="#F6D77A"/><circle cx="32" cy="8" r="4" fill="#F6D77A"/><circle cx="60" cy="16" r="4" fill="#F6D77A"/>
+        </svg>
+        <h1>Monarchy</h1>
+        <p class="sub">The court is not yet open.</p>
+        <p class="note">Enter the password to continue.</p>
+
+        <form id="staticrypt-form" action="#" method="post" novalidate>
+          <label class="field" for="staticrypt-password">Password</label>
+          <div class="pw">
+            <input id="staticrypt-password" type="password" name="password" autocomplete="current-password" autofocus aria-describedby="gate-error" />
+            <button type="button" class="toggle" id="gate-toggle" aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+          <div class="error" id="gate-error" role="alert"></div>
+
+          <label id="staticrypt-remember-label" class="remember hidden">
+            <input id="staticrypt-remember" type="checkbox" name="remember" />
+            Remember me <span>on this device</span>
+          </label>
+
+          <button type="submit" class="submit" id="gate-submit">Enter</button>
+        </form>
+      </main>
+      <p class="foot">Elysium testnet preview</p>
+    </div>
+
+    <script>
+      // Filled in by staticrypt at build time: the template format is '/*[|variable_name|]*/0'
+      const staticryptInitiator = /*[|js_staticrypt|]*/ 0;
+      const templateError = "/*[|template_error|]*/0",
+        isRememberEnabled = /*[|is_remember_enabled|]*/ 0,
+        staticryptConfig = /*[|staticrypt_config|]*/ 0;
+
+      const templateConfig = {
+        rememberExpirationKey: "staticrypt_expiration",
+        rememberPassphraseKey: "staticrypt_passphrase",
+        replaceHtmlCallback: null,
+        clearLocalStorageCallback: null,
+      };
+
+      const staticrypt = staticryptInitiator.init(staticryptConfig, templateConfig);
+      const input = document.getElementById("staticrypt-password");
+      const error = document.getElementById("gate-error");
+      const submit = document.getElementById("gate-submit");
+
+      // Decrypt straight away if this device remembered the password.
+      window.onload = async function () {
+        const { isSuccessful } = await staticrypt.handleDecryptOnLoad();
+        if (!isSuccessful) {
+          document.getElementById("staticrypt_loading").classList.add("hidden");
+          document.getElementById("staticrypt_content").classList.remove("hidden");
+          if (isRememberEnabled) document.getElementById("staticrypt-remember-label").classList.remove("hidden");
+          input.focus();
+        }
+      };
+
+      const toggle = document.getElementById("gate-toggle");
+      toggle.addEventListener("click", function () {
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        toggle.textContent = show ? "Hide" : "Show";
+        toggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+        toggle.setAttribute("aria-pressed", String(show));
+        input.focus();
+      });
+
+      input.addEventListener("input", function () {
+        error.textContent = "";
+        input.removeAttribute("aria-invalid");
+      });
+
+      document.getElementById("staticrypt-form").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        if (!input.value) {
+          error.textContent = "Enter the password first.";
+          input.focus();
+          return;
+        }
+        submit.disabled = true;
+        submit.innerHTML = '<span class="spin" aria-hidden="true"></span> Unlocking';
+        const remember = document.getElementById("staticrypt-remember").checked;
+        const { isSuccessful } = await staticrypt.handleDecryptionOfPage(input.value, remember);
+        if (!isSuccessful) {
+          submit.disabled = false;
+          submit.textContent = "Enter";
+          error.textContent = templateError;
+          input.setAttribute("aria-invalid", "true");
+          input.select();
+        }
+      });
+    </script>
+  </body>
+</html>

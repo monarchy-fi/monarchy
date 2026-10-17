@@ -3,16 +3,19 @@ import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { isAddress, type Address } from "viem";
 import { mockERC20Abi, sandfallAbi } from "../abi";
 import { TxButton, WithApproval } from "../components/Tx";
-import { Addr, Badge, Card, Empty, Row } from "../components/Ui";
+import { ConnectPrompt } from "../components/States";
+import { Addr, Badge, Card, Empty, Row, Sym } from "../components/Ui";
 import { useDeployment, ZERO } from "../lib/deployments";
 import { date, duration, fmt } from "../lib/format";
-import { POLL, useNow } from "../lib/hooks";
+import { POLL, useNow, usePageTitle } from "../lib/hooks";
 import { useLodestarCore } from "../lib/monarchy";
-import { NoDeployment, safeParse } from "./Exile";
+import { NoDeployment } from "../components/States";
+import { safeParse } from "./Exile";
 
 const KINDS = ["Linear", "Monthly steps", "Rolling"];
 
 export function SandfallPage() {
+  usePageTitle("Sandfall");
   const d = useDeployment();
   const core = useLodestarCore();
   const { address } = useConnection();
@@ -41,16 +44,28 @@ export function SandfallPage() {
       </header>
 
       {core.treasuryStreamId !== undefined && (
-        <Card title={`${core.tokenMeta?.symbol ?? "MONARCH"} Team Treasury`} right={<span className="muted">fed by Lodestar on every distribute</span>}>
-          <StreamCard sandfall={d.sandfall} id={core.treasuryStreamId} title="Rolling 30-day stream" />
+        <Card
+          title={
+            <>
+              <Sym s={core.tokenMeta?.symbol} /> Team Treasury
+            </>
+          }
+          right={<span className="muted small">Fed by Lodestar on every distribute</span>}
+        >
+          <StreamCard sandfall={d.sandfall} id={core.treasuryStreamId} rollingTitle />
         </Card>
       )}
 
       <CreateStream sandfall={d.sandfall} quote={core.quote} token={core.token} quoteSymbol={core.quoteMeta?.symbol} tokenSymbol={core.tokenMeta?.symbol} />
 
       <Card title="Streams to me">
-        {!address && <Empty>Connect a wallet to see your streams.</Empty>}
-        {address && mine.length === 0 && <Empty>Nothing vesting to this wallet yet.</Empty>}
+        {!address && <ConnectPrompt>Connect a wallet to see what is vesting to you.</ConnectPrompt>}
+        {address && !lists.data && (
+          <div className="locks">
+            <div className="lock skeleton" />
+          </div>
+        )}
+        {address && lists.data && mine.length === 0 && <Empty title="Nothing vesting to you yet">Streams sent to this wallet will show up here, with what you can claim.</Empty>}
         <div className="locks">
           {mine.map((id) => (
             <StreamCard key={id.toString()} sandfall={d.sandfall} id={id} />
@@ -158,15 +173,15 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
       </label>
       <p className={cancellable ? "warn small" : "muted small"}>
         {cancellable
-          ? "Cancellable: you can stop this stream later. What has vested stays claimable by the recipient and the rest comes back to you. The recipient will see an amber Cancellable badge."
-          : "Not cancellable: once created, nobody can stop or change this stream. This can't be changed later."}
+          ? "Cancellable. You can stop this stream later. What has vested stays claimable by the recipient and the rest comes back to you. The recipient sees an amber Cancellable badge."
+          : "Not cancellable. Once created, nobody can stop or change this stream, and this choice is final."}
       </p>
       {isNative ? send : <WithApproval token={asset} spender={sandfall} amount={value}>{send}</WithApproval>}
     </Card>
   );
 }
 
-function StreamCard({ sandfall, id, title }: { sandfall: Address; id: bigint; title?: string }) {
+function StreamCard({ sandfall, id, rollingTitle }: { sandfall: Address; id: bigint; rollingTitle?: boolean }) {
   const { address } = useConnection();
   const sf = { address: sandfall, abi: sandfallAbi } as const;
   const r = useReadContracts({
@@ -201,7 +216,7 @@ function StreamCard({ sandfall, id, title }: { sandfall: Address; id: bigint; ti
     <div className="lock">
       <div className="lock-top">
         <div className="lock-badges">
-          <Badge tone="silver">{title ?? KINDS[s.kind]}</Badge>
+          <Badge tone="silver">{rollingTitle && rolling ? `Rolling ${Number(s.window) / 86400} day stream` : KINDS[s.kind]}</Badge>
           {s.cancelled ? <Badge tone="red">Cancelled</Badge> : s.cancellable ? <Badge tone="amber">Cancellable</Badge> : <Badge tone="green">Not cancellable</Badge>}
         </div>
         <span className="muted mono">#{id.toString()}</span>
