@@ -11,10 +11,14 @@ import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 /// @notice Hand the token's Ascend creator role to its Lodestar and activate it with MONARCH's defaults:
 /// 40% buyback and burn / 40% holders / 20% Team Treasury, Peasant-Knight-Duke-Monarch tiers,
 /// a 7-day rolling treasury stream, listing set-aside on (5,000 USDC cap), creator role locked a year.
-/// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER (unset = the factory default),
-/// MAX_SLIPPAGE_BPS, ENROL_LISTING, LISTING_CAP, LOCK_DAYS (0 = no lock). To keep buybacks in reserve
-/// instead, the factory owner runs setDefaultSwapper(0x0) at least 12 hours before activating.
-/// TREASURY (the Team Treasury recipient) must be set explicitly.
+/// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER, MAX_SLIPPAGE_BPS, ENROL_LISTING,
+/// LISTING_CAP, LOCK_DAYS (0 = no lock). The buyback route is the AscendSwapper recorded in
+/// deployments/<chainId>.json unless SWAPPER names another one. It is never left to the factory's default
+/// silently: the factory owner can change that default (12 hours after setDefaultSwapper), and a re-run of
+/// this script would otherwise pick the new one up without warning. To keep buybacks in reserve instead,
+/// the factory owner runs setDefaultSwapper(0x0) at least 12 hours before activating and this script runs
+/// with SWAPPER set to the zero address, which asks for that default.
+/// TREASURY (the Team Treasury recipient) must be set explicitly; it can never be changed afterwards.
 contract ActivateLodestar is BaseScript {
     function run() external {
         Deployment memory d = _load();
@@ -26,6 +30,11 @@ contract ActivateLodestar is BaseScript {
         console2.log("predicted Lodestar", predicted);
         require(IAscendLaunchpad(d.launchpad).poolCreator(poolId) == me, "PRIVATE_KEY is not the pool creator");
 
+        bool swapperGiven = bytes(vm.envOr("SWAPPER", string(""))).length != 0;
+        address swapper = swapperGiven ? vm.envAddress("SWAPPER") : d.swapper;
+        require(swapperGiven || swapper != address(0), "no swapper in deployments/<chainId>.json; set SWAPPER");
+        console2.log("swapper", swapper);
+
         LodestarFactory.DeployParams memory p;
         p.token = d.token;
         p.quote = d.quote;
@@ -33,7 +42,7 @@ contract ActivateLodestar is BaseScript {
             burnBps: uint16(vm.envOr("BURN_BPS", uint256(4_000))),
             holdersBps: uint16(vm.envOr("HOLDERS_BPS", uint256(4_000))),
             treasuryBps: uint16(vm.envOr("TREASURY_BPS", uint256(2_000))),
-            swapper: vm.envOr("SWAPPER", address(0)),
+            swapper: swapper,
             maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(1_000)))
         });
         p.treasuryRecipient = vm.envAddress("TREASURY");

@@ -70,6 +70,29 @@ abstract contract BaseScript is Script {
         console2.log("wrote", _path());
     }
 
+    /// @dev Refuse to replace a core that deployments/<chainId>.json already records unless the operator
+    /// sets OVERWRITE_DEPLOYMENT=1. A second DeployCore by habit, or one against the wrong RPC_URL, would
+    /// otherwise point the website and the keeper at new contracts while the old Lodestar keeps running
+    /// on the old ones. tools/demo-local.sh deletes the local file first, so the demo is unaffected.
+    function _guardOverwrite(Deployment memory d) internal view {
+        if (d.factory == address(0)) return;
+        string memory flag = vm.envOr("OVERWRITE_DEPLOYMENT", string(""));
+        bool allowed = keccak256(bytes(flag)) == keccak256("1") || keccak256(bytes(flag)) == keccak256("true");
+        require(
+            allowed,
+            string.concat(
+                _path(),
+                " already records a core (factory ",
+                vm.toString(d.factory),
+                "). Set OVERWRITE_DEPLOYMENT=1 to replace it."
+            )
+        );
+        if (d.lodestar != address(0)) {
+            console2.log("OVERWRITE_DEPLOYMENT=1: replacing the core; the file keeps lodestar", d.lodestar);
+            console2.log("that router still runs on the old Exile and Sandfall; the website expects them to match");
+        }
+    }
+
     function _addr(string memory j, string memory key) private view returns (address) {
         return vm.keyExistsJson(j, key) ? vm.parseJsonAddress(j, key) : address(0);
     }
