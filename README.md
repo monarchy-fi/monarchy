@@ -86,11 +86,11 @@ Ascend addresses used (Elysium testnet, chain 99801):
 
 | | |
 |---|---|
-| AscendLaunchpad | `0xE2f6254508DEB93Da081837F545e0bAF7b00d8E9` |
-| ListingDesk | `0xa6E7103abFB06F8231Ed9c84E7DC2A7F8570A9A6` |
+| AscendLaunchpad | `0x6d01f6644bbf1b5074472D3e85aa1465B4d2bF3d` |
+| ListingDesk | `0x06DbB5eF794BA3C0F6F0ddC6164617Cf21811a77` |
 | PancakeSwap Infinity CLPoolManager | `0x12E84206cB53aE0df055482ebc4658635096E1aA` |
 | Infinity Vault | `0x2B738A9A69b7a45C9dA6B519f6bE6efBfb912aec` |
-| Mock USDC (quote) | `0x4b4fb5C5794F0c821464956374cC5872D5F0f140` |
+| Mock USDC (quote) | `0x84Cc00D13173f7016Bbab22A736dBf75A154cFE2` |
 
 ## Status
 

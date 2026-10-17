@@ -8,10 +8,21 @@ import {MockAscendLaunchpad} from "../src/mocks/MockAscendLaunchpad.sol";
 import {AscendPoolKey} from "../src/libraries/AscendPoolKey.sol";
 
 /// @notice Launch a token (default MONARCH) and record it in deployments/<chainId>.json.
-/// Real mode calls Ascend's launch((name, symbol, quote, devBuyQuote, minDevOut, salt, creator)) with
-/// both uints 0 because their order is not confirmed; run without --broadcast first to simulate.
+/// Real mode calls Ascend's launch((name, symbol, quote, devBuyQuote, minDevOut, salt, creator)) with no
+/// dev buy; run without --broadcast first to simulate.
 /// Launching on Ascend's own site and setting TOKEN=<address> works too: the script then just records it.
 contract LaunchOnAscend is BaseScript {
+    /// @dev Ascend's launch takes one struct, so it must be ABI-encoded as a tuple, not as flat arguments.
+    struct LaunchParams {
+        string name;
+        string symbol;
+        address quote;
+        uint256 devBuyQuote;
+        uint256 minDevOut;
+        bytes32 salt;
+        address creator;
+    }
+
     function run() external {
         Deployment memory d = _load();
         require(d.launchpad != address(0), "run DeployCore first");
@@ -38,13 +49,7 @@ contract LaunchOnAscend is BaseScript {
             (bool ok, bytes memory ret) = d.launchpad.call(
                 abi.encodeWithSignature(
                     "launch((string,string,address,uint256,uint256,bytes32,address))",
-                    name,
-                    symbol,
-                    d.quote,
-                    uint256(0),
-                    uint256(0),
-                    salt,
-                    me
+                    LaunchParams(name, symbol, d.quote, 0, 0, salt, me)
                 )
             );
             vm.stopBroadcast();
