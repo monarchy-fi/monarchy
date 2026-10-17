@@ -1,0 +1,37 @@
+name: Distribute
+
+# Keeper: calls distribute() on the Lodestar in deployments/99801.json every 3 hours, so fees reach
+# holders in small, steady payouts and never pile up into one big payout worth timing a lock for.
+# The team pays the gas from a keeper wallet that only holds gas money. Set its key as the
+# KEEPER_PRIVATE_KEY secret; without it the job is skipped. distribute() is permissionless, so anyone
+# can also call it in between.
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: distribute
+  cancel-in-progress: false
+
+jobs:
+  distribute:
+    runs-on: ubuntu-latest
+    env:
+      KEEPER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
+      RPC_URL: ${{ vars.RPC_URL || 'https://testnet-rpc.elysium.kinetiq.xyz' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.KEEPER_PRIVATE_KEY != ''
+      - uses: foundry-rs/foundry-toolchain@v1
+        if: env.KEEPER_PRIVATE_KEY != ''
+      - name: distribute()
+        if: env.KEEPER_PRIVATE_KEY != ''
+        run: |
+          LODESTAR=$(jq -r .lodestar deployments/99801.json)
+          cast send "$LODESTAR" "distribute()" --gas-limit 3000000 \
+            --rpc-url "$RPC_URL" --private-key "$KEEPER_PRIVATE_KEY"
+      - name: No keeper key
+        if: env.KEEPER_PRIVATE_KEY == ''
+        run: echo "KEEPER_PRIVATE_KEY is not set; skipping."

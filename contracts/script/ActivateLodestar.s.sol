@@ -10,7 +10,7 @@ import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 
 /// @notice Hand the token's Ascend creator role to its Lodestar and activate it with MONARCH's defaults:
 /// 40% buyback and burn / 40% holders / 20% Team Treasury, Peasant-Knight-Duke-Monarch tiers,
-/// a 30-day rolling treasury stream, listing set-aside on (5,000 USDC cap), creator role locked a year.
+/// a 7-day rolling treasury stream, listing set-aside on (5,000 USDC cap), creator role locked a year.
 /// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER (unset = the factory default),
 /// MAX_SLIPPAGE_BPS, ENROL_LISTING, LISTING_CAP, LOCK_DAYS (0 = no lock). To keep buybacks in reserve
 /// instead, the factory owner runs setDefaultSwapper(0x0) at least 12 hours before activating.
@@ -37,7 +37,7 @@ contract ActivateLodestar is BaseScript {
             maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(1_000)))
         });
         p.treasuryRecipient = vm.envAddress("TREASURY");
-        p.treasuryWindow = 30 days;
+        p.treasuryWindow = 7 days;
         p.tiers = MonarchTiers.defaults();
         p.enrolListing = vm.envOr("ENROL_LISTING", true);
         p.listingCap = vm.envOr("LISTING_CAP", uint256(5_000e6));
