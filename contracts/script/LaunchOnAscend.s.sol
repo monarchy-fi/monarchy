@@ -7,7 +7,7 @@ import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {MockAscendLaunchpad} from "../src/mocks/MockAscendLaunchpad.sol";
 import {AscendPoolKey} from "../src/libraries/AscendPoolKey.sol";
 
-/// @notice Launch a token (default MONARCH) and record it in deployments/<chainId>.json.
+/// @notice Launch a token (default "Demo Token" / DEMO) and record it in deployments/<chainId>.json.
 /// Real mode calls Ascend's launch((name, symbol, quote, devBuyQuote, minDevOut, salt, creator)) with no
 /// dev buy; run without --broadcast first to simulate.
 /// Launching on Ascend's own site and setting TOKEN=<address> works too: the script then just records it.
@@ -28,8 +28,8 @@ contract LaunchOnAscend is BaseScript {
         require(d.launchpad != address(0), "run DeployCore first");
         uint256 pk = _deployerKey();
         address me = vm.addr(pk);
-        string memory name = vm.envOr("TOKEN_NAME", string("Monarchy"));
-        string memory symbol = vm.envOr("TOKEN_SYMBOL", string("MONARCH"));
+        string memory name = vm.envOr("TOKEN_NAME", string("Demo Token"));
+        string memory symbol = vm.envOr("TOKEN_SYMBOL", string("DEMO"));
         address existing = vm.envOr("TOKEN", address(0));
 
         if (existing != address(0)) {
