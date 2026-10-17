@@ -158,7 +158,7 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
       </label>
       <p className={cancellable ? "warn small" : "muted small"}>
         {cancellable
-          ? "Cancellable: you can stop this stream later. What has vested goes to the recipient and the rest comes back to you. The recipient will see an amber Cancellable badge."
+          ? "Cancellable: you can stop this stream later. What has vested stays claimable by the recipient and the rest comes back to you. The recipient will see an amber Cancellable badge."
           : "Not cancellable: once created, nobody can stop or change this stream. This can't be changed later."}
       </p>
       {isNative ? send : <WithApproval token={asset} spender={sandfall} amount={value}>{send}</WithApproval>}

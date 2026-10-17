@@ -73,7 +73,7 @@ contract DemoFlow is BaseScript {
         uint64 nowTs = uint64(block.timestamp);
         sandfall.createFixed(d.quote, alice, 2_000e6, nowTs, nowTs + 1 days, nowTs + 30 days, 0, true);
         sandfall.createFixed(d.quote, alice, 1_000e6, nowTs, nowTs, nowTs + 90 days, 30 days, false);
-        // a pending split change, to show the 72h timelock
+        // a pending split change, to show the 12h timelock
         l.proposeConfig(ILodestar.Config(3_000, 5_000, 2_000, l.config().swapper, 300));
         vm.stopBroadcast();
 

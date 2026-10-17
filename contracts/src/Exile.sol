@@ -84,6 +84,8 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     uint64 public constant BUCKET = 1 hours;
     uint64 public constant DRIP = 7 days;
     uint64 public constant TIMELOCK = 12 hours;
+    /// @dev A ready tier change must be executed within this window, or proposed again.
+    uint64 public constant EXECUTION_WINDOW = 7 days;
     uint256 public constant MAX_BUCKETS_PER_CALL = 720;
     uint256 public constant MAX_TIERS = 8;
     uint256 internal constant BPS = 10_000;
@@ -135,6 +137,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     error NoPendingTiers();
     error TimelockActive();
     error PoolNeedsPoke();
+    error ProposalExpired();
     error UnexpectedNFT();
 
     // ================================================================ pools
@@ -173,10 +176,19 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         rt.safeTransferFrom(msg.sender, address(this), amount);
         uint256 received = rt.balanceOf(address(this)) - before;
 
-        uint256 leftover = p.periodFinish > block.timestamp ? p.rewardRate * (p.periodFinish - block.timestamp) : 0;
-        p.rewardRate = (received * RATE_PREC + leftover + p.unallocated) / DRIP;
+        // The new end is weighted by amount: what is still dripping keeps its remaining time, while the
+        // payout and anything that dripped with nobody locked get a full 7 days. Dust barely moves the
+        // end, splitting a payout changes nothing, and the empty-pool carry can't be squeezed into the
+        // last seconds of a drip.
+        uint256 left = p.periodFinish > block.timestamp ? p.periodFinish - block.timestamp : 0;
+        uint256 leftover = p.rewardRate * left;
+        uint256 fresh = received * RATE_PREC + p.unallocated;
+        uint256 total = leftover + fresh;
+        uint256 duration = total == 0 ? DRIP : (leftover * left + fresh * DRIP) / total;
+        if (duration == 0) duration = 1;
+        p.rewardRate = total / duration;
+        p.periodFinish = uint64(block.timestamp + duration);
         p.unallocated = 0;
-        p.periodFinish = uint64(block.timestamp + DRIP);
         p.totalDistributed += received;
         emit RewardAdded(poolId, msg.sender, received, p.rewardRate, p.periodFinish);
     }
@@ -202,6 +214,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         Pool storage p = _pool(poolId);
         if (p.tiersEta == 0) revert NoPendingTiers();
         if (block.timestamp < p.tiersEta) revert TimelockActive();
+        if (block.timestamp > p.tiersEta + EXECUTION_WINDOW) revert ProposalExpired();
         delete p.tiers;
         for (uint256 i; i < p.pendingTiers.length; ++i) {
             p.tiers.push(p.pendingTiers[i]);
@@ -280,8 +293,9 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         emit Locked(lockId, msg.sender, Kind.ERC1155, asset, id, amount, _locks[lockId].unlockAt, 0, 0, 0);
     }
 
-    /// @notice Push the unlock time later. The tier is judged from now to the new unlock time and the
-    /// multiplier never drops.
+    /// @notice Push the unlock time later. The lock is re-tiered from now to the new unlock time, so the
+    /// multiplier always matches what is still committed: keeping Monarch means keeping 30 days ahead,
+    /// and a past long lock can't hold 3x through one-hour extensions.
     function extend(uint256 lockId, uint64 newUnlockAt) external nonReentrant {
         Lock storage l = _lock(lockId);
         if (msg.sender != l.owner) revert NotOwner();
@@ -299,7 +313,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
                 p.totalPoints -= l.points;
             }
             uint16 tierMult = _tierMultiplier(p.tiers, newUnlockAt - block.timestamp);
-            if (tierMult > l.multiplierBps) l.multiplierBps = tierMult;
+            l.multiplierBps = tierMult;
             l.points = l.amount * l.multiplierBps / BPS;
             l.unlockAt = rounded;
             l.rewardPerPointPaid = p.rewardPerPoint;
@@ -560,7 +574,12 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         if (tiers.length == 0 || tiers.length > MAX_TIERS) revert InvalidTiers();
         for (uint256 i; i < tiers.length; ++i) {
             if (tiers[i].multiplierBps == 0 || tiers[i].minDuration == 0) revert InvalidTiers();
-            if (i > 0 && tiers[i].minDuration <= tiers[i - 1].minDuration) revert InvalidTiers();
+            // longer locks never earn a lower multiplier than shorter ones
+            if (
+                i > 0
+                    && (tiers[i].minDuration <= tiers[i - 1].minDuration
+                        || tiers[i].multiplierBps < tiers[i - 1].multiplierBps)
+            ) revert InvalidTiers();
         }
     }
 
@@ -578,8 +597,11 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         return uint64(t - (t % BUCKET));
     }
 
+    /// @dev Reverts instead of wrapping: an unlock time near uint64 max must not round into the past.
     function _ceilBucket(uint256 t) internal pure returns (uint64) {
         uint256 r = t % BUCKET;
-        return uint64(r == 0 ? t : t + BUCKET - r);
+        uint256 c = r == 0 ? t : t + BUCKET - r;
+        if (c > type(uint64).max) revert InvalidUnlock();
+        return uint64(c);
     }
 }

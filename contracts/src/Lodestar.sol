@@ -26,8 +26,17 @@ contract Lodestar is ILodestar, ReentrancyGuard {
 
     uint256 public constant BPS = 10_000;
     uint256 public constant SWAP_FEE_BPS = 100; // Ascend's 1% pool fee
+    uint256 public constant MIN_SLIPPAGE_BPS = 100;
     uint256 public constant MAX_SLIPPAGE_BPS = 2_000;
     uint64 public constant TIMELOCK = 12 hours;
+    /// @dev A ready config change must be executed within this window, or proposed again.
+    uint64 public constant EXECUTION_WINDOW = 7 days;
+    /// @dev After a skipped buyback the next attempt halves, down to 1/256 of the amount due.
+    uint8 public constant MAX_BUYBACK_SHIFT = 8;
+    /// @dev Each buyback spends at most this share of the quote side of the pool's active liquidity
+    /// (valued at the EMA price). A buy that small moves the price about 1%, which is less than the
+    /// 1% fee a sandwich pays each way, so sandwiching it doesn't pay.
+    uint256 public constant MAX_BUY_DEPTH_BPS = 50;
     /// @dev Burn sink. Ascend's launch tokens reject transfers to address(0) and to 0x…dEaD, so burns go
     /// to this widely used dead address instead. Nobody holds its key.
     address public constant DEAD = 0xdEAD000000000000000042069420694206942069;
@@ -59,6 +68,12 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     uint256 public totalHoldersQuote;
     uint256 public totalTreasuryQuote;
     uint64 public lastDistributeAt;
+    /// @notice Each attempt buys `due >> buybackShift`. Rises by one after a skipped buyback and falls by
+    /// one after a successful one, so a reserve too big for the pool is bought back in smaller pieces.
+    uint8 public buybackShift;
+    /// @notice Holder rewards or treasury top-ups that couldn't be paid out yet; retried on the next distribute.
+    uint256 public holdersReserve;
+    uint256 public treasuryReserve;
 
     event Initialized(bytes32 indexed poolId, address indexed token, address quote, address steward, Config config);
     event Distributed(
@@ -72,6 +87,9 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     event BuybackSkipped(uint256 amount, uint256 minOut);
     event TokenBurnFailed(uint256 amount);
     event CollectFailed();
+    event ClaimFailed();
+    event HoldersPayoutFailed(uint256 amount);
+    event TreasuryPayoutFailed(uint256 amount);
     event ConfigProposed(Config config, uint64 eta);
     event ConfigExecuted(Config config);
     event ConfigCancelled();
@@ -91,6 +109,10 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     error CreatorRoleIsLocked();
     error NotExtending();
     error ZeroAddress();
+    error ProposalExpired();
+    error OnlySelf();
+    error BuybackShort();
+    error CreatorTransferPending();
 
     constructor() {
         _initialized = true; // the implementation itself can never be initialized
@@ -145,13 +167,15 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     // ================================================================ routing (anyone)
 
     /// @notice Collect and claim this token's creator fees from Ascend and route everything this
-    /// router holds. Permissionless: the buyback is priced against Ascend's on-chain EMA, so a
-    /// manipulated spot price only makes the buyback wait in reserve.
+    /// router holds. Permissionless. The buyback's minimum output comes from Ascend's EMA price, and
+    /// each buy is capped at a small share of the pool's depth so sandwiching it doesn't pay. Any
+    /// step that fails keeps its amount here and retries next time; the other steps still run.
     function distribute() external nonReentrant {
-        try launchpad.collect(poolId) {} catch {
-            emit CollectFailed(); // Ascend's keeper may have collected already
-        }
-        launchpad.claim(poolId);
+        // low-level calls, so even a changed return shape can't block routing
+        (bool ok,) = address(launchpad).call(abi.encodeCall(IAscendLaunchpad.collect, (poolId)));
+        if (!ok) emit CollectFailed(); // Ascend's keeper may have collected already
+        (ok,) = address(launchpad).call(abi.encodeCall(IAscendLaunchpad.claim, (poolId)));
+        if (!ok) emit ClaimFailed();
 
         // project-token side: burn all of it
         uint256 t = token.balanceOf(address(this));
@@ -166,54 +190,137 @@ contract Lodestar is ILodestar, ReentrancyGuard {
 
         // quote side: balance based, so fees claimed by anyone else and listing refunds are routed too
         Config memory c = _cfg;
-        uint256 q = quote.balanceOf(address(this)) - buybackReserve;
+        uint256 q = quote.balanceOf(address(this)) - buybackReserve - holdersReserve - treasuryReserve;
         uint256 burnQ = q * c.burnBps / BPS;
         uint256 holdQ = q * c.holdersBps / BPS;
-        uint256 treasQ = q - burnQ - holdQ;
-
-        uint256 buyAmt = burnQ + buybackReserve;
-        uint256 bought;
-        uint256 spent;
-        if (buyAmt > 0) {
-            if (c.swapper == address(0)) {
-                buybackReserve = buyAmt;
-            } else {
-                uint256 minOut = quoteMinOut(buyAmt, c.maxSlippageBps);
-                quote.forceApprove(c.swapper, buyAmt);
-                try IBuybackSwapper(c.swapper).buyExactIn(poolId, buyAmt, minOut, DEAD) returns (uint256 out) {
-                    bought = out;
-                    spent = buyAmt;
-                    buybackReserve = 0;
-                    totalBuybackQuote += buyAmt;
-                    totalBuybackTokensBurned += out;
-                } catch {
-                    buybackReserve = buyAmt;
-                    emit BuybackSkipped(buyAmt, minOut);
-                }
-                quote.forceApprove(c.swapper, 0);
-            }
+        uint256 rest = q - burnQ - holdQ;
+        // the rounding remainder goes to a share that is switched on
+        if (c.treasuryBps == 0) {
+            if (c.holdersBps > 0) holdQ += rest;
+            else burnQ += rest;
+            rest = 0;
         }
+        uint256 treasQ = rest + treasuryReserve;
+        holdQ += holdersReserve;
+
+        (uint256 spent, uint256 bought) = _buyback(c, burnQ + buybackReserve);
 
         if (holdQ > 0) {
             quote.forceApprove(address(exile), holdQ);
-            exile.notifyReward(exilePoolId, holdQ);
-            totalHoldersQuote += holdQ;
+            try exile.notifyReward(exilePoolId, holdQ) {
+                totalHoldersQuote += holdQ;
+                holdersReserve = 0;
+            } catch {
+                quote.forceApprove(address(exile), 0);
+                holdersReserve = holdQ;
+                emit HoldersPayoutFailed(holdQ);
+                holdQ = 0;
+            }
         }
         if (treasQ > 0) {
-            quote.forceApprove(address(sandfall), treasQ);
-            sandfall.topUp(treasuryStreamId, uint128(treasQ));
-            totalTreasuryQuote += treasQ;
+            bool paid;
+            if (treasQ <= type(uint128).max) {
+                quote.forceApprove(address(sandfall), treasQ);
+                try sandfall.topUp(treasuryStreamId, uint128(treasQ)) {
+                    paid = true;
+                } catch {
+                    quote.forceApprove(address(sandfall), 0);
+                }
+            }
+            if (paid) {
+                totalTreasuryQuote += treasQ;
+                treasuryReserve = 0;
+            } else {
+                treasuryReserve = treasQ;
+                emit TreasuryPayoutFailed(treasQ);
+                treasQ = 0;
+            }
         }
 
         lastDistributeAt = uint64(block.timestamp);
         emit Distributed(t, q, spent, bought, holdQ, treasQ);
     }
 
+    function _buyback(Config memory c, uint256 buyAmt) internal returns (uint256 spent, uint256 bought) {
+        if (buyAmt > 0 && c.swapper != address(0)) {
+            uint256 ema = _ema();
+            uint256 cap = _maxBuyback(ema);
+            uint256 full = cap != 0 && buyAmt > cap ? cap : buyAmt;
+            uint256 attempt = full >> buybackShift;
+            if (attempt == 0) attempt = full;
+            uint256 minOut = _minOut(ema, attempt, c.maxSlippageBps);
+            bool ok;
+            if (minOut > 0) {
+                try this.buybackStep(c.swapper, attempt, minOut) returns (uint256 s_, uint256 b_) {
+                    (spent, bought, ok) = (s_, b_, true);
+                } catch {}
+            }
+            if (ok) {
+                totalBuybackQuote += spent;
+                totalBuybackTokensBurned += bought;
+                if (buybackShift > 0) --buybackShift;
+            } else {
+                // dust attempts don't count, so a few wei can't shrink the next real buyback
+                if (buybackShift < MAX_BUYBACK_SHIFT && (cap == 0 || attempt * 256 >= cap)) ++buybackShift;
+                emit BuybackSkipped(attempt, minOut);
+            }
+        }
+        buybackReserve = buyAmt - spent;
+    }
+
+    /// @notice One buyback, checked by what actually happened: at most `amountIn` quote left this router
+    /// and at least `minOut` tokens reached the burn address. Only callable by this router, from
+    /// `distribute`, so a bad swap reverts here and the quote stays in reserve.
+    function buybackStep(address swapper, uint256 amountIn, uint256 minOut)
+        external
+        returns (uint256 spent, uint256 burned)
+    {
+        if (msg.sender != address(this)) revert OnlySelf();
+        uint256 quoteBefore = quote.balanceOf(address(this));
+        uint256 deadBefore = token.balanceOf(DEAD);
+        quote.forceApprove(swapper, amountIn);
+        IBuybackSwapper(swapper).buyExactIn(poolId, amountIn, minOut, DEAD);
+        quote.forceApprove(swapper, 0);
+        spent = quoteBefore - quote.balanceOf(address(this));
+        burned = token.balanceOf(DEAD) - deadBefore;
+        if (burned < minOut || spent > amountIn) revert BuybackShort();
+    }
+
     /// @notice Minimum tokens to accept when buying with `quoteIn`, from Ascend's EMA price minus the
-    /// pool fee and the slippage allowance.
+    /// pool fee and the slippage allowance. Returns 0 (no buyback) when there is no EMA: the spot
+    /// price is never used, since a sandwich can move it in the same transaction.
     function quoteMinOut(uint256 quoteIn, uint256 slippageBps) public view returns (uint256) {
-        uint256 sp = launchpad.emaSqrtPrice(poolId);
-        if (sp == 0) (sp,,,) = poolManager.getSlot0(poolId);
+        return _minOut(_ema(), quoteIn, slippageBps);
+    }
+
+    /// @notice Largest single buyback right now (0 = the pool doesn't report its liquidity, no cap).
+    function maxBuyback() external view returns (uint256) {
+        return _maxBuyback(_ema());
+    }
+
+    function _ema() internal view returns (uint256 sp) {
+        try launchpad.emaSqrtPrice(poolId) returns (uint160 e) {
+            sp = e;
+        } catch {}
+    }
+
+    /// @dev Quote side of the active liquidity at the EMA price (not spot, which a sandwich can move):
+    /// L * sqrtP for currency1, L / sqrtP for currency0.
+    function _maxBuyback(uint256 sp) internal view returns (uint256) {
+        if (sp == 0) return 0;
+        uint256 liq;
+        try poolManager.getLiquidity(poolId) returns (uint128 l_) {
+            liq = l_;
+        } catch {
+            return 0;
+        }
+        if (liq == 0) return 0;
+        uint256 depth = tokenIs0 ? Math.mulDiv(liq, sp, 1 << 96) : Math.mulDiv(liq, 1 << 96, sp);
+        uint256 cap = depth * MAX_BUY_DEPTH_BPS / BPS;
+        return cap == 0 ? 1 : cap;
+    }
+
+    function _minOut(uint256 sp, uint256 quoteIn, uint256 slippageBps) internal view returns (uint256) {
         if (sp == 0) return 0;
         // price = (sp / 2^96)^2 = currency1 per currency0
         uint256 expected = tokenIs0
@@ -225,6 +332,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     function executeConfig() external {
         if (pendingEta == 0) revert NoPendingConfig();
         if (block.timestamp < pendingEta) revert TimelockActive();
+        if (block.timestamp > pendingEta + EXECUTION_WINDOW) revert ProposalExpired();
         _cfg = _pendingCfg;
         delete _pendingCfg;
         pendingEta = 0;
@@ -248,16 +356,18 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     }
 
     /// @notice Promise the creator role stays with this router until `until` (type(uint64).max = forever).
-    /// Can only be extended.
+    /// Can only be extended, and not while a hand-off is pending (it could be accepted after locking).
     function lockCreatorRole(uint64 until) external onlyStewardOrFactory {
         if (until <= creatorLockedUntil || until <= block.timestamp) revert NotExtending();
+        if (launchpad.pendingCreator(poolId) != address(0)) revert CreatorTransferPending();
         creatorLockedUntil = until;
         emit CreatorRoleLocked(until);
     }
 
-    /// @notice Start handing the Ascend creator role to `next` (0 cancels). Blocked while locked.
+    /// @notice Start handing the Ascend creator role to `next`. Blocked while locked; `next = 0` cancels a
+    /// pending hand-off and is always allowed.
     function transferCreatorOut(address next) external onlySteward {
-        if (block.timestamp < creatorLockedUntil) revert CreatorRoleIsLocked();
+        if (next != address(0) && block.timestamp < creatorLockedUntil) revert CreatorRoleIsLocked();
         launchpad.transferCreator(poolId, next);
         emit CreatorTransferOutStarted(next);
     }
@@ -298,7 +408,8 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         returns (uint256 tokenToBurn, uint256 quoteTotal, uint256 burnQ, uint256 holdQ, uint256 treasQ)
     {
         tokenToBurn = token.balanceOf(address(this)) + launchpad.creatorOwedToken(poolId);
-        quoteTotal = quote.balanceOf(address(this)) - buybackReserve + launchpad.creatorOwedQuote(poolId);
+        quoteTotal = quote.balanceOf(address(this)) - buybackReserve - holdersReserve - treasuryReserve
+            + launchpad.creatorOwedQuote(poolId);
         burnQ = quoteTotal * _cfg.burnBps / BPS;
         holdQ = quoteTotal * _cfg.holdersBps / BPS;
         treasQ = quoteTotal - burnQ - holdQ;
@@ -312,7 +423,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
 
     function _validate(Config memory c) internal pure {
         if (uint256(c.burnBps) + c.holdersBps + c.treasuryBps != BPS) revert InvalidConfig();
-        if (c.maxSlippageBps > MAX_SLIPPAGE_BPS) revert InvalidConfig();
+        if (c.maxSlippageBps < MIN_SLIPPAGE_BPS || c.maxSlippageBps > MAX_SLIPPAGE_BPS) revert InvalidConfig();
     }
 
     function _tryTransfer(IERC20 asset, address to, uint256 amount) internal returns (bool) {

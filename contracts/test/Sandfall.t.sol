@@ -108,9 +108,11 @@ contract SandfallTest is Test {
         uint256 creatorBefore = usdc.balanceOf(creator);
         vm.prank(creator);
         sf.cancel(id);
-        assertEq(usdc.balanceOf(alice), 500e6, "vested goes to recipient");
         assertEq(usdc.balanceOf(creator) - creatorBefore, 500e6, "rest back to creator");
+        assertEq(sf.claimable(id), 500e6, "vested stays claimable");
         vm.warp(t0 + 100 days);
+        vm.prank(alice);
+        assertEq(sf.claim(id), 500e6, "vested goes to recipient");
         vm.prank(alice);
         assertEq(sf.claim(id), 0, "frozen after cancel");
         vm.prank(creator);
@@ -171,12 +173,13 @@ contract SandfallTest is Test {
         sf.topUp(id, 700e6);
         vm.warp(block.timestamp + 3.5 days);
         assertApproxEqAbs(sf.vestedAmount(id), 350e6, 1);
-        // second top-up re-streams leftover + new over a fresh window
+        // second top-up: 350 left with 3.5 days to go plus 350 new over 7 days ends after 5.25 days
         vm.prank(creator);
         sf.topUp(id, 350e6);
         assertApproxEqAbs(sf.vestedAmount(id), 350e6, 1);
-        vm.warp(block.timestamp + 3.5 days);
-        assertApproxEqAbs(sf.vestedAmount(id), 350e6 + 350e6, 2);
+        assertApproxEqAbs(sf.stream(id).periodFinish, block.timestamp + 5.25 days, 1);
+        vm.warp(sf.stream(id).periodFinish);
+        assertEq(sf.vestedAmount(id), 1050e6);
         vm.warp(block.timestamp + 7 days);
         assertEq(sf.vestedAmount(id), 1050e6, "everything vested after window, no dust");
         vm.prank(alice);
@@ -213,6 +216,65 @@ contract SandfallTest is Test {
         vm.warp(t0 + 1 days);
         vm.expectRevert(Sandfall.NativeTransferFailed.selector);
         r.claimFrom(id);
+    }
+
+    function test_cancelWorksEvenIfRecipientCannotReceive() public {
+        RejectingRecipient r = new RejectingRecipient(sf);
+        vm.prank(creator);
+        uint256 id = sf.createFixed{value: 10 ether}(address(0), address(r), 10 ether, t0, t0, t0 + 10 days, 0, true);
+        vm.warp(t0 + 5 days);
+        uint256 before = creator.balance;
+        vm.prank(creator);
+        sf.cancel(id);
+        assertEq(creator.balance - before, 5 ether, "unvested back to creator");
+        assertEq(sf.claimable(id), 5 ether, "vested left for the recipient");
+    }
+
+    function test_dustTopUpDoesNotDelayVesting() public {
+        uint256 id = sf.createRolling(address(usdc), alice, 30 days, creator, false);
+        vm.prank(creator);
+        sf.topUp(id, 3000e6);
+        uint64 finish = sf.stream(id).periodFinish;
+        vm.warp(block.timestamp + 10 days);
+        vm.prank(creator);
+        sf.topUp(id, 1); // a dust amount
+        assertApproxEqAbs(sf.stream(id).periodFinish, finish, 1, "dust pushed vesting back");
+        vm.warp(sf.stream(id).periodFinish);
+        assertEq(sf.vestedAmount(id), 3000e6 + 1);
+        vm.prank(creator);
+        sf.topUp(id, 100e6); // nothing left vesting: the new amount gets a full window
+        assertEq(sf.stream(id).periodFinish, block.timestamp + 30 days);
+    }
+
+    function test_splitTopUpsCannotSkipTheWindow() public {
+        uint256 id = sf.createRolling(address(usdc), alice, 30 days, creator, true);
+        vm.prank(creator);
+        sf.topUp(id, 1000e6);
+        vm.warp(block.timestamp + 30 days - 1 hours); // an hour before the window ends
+        // many small top-ups in a row can't drag a big one into the ending window
+        for (uint256 i; i < 200; ++i) {
+            vm.prank(creator);
+            sf.topUp(id, 9e6);
+        }
+        vm.prank(creator);
+        sf.topUp(id, 10_000e6);
+        vm.warp(block.timestamp + 1 hours);
+        // the 10k (and the 1.8k) still mostly vest over about 30 days, not in the next hour
+        assertLt(sf.vestedAmount(id), 1000e6 + 100e6, "top-up vested far too fast");
+    }
+
+    function test_claimToAnotherAddress() public {
+        RejectingRecipient r = new RejectingRecipient(sf);
+        vm.prank(creator);
+        uint256 id = sf.createFixed{value: 1 ether}(address(0), address(r), 1 ether, t0, t0, t0 + 1 days, 0, false);
+        vm.warp(t0 + 1 days);
+        address safe = makeAddr("safe");
+        vm.prank(address(r));
+        assertEq(sf.claimTo(id, safe), 1 ether);
+        assertEq(safe.balance, 1 ether);
+        vm.prank(alice);
+        vm.expectRevert(Sandfall.NotRecipient.selector);
+        sf.claimTo(id, alice);
     }
 
     function test_listings() public {

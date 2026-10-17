@@ -15,6 +15,8 @@ contract MockSwapper is IBuybackSwapper {
     MockERC20 public immutable token;
     uint256 public tokensPerQuote; // 1e18-scaled
     bool public fail;
+    uint256 public maxIn; // 0 = no limit; bigger buys revert, like a pool too thin for them
+    bool public shortChange; // takes the quote and burns nothing, like a dishonest swapper
     address public reenterTarget;
     bytes public reenterData;
 
@@ -28,6 +30,14 @@ contract MockSwapper is IBuybackSwapper {
         fail = f;
     }
 
+    function setMaxIn(uint256 m) external {
+        maxIn = m;
+    }
+
+    function setShortChange(bool s) external {
+        shortChange = s;
+    }
+
     function setReenter(address target, bytes calldata data) external {
         reenterTarget = target;
         reenterData = data;
@@ -35,6 +45,7 @@ contract MockSwapper is IBuybackSwapper {
 
     function buyExactIn(bytes32, uint256 quoteIn, uint256 minTokenOut, address to) external returns (uint256 out) {
         require(!fail, "swap failed");
+        require(maxIn == 0 || quoteIn <= maxIn, "too big for the pool");
         if (reenterTarget != address(0)) {
             (bool ok, bytes memory ret) = reenterTarget.call(reenterData);
             if (!ok) {
@@ -46,6 +57,7 @@ contract MockSwapper is IBuybackSwapper {
         quote.safeTransferFrom(msg.sender, address(this), quoteIn);
         out = quoteIn * tokensPerQuote / 1e18;
         require(out >= minTokenOut, "slippage");
+        if (shortChange) return out;
         token.mint(to, out);
     }
 }
