@@ -38,11 +38,11 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// the price about 1%, which is less than the 1% fee a sandwich pays each way, so sandwiching it
     /// doesn't pay.
     uint256 public constant MAX_BUY_DEPTH_BPS = 50;
-    /// @dev At most one buyback per hour. The depth cap bounds one buy; without a gap between buys a
+    /// @dev At most one buyback every 30 minutes. The depth cap bounds one buy; without a gap between buys a
     /// caller could push several capped pieces through in one transaction, between their own buy and
     /// sell, and collect about 1% per piece for one 2% round trip in fees. The keeper runs every 3 hours,
     /// so the gap costs nothing in the normal flow.
-    uint64 public constant BUYBACK_INTERVAL = 1 hours;
+    uint64 public constant BUYBACK_INTERVAL = 30 minutes;
     /// @dev Burn sink. Ascend's launch tokens reject transfers to address(0) and to 0x…dEaD, so burns go
     /// to this widely used dead address instead. Nobody holds its key.
     address public constant DEAD = 0xdEAD000000000000000042069420694206942069;
@@ -182,7 +182,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// @notice Collect and claim this token's creator fees from Ascend and route everything this
     /// router holds. Permissionless. The buyback's minimum output comes from Ascend's EMA price (or
     /// spot, whichever asks for more), each buy is capped at a small share of the pool's depth, and
-    /// buys are at least an hour apart, so sandwiching them doesn't pay. Any step that fails keeps its
+    /// buys are at least 30 minutes apart, so sandwiching them doesn't pay. Any step that fails keeps its
     /// amount here and retries next time; the other steps still run.
     function distribute() external nonReentrant {
         // low-level calls, so even a changed return shape can't block routing
@@ -278,7 +278,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
             } else {
                 // only a real attempt counts: with no EMA nothing was tried, and dust attempts are exempt,
                 // so neither an EMA-less first day nor a few wei can shrink the next real buyback; and it
-                // halves at most once an hour, so repeated calls during one pump can't run it to 1/256
+                // halves at most once per interval, so repeated calls during one pump can't run it to 1/256
                 if (
                     ema != 0 && buybackShift < MAX_BUYBACK_SHIFT && (cap == 0 || attempt * 256 >= cap)
                         && block.timestamp >= lastHalvingAt + BUYBACK_INTERVAL

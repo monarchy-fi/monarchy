@@ -281,7 +281,7 @@ contract LodestarTest is MonarchyFixture {
         assertEq(l.totalHoldersQuote(), 400e6, "reserve is not split again");
 
         for (uint256 i; i < 5 && l.buybackReserve() > 0; ++i) {
-            vm.warp(block.timestamp + 1 hours); // buybacks are at least an hour apart
+            vm.warp(block.timestamp + 30 minutes); // buybacks are at least 30 minutes apart
             l.distribute();
         }
         assertEq(l.totalBuybackQuote(), 400e6, "everything bought back in pieces");
@@ -603,30 +603,30 @@ contract LodestarTest is MonarchyFixture {
 
     // ---------------------------------------------------------------- 13. second review: buyback timing and prices
 
-    /// @dev The depth cap bounds one buy. Buys are also at least an hour apart, so calling distribute
+    /// @dev The depth cap bounds one buy. Buys are also at least 30 minutes apart, so calling distribute
     /// many times in one block moves one capped piece, not the whole reserve.
-    function test_buybacksAreAtLeastAnHourApart() public {
+    function test_buybacksAreAtLeastThirtyMinutesApart() public {
         Lodestar l = _activate(_params(token, 10_000, 0, 0, address(mockSwapper), false));
         launchpad.injectFees(poolId, 0, 4_000e6); // 2,000 USDC to buy back
         uint256 cap = l.maxBuyback();
         assertEq(l.nextBuybackAt(), 0, "nothing bought yet: no wait");
         l.distribute();
         assertEq(l.totalBuybackQuote(), cap);
-        assertEq(l.nextBuybackAt(), block.timestamp + 1 hours);
+        assertEq(l.nextBuybackAt(), block.timestamp + 30 minutes);
         assertEq(l.buybackShift(), 0);
 
         l.distribute();
         l.distribute();
-        assertEq(l.totalBuybackQuote(), cap, "one buyback per hour, however often distribute is called");
+        assertEq(l.totalBuybackQuote(), cap, "one buyback per 30 minutes, however often distribute is called");
         assertEq(l.buybackReserve(), 2_000e6 - cap);
         assertEq(l.buybackShift(), 0, "waiting is not a skip");
 
-        vm.warp(block.timestamp + 1 hours - 1);
+        vm.warp(block.timestamp + 30 minutes - 1);
         l.distribute();
-        assertEq(l.totalBuybackQuote(), cap, "still inside the hour");
+        assertEq(l.totalBuybackQuote(), cap, "still inside the 30 minutes");
         vm.warp(block.timestamp + 1);
         l.distribute();
-        assertEq(l.totalBuybackQuote(), 2 * cap, "the next piece goes out an hour later");
+        assertEq(l.totalBuybackQuote(), 2 * cap, "the next piece goes out 30 minutes later");
     }
 
     /// @dev Buy, call distribute twenty times, sell, all in one block, against the real swapper and the
@@ -638,7 +638,7 @@ contract LodestarTest is MonarchyFixture {
         launchpad.injectFees(poolId, 0, 30_000e6); // a busy window: 6k USDC of buyback share
         l.distribute(); // keeper: first capped piece, the rest waits in buybackReserve
         assertGt(l.buybackReserve(), 20 * l.maxBuyback(), "precondition: a reserve worth many capped pieces");
-        vm.warp(block.timestamp + 1 hours); // the next piece is due
+        vm.warp(block.timestamp + 30 minutes); // the next piece is due
 
         address attacker = makeAddr("attacker");
         uint256 stake = 5_000e6;
@@ -713,8 +713,9 @@ contract LodestarTest is MonarchyFixture {
     }
 
     /// @dev A pump that blocks the buyback can't be milked for halvings: however many times distribute is
-    /// called during it, the attempt size halves once an hour, the same rate at which successes double it back.
-    function test_halvingIsAtMostHourly() public {
+    /// called during it, the attempt size halves at most once every 30 minutes, the same rate at which
+    /// successes double it back.
+    function test_halvingIsAtMostEveryThirtyMinutes() public {
         LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(swapper), false);
         p.cfg.maxSlippageBps = 1_000;
         Lodestar l = _activate(p);
@@ -731,9 +732,13 @@ contract LodestarTest is MonarchyFixture {
         assertEq(l.buybackShift(), 1, "eight failed calls in one block halve once");
         assertEq(l.lastHalvingAt(), block.timestamp);
 
-        vm.warp(block.timestamp + 1 hours);
+        vm.warp(block.timestamp + 30 minutes - 1);
         l.distribute();
-        assertEq(l.buybackShift(), 2, "an hour later it can halve again");
+        assertEq(l.buybackShift(), 1, "not yet");
+
+        vm.warp(block.timestamp + 1);
+        l.distribute();
+        assertEq(l.buybackShift(), 2, "30 minutes later it can halve again");
     }
 
     /// @dev The steward can't hand the role to the router itself: that would let anyone "accept" a no-op
