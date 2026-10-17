@@ -6,7 +6,8 @@ import {Exile} from "../../src/Exile.sol";
 import {MockERC20} from "../../src/mocks/MockERC20.sol";
 import {MonarchTiers} from "../../src/libraries/MonarchTiers.sol";
 
-/// @notice Drives Exile with random locks, extensions, payouts, claims, withdrawals and time jumps.
+/// @notice Drives Exile with random locks, extensions, payouts in both streams (the reward token and the
+/// stake token itself), claims, withdrawals and time jumps.
 contract ExileHandler is Test {
     Exile internal exile;
     MockERC20 internal stake;
@@ -21,6 +22,8 @@ contract ExileHandler is Test {
     uint256 public ghostNotified;
     uint256 public ghostClaimed;
     uint256 public ghostLockedOutstanding;
+    uint256 public ghostStakeNotified;
+    uint256 public ghostStakeClaimed;
     bool public multiplierDropped;
 
     constructor(Exile exile_, MockERC20 stake_, MockERC20 reward_, uint256 poolId_) {
@@ -36,8 +39,11 @@ contract ExileHandler is Test {
             stake.approve(address(exile), type(uint256).max);
         }
         reward.mint(funder, 1e30);
-        vm.prank(funder);
+        stake.mint(funder, 1e30);
+        vm.startPrank(funder);
         reward.approve(address(exile), type(uint256).max);
+        stake.approve(address(exile), type(uint256).max);
+        vm.stopPrank();
     }
 
     function lock(uint256 actorSeed, uint256 amount, uint256 duration) external {
@@ -74,11 +80,21 @@ contract ExileHandler is Test {
         ghostNotified += amount;
     }
 
+    function notifyStake(uint256 amount) external {
+        amount = bound(amount, 1, 1e24);
+        vm.prank(funder);
+        exile.notifyStakeReward(poolId, amount);
+        ghostStakeNotified += amount;
+    }
+
     function claim(uint256 lockSeed) external {
         if (lockIds.length == 0) return;
         uint256 id = lockIds[lockSeed % lockIds.length];
-        vm.prank(exile.lockInfo(id).owner);
+        address owner = exile.lockInfo(id).owner;
+        uint256 stakeBefore = stake.balanceOf(owner);
+        vm.prank(owner);
         ghostClaimed += exile.claimRewards(id);
+        ghostStakeClaimed += stake.balanceOf(owner) - stakeBefore;
     }
 
     function withdraw(uint256 lockSeed) external {
@@ -87,10 +103,12 @@ contract ExileHandler is Test {
         Exile.Lock memory l = exile.lockInfo(id);
         if (l.withdrawn || block.timestamp < l.unlockAt) return;
         uint256 before = reward.balanceOf(l.owner);
+        uint256 stakeBefore = stake.balanceOf(l.owner);
         vm.prank(l.owner);
         exile.withdraw(id);
         // withdraw settles but does not pay out rewards; they stay claimable
         assertEq(reward.balanceOf(l.owner), before, "withdraw moved rewards");
+        assertEq(stake.balanceOf(l.owner), stakeBefore + l.amount, "withdraw paid stake rewards or short principal");
         ghostLockedOutstanding -= l.amount;
     }
 
@@ -139,6 +157,22 @@ contract ExileInvariantTest is Test {
     /// forge-config: default.invariant.depth = 60
     /// forge-config: offline.invariant.runs = 64
     /// forge-config: offline.invariant.depth = 60
+    function invariant_stakeRewardsNeverTouchPrincipal() public view {
+        uint256 owed;
+        for (uint256 i; i < handler.lockCount(); ++i) {
+            owed += exile.pendingStakeRewards(handler.lockIds(i));
+        }
+        assertLe(
+            owed + handler.ghostLockedOutstanding(),
+            stake.balanceOf(address(exile)),
+            "stake-token rewards owed would eat into locked principal"
+        );
+    }
+
+    /// forge-config: default.invariant.runs = 64
+    /// forge-config: default.invariant.depth = 60
+    /// forge-config: offline.invariant.runs = 64
+    /// forge-config: offline.invariant.depth = 60
     function invariant_rewardsConserved() public view {
         assertEq(
             reward.balanceOf(address(exile)) + handler.ghostClaimed(), handler.ghostNotified(), "reward tokens leaked"
@@ -150,7 +184,11 @@ contract ExileInvariantTest is Test {
     /// forge-config: offline.invariant.runs = 64
     /// forge-config: offline.invariant.depth = 60
     function invariant_principalHeld() public view {
-        assertEq(stake.balanceOf(address(exile)), handler.ghostLockedOutstanding(), "locked tokens don't match");
+        assertEq(
+            stake.balanceOf(address(exile)) + handler.ghostStakeClaimed(),
+            handler.ghostLockedOutstanding() + handler.ghostStakeNotified(),
+            "stake tokens leaked"
+        );
     }
 
     /// forge-config: default.invariant.runs = 64

@@ -556,6 +556,199 @@ contract ExileTest is Test {
         nft.safeTransferFrom(alice, address(exile), 1);
     }
 
+    // ---------------------------------------------------------------- stake-token rewards
+
+    function _fundStake(uint256 amount) internal {
+        monarch.mint(funder, amount);
+        vm.startPrank(funder);
+        monarch.approve(address(exile), type(uint256).max);
+        exile.notifyStakeReward(poolId, amount);
+        vm.stopPrank();
+    }
+
+    /// @dev Token-side fees paid in the stake token drip on the same points as the reward token, and one
+    /// claim pays both.
+    function test_stakeRewardsDripByPointsAndClaimPaysBoth() public {
+        uint256 a = _lock(alice, 1000e18, 30 days); // Monarch, 3000 points
+        uint256 b = _lock(bob, 1000e18, 3 days); // Knight, 1000 points
+        _notify(400e18);
+        _fundStake(800e18);
+        _skip(1 days);
+        // a third of each drip has gone out, split 3 : 1
+        assertApproxEqRel(exile.pendingStakeRewards(a), 200e18, 1e12);
+        assertApproxEqRel(exile.pendingStakeRewards(b), uint256(800e18) / 12, 1e12);
+        assertApproxEqRel(exile.pendingRewards(a), 100e18, 1e12);
+
+        uint256 monarchBefore = monarch.balanceOf(alice);
+        uint256 rewardBefore = reward.balanceOf(alice);
+        vm.expectEmit(true, true, false, false);
+        emit Exile.StakeRewardsClaimed(a, alice, 0);
+        _claim(alice, a);
+        assertApproxEqRel(monarch.balanceOf(alice) - monarchBefore, 200e18, 1e12, "stake-token rewards paid");
+        assertApproxEqRel(reward.balanceOf(alice) - rewardBefore, 100e18, 1e12, "reward token paid too");
+        assertEq(exile.pendingStakeRewards(a), 0);
+        assertApproxEqRel(exile.stakeEarningRatePerSecond(a) * 1 days / 1e18, 200e18, 1e9);
+    }
+
+    /// @dev A lock stops earning stake-token rewards at unlock, exactly like the reward token, and the
+    /// principal is never used to pay them.
+    function test_stakeRewardsStopAtUnlockAndLeavePrincipalAlone() public {
+        uint256 a = _lock(alice, 1000e18, 1 days); // Peasant, 500 points, ends after one day
+        uint256 b = _lock(bob, 500e18, 30 days); // Monarch, 1500 points
+        _fundStake(3000e18);
+        _skip(3 days);
+        exile.poke(poolId, 1000);
+        // day one splits 1000 by 500 : 1500, the other two days go to bob alone
+        assertApproxEqRel(exile.pendingStakeRewards(a), 250e18, 1e12, "alice earns only while locked");
+        assertApproxEqRel(exile.pendingStakeRewards(b), 2750e18, 1e12);
+
+        vm.prank(alice);
+        exile.withdraw(a);
+        assertEq(exile.lockInfo(a).withdrawn, true);
+        _claim(alice, a);
+        _claim(bob, b);
+        // what is left is bob's principal plus rounding dust, never less
+        assertGe(monarch.balanceOf(address(exile)), 500e18);
+        assertLt(monarch.balanceOf(address(exile)) - 500e18, 1e9);
+    }
+
+    /// @dev A lock made after a stake-token payout started only earns what drips from then on.
+    function test_lateLockDoesNotTakeEarlierStakeRewards() public {
+        uint256 a = _lock(alice, 1000e18, 30 days);
+        _fundStake(3000e18);
+        _skip(1 days);
+        uint256 b = _lock(bob, 1000e18, 30 days);
+        assertEq(exile.pendingStakeRewards(b), 0);
+        _skip(2 days);
+        assertApproxEqRel(exile.pendingStakeRewards(a), 1000e18 + 1000e18, 1e12);
+        assertApproxEqRel(exile.pendingStakeRewards(b), 1000e18, 1e12);
+    }
+
+    /// @dev A lock that ended before any stake-token payout existed earns none of it, and the skipped
+    /// bucket write doesn't hand it anything later.
+    function test_lockThatEndedBeforeStakeRewardsGetsNone() public {
+        uint256 a = _lock(alice, 1000e18, 1 days);
+        uint256 b = _lock(bob, 1000e18, 30 days);
+        _skip(2 days);
+        _fundStake(3000e18);
+        _skip(3 days);
+        exile.poke(poolId, 1000);
+        assertEq(exile.pendingStakeRewards(a), 0, "ended before the payout");
+        assertApproxEqRel(exile.pendingStakeRewards(b), 3000e18, 1e12);
+        _claim(alice, a);
+        assertEq(monarch.balanceOf(alice), 1_000_000e18 - 1000e18, "nothing paid to alice");
+    }
+
+    /// @dev Stake-token rewards that drip while nobody is locked show as `stakeCarry` and re-drip with
+    /// the next stake-token payout, like the reward-token carry.
+    function test_stakeCarryIsVisibleAndRedrips() public {
+        _fundStake(3000e18);
+        _skip(1 days);
+        Exile.PoolView memory v = exile.poolInfo(poolId);
+        assertApproxEqAbs(v.stakeCarry, 1000e18, 1e6);
+        assertEq(v.stakeTotalDistributed, 3000e18);
+        assertEq(v.carry, 0, "the reward-token stream is separate");
+        uint256 a = _lock(alice, 1000e18, 30 days);
+        _fundStake(1);
+        assertEq(exile.poolInfo(poolId).stakeCarry, 0);
+        _skip(3 days);
+        assertApproxEqRel(exile.pendingStakeRewards(a), 3000e18, 1e9, "all of it reaches the locker");
+    }
+
+    /// @dev claimRewardsTo sends both streams to the other address.
+    function test_claimRewardsToPaysBothStreams() public {
+        uint256 a = _lock(alice, 1000e18, 30 days);
+        _notify(300e18);
+        _fundStake(300e18);
+        _skip(3 days);
+        vm.prank(alice);
+        exile.claimRewardsTo(a, carol);
+        assertApproxEqRel(reward.balanceOf(carol), 300e18, 1e12);
+        assertApproxEqRel(monarch.balanceOf(carol) - 1_000_000e18, 300e18, 1e12);
+    }
+
+    /// @dev The heaviest catch-up one call can do: a month of hourly buckets, the most it may snapshot with
+    /// points expiring, and both streams dripping. It has to fit a 32M gas transaction with room to spare.
+    function test_fullCatchUpWithBothStreamsFitsInABlock() public {
+        for (uint256 i; i < exile.MAX_EXPIRING_PER_CALL(); ++i) {
+            _lock(alice, 1e18, 1 days + i * 1 hours);
+        }
+        _notify(1000e18);
+        _fundStake(1000e18);
+        _skip(exile.MAX_BUCKETS_PER_CALL() * 1 hours);
+        uint256 g = gasleft();
+        assertTrue(exile.poke(poolId, exile.MAX_BUCKETS_PER_CALL()), "one call catches up");
+        g -= gasleft();
+        emit log_named_uint("full catch-up gas", g);
+        assertLt(g, 20_000_000, "catch-up too heavy");
+    }
+
+    /// @dev With points expiring in more buckets than one call may snapshot, an action waits for a poke, and
+    /// nothing is lost once the pool is caught up.
+    function test_catchUpStopsAtTheSnapshotCap() public {
+        uint256 n = exile.MAX_EXPIRING_PER_CALL() + 10;
+        uint256[] memory ids = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            ids[i] = _lock(i % 2 == 0 ? alice : bob, 1e18, 1 days + i * 1 hours);
+        }
+        _notify(1000e18);
+        _fundStake(1000e18);
+        _skip(1 days + n * 1 hours);
+        vm.prank(alice);
+        vm.expectRevert(Exile.PoolNeedsPoke.selector);
+        exile.claimRewards(ids[0]);
+        assertFalse(exile.poke(poolId, exile.MAX_BUCKETS_PER_CALL()), "capped at the snapshot limit");
+        // the claims below each catch up what is left
+        uint256 paid;
+        uint256 paidStake;
+        for (uint256 i; i < n; ++i) {
+            address who = i % 2 == 0 ? alice : bob;
+            uint256 before = monarch.balanceOf(who);
+            paid += _claim(who, ids[i]);
+            paidStake += monarch.balanceOf(who) - before;
+        }
+        assertApproxEqAbs(paid, 1000e18, 1e9, "every reward paid out once caught up");
+        assertApproxEqAbs(paidStake, 1000e18, 1e9, "every stake reward paid out once caught up");
+    }
+
+    /// @dev Dust locks expiring hour after hour can make users wait for a poke, but never block a payout.
+    function test_dustLocksCannotBlockPayouts() public {
+        uint256 n = exile.MAX_EXPIRING_PER_CALL() + 1;
+        for (uint256 i; i < n; ++i) {
+            _lock(bob, 2, 1 days + i * 1 hours);
+        }
+        _skip(1 days + n * 1 hours);
+        _notify(100e18);
+        _fundStake(100e18);
+        assertTrue(exile.poke(poolId, 1), "the payouts caught the pool up");
+    }
+
+    /// @dev A reward token that can't be paid out right now doesn't hold the stake-token rewards hostage.
+    function test_stakeRewardsClaimableWhileRewardTokenIsStuck() public {
+        uint256 a = _lock(alice, 1000e18, 30 days);
+        _notify(300e18);
+        _fundStake(300e18);
+        _skip(3 days);
+        vm.mockCallRevert(address(reward), abi.encodeWithSelector(reward.transfer.selector), "paused");
+        vm.prank(alice);
+        vm.expectRevert();
+        exile.claimRewards(a);
+        uint256 before = monarch.balanceOf(carol);
+        vm.prank(alice);
+        uint256 got = exile.claimStakeRewardsTo(a, carol);
+        assertApproxEqAbs(got, 300e18, 1e9, "stake rewards paid on their own");
+        assertEq(monarch.balanceOf(carol) - before, got);
+        vm.clearMockedCalls();
+        assertApproxEqAbs(_claim(alice, a), 300e18, 1e9, "reward token still owed once it works again");
+        assertEq(exile.pendingStakeRewards(a), 0, "stake rewards not paid twice");
+    }
+
+    function test_stakeRewardRejectsZero() public {
+        vm.prank(funder);
+        vm.expectRevert(Exile.InvalidAmount.selector);
+        exile.notifyStakeReward(poolId, 0);
+    }
+
     // ---------------------------------------------------------------- fuzz
 
     function testFuzz_rewardsNeverExceedDeposits(uint256 seed) public {

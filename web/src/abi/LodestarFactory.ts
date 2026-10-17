@@ -160,6 +160,11 @@ export const lodestarFactoryAbi = [
                 "name": "maxSlippageBps",
                 "type": "uint16",
                 "internalType": "uint16"
+              },
+              {
+                "name": "tokenToHolders",
+                "type": "bool",
+                "internalType": "bool"
               }
             ]
           },

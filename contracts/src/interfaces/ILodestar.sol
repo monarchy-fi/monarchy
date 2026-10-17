@@ -2,13 +2,15 @@
 pragma solidity ^0.8.24;
 
 interface ILodestar {
-    /// @notice How a Lodestar splits the quote side of its creator fees. Basis points sum to 10_000.
+    /// @notice How a Lodestar routes its creator fees. The quote side splits by basis points that sum to
+    /// 10_000; the token side is either burned or paid to Exile lockers in full.
     struct Config {
         uint16 burnBps; // buy back the token and burn it
         uint16 holdersBps; // Exile holder rewards
         uint16 treasuryBps; // Team Treasury, streamed through Sandfall
         address swapper; // buyback route; 0 = keep the buyback share in reserve
         uint16 maxSlippageBps; // vs the stricter of Ascend's on-chain EMA price and spot, on top of the 1% pool fee
+        bool tokenToHolders; // token-side fees: false = burn them all, true = all of them to Exile lockers
     }
 
     struct InitParams {

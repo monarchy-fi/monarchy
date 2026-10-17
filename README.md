@@ -7,7 +7,7 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 143 passing](https://img.shields.io/badge/Foundry-143%20tests%20passing-2E7D5B.svg)](contracts/test)
+[![Tests: 159 passing](https://img.shields.io/badge/Foundry-159%20tests%20passing-2E7D5B.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
 [![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-6930EA.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-C9A24A.svg)](#how-it-works)
@@ -32,7 +32,8 @@ On Ascend the creator role collects half of every 1% swap fee, in both the token
 ```mermaid
 flowchart LR
     A[Ascend pool<br/>creator fees] --> L(Lodestar)
-    L -->|token side| B[Burned]
+    L -->|token side, default| B[Burned]
+    L -->|token side, if chosen| E
     L -->|quote, burn share| S[AscendSwapper] --> B
     L -->|quote, holder share| E[Exile<br/>3 day drip to lockers]
     L -->|quote, treasury share| T[Sandfall<br/>rolling Team Treasury stream]
@@ -40,7 +41,7 @@ flowchart LR
 
 | | What it does |
 |---|---|
-| **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`, and the team's keeper calls it every 3 hours so fees never pile up into one big payout: token-side fees are burned, and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. |
+| **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`, and the team's keeper calls it every 3 hours so fees never pile up into one big payout: token-side fees are burned (or, if the creator chooses, all paid to Exile lockers in the token itself), and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. |
 | **Exile** | Locks ERC-20s (including v2 LP), ERC-721s and ERC-1155s. Locks can be extended, never shortened, cancelled or transferred. ERC-20 locks earn holder rewards by tier, paid as a 3 day drip, and stop earning the second they unlock. |
 | **Sandfall** | Vesting streams (linear, cliff or monthly steps) in any non-rebasing ERC-20 or native HYPE. The creator decides at creation whether a stream can be cancelled, and the site badges it. Rolling streams back Lodestar's Team Treasury. |
 
@@ -173,7 +174,7 @@ Mock USDC on Elysium has a public `mint`, so you can fund wallets for trading wi
 
 If buybacks through the Infinity vault misbehave, Lodestar keeps the buyback share in `buybackReserve` and still pays holders and the treasury. To activate with no buyback route at all, have the factory owner run `setDefaultSwapper(0x0)` at least 12 hours before step 3 (a new default only applies after 12 hours), then run step 3 with `SWAPPER=0x0000000000000000000000000000000000000000`, which asks for the factory's default instead of the deployed AscendSwapper.
 
-The keeper (`.github/workflows/distribute.yml`) calls `distribute()` every 3 hours from a wallet that holds only gas money, set as the `KEEPER_PRIVATE_KEY` Actions secret. Each run checks that `RPC_URL` serves chain 99801, lets `cast` estimate the gas, and fails when the receipt shows a revert, so a broken distribute is a red run rather than a green one. If the call fails after a long outage, the run first catches Exile's reward pool up with `poke(poolId, 720)` until it is current, then tries `distribute()` once more.
+The keeper (`.github/workflows/distribute.yml`) calls `distribute()` every 3 hours from a wallet that holds only gas money, set as the `KEEPER_PRIVATE_KEY` Actions secret. Each run checks that `RPC_URL` serves chain 99801, lets `cast` estimate the gas, and fails when the receipt shows a revert, so a broken distribute is a red run rather than a green one. When Exile's reward pool is more than 6 hours behind (after an outage), the run first catches it up with `poke`, one call's worth of hours at a time, so the payouts inside `distribute()` stay light. If `distribute()` fails or a holder payout is parked, it catches up again and tries once more.
 
 ## Status and roadmap
 

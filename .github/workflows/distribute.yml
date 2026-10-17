@@ -17,9 +17,9 @@ name: Distribute
 #   transaction makes the run red. (`cast send` alone exits 0 on a revert.)
 # - Recovery after an outage: Exile walks every idle hour of its reward pool inside notifyReward, so
 #   a pool that fell weeks behind can make distribute() need more gas than a block allows. When the
-#   estimate or the send fails, tools/keeper-distribute.sh calls Exile.poke(poolId, 720) until the
-#   pool reports it is caught up (at most 40 times), then retries distribute() once. If that still
-#   fails, the job fails: red is the point.
+#   pool is more than a few hours behind, tools/keeper-distribute.sh calls Exile.poke in chunks until
+#   it reports caught up (at most 40 times) before distributing, and again before one retry if
+#   distribute() fails or parks a holder payout. If that still fails, the job fails: red is the point.
 
 on:
   schedule:
