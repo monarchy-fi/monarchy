@@ -7,7 +7,7 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 89 passing](https://img.shields.io/badge/Foundry-89%20tests%20passing-2E7D5B.svg)](contracts/test)
+[![Tests: 107 passing](https://img.shields.io/badge/Foundry-107%20tests%20passing-2E7D5B.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
 [![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-6930EA.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-C9A24A.svg)](#how-it-works)
@@ -63,6 +63,7 @@ No lock, no rewards. With four holders each locking 10,000 tokens and fees dripp
 - **Locked router.** The creator role can be locked to the Lodestar for a chosen period, so the router can't be swapped out.
 - **Guarded buybacks.** The minimum output comes from Ascend's on-chain EMA price, less the pool fee and a slippage allowance (default 10%, max 20%). A skipped buyback stays in reserve and retries on the next distribute; holders and treasury are still paid.
 - **Front-run safe activation.** Only the pool's current creator can deploy its Lodestar, at an address derived from the pool id.
+- **Fuzz and invariant tested.** Random sequences of locks, payouts, claims, top-ups, cancels, fees and failed buybacks check that Exile stays solvent and never pays out more than it received, that every Sandfall stream stays fully backed, and that every unit of quote a Lodestar handles ends up burned, locked, streamed or held in its buyback reserve.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [SECURITY.md](SECURITY.md) to report an issue. The contracts have not been audited yet.
 
