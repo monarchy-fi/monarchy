@@ -26,7 +26,7 @@
 - Points = amount × tier multiplier, chosen by lock length when locking (and `max(old, new)` when extending).
 - Rewards accrue Synthetix-style per second, shared by points. Each `notifyReward` drips over 7 days, merging any undistributed remainder, so a lock taken right before a payout only catches a sliver.
 - Unlock times round up to the hour. Points expiring in each hour are kept in a bucket, and the pool snapshots the reward index at each hour boundary it passes, so a lock stops earning exactly at unlock even if nobody touches it. A pool idle for more than 720 hours can be caught up with `poke`.
-- Tier changes are timelocked 72 hours and only affect new locks. NFT locks hold the item and earn nothing.
+- Tier changes are timelocked 12 hours and only affect new locks. NFT locks hold the item and earn nothing.
 
 ## Sandfall
 

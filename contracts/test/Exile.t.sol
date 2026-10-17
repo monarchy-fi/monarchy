@@ -316,7 +316,7 @@ contract ExileTest is Test {
         exile.proposeTiers(poolId, t);
         vm.expectRevert(Exile.TimelockActive.selector);
         exile.executeTiers(poolId);
-        _skip(72 hours);
+        _skip(12 hours);
         exile.executeTiers(poolId);
 
         uint256 fresh = _lock(bob, 1000e18, 1 days);
