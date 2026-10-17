@@ -2,7 +2,6 @@ import type { CSSProperties, ReactNode } from "react";
 import { useChainId } from "wagmi";
 import { explorerAddress } from "../lib/chains";
 import { compact as compactFmt, fmt, short } from "../lib/format";
-import { Crown } from "./Crown";
 
 export function Card({ title, children, right, className }: { title?: ReactNode; children: ReactNode; right?: ReactNode; className?: string }) {
   return (
@@ -91,11 +90,13 @@ export function Row({ k, v }: { k: ReactNode; v: ReactNode }) {
   );
 }
 
-/** A friendly empty state: a faint crown, a line of text and an optional action. */
+const EMPTY_GLYPH = ["  .   .   .  ", " /|\\ /|\\ /|\\ ", "+-----------+"].join("\n");
+
+/** A friendly empty state: a faint crown in ASCII, a line of text and an optional action. */
 export function Empty({ title, children, action }: { title?: ReactNode; children?: ReactNode; action?: ReactNode }) {
   return (
     <div className="empty">
-      <Crown size={28} className="empty-crown" />
+      <span className="empty-glyph" aria-hidden="true">{EMPTY_GLYPH}</span>
       {title && <div className="empty-title">{title}</div>}
       {children && <p className="empty-body">{children}</p>}
       {action && <div className="empty-action">{action}</div>}

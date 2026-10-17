@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useChainId, useConnection, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useChainId, useConnect, useConnection, useConnectors, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Abi, Address } from "viem";
 import { useReadContract } from "wagmi";
@@ -94,7 +94,7 @@ export function TxButton({ request, children, disabledReason, onDone, className 
           children
         )}
       </button>
-      {reason && !busy && <span className="tx-note">{reason}</span>}
+      {!isConnected ? <ConnectFirst /> : reason && !busy && <span className="tx-note">{reason}</span>}
       {busy && !write.isPending && hash && <span className="tx-pending">Waiting for the block. {txRef}</span>}
       {done && (
         <span className="tx-ok" role="status">
@@ -112,6 +112,19 @@ export function TxButton({ request, children, disabledReason, onDone, className 
         </span>
       )}
     </div>
+  );
+}
+
+/** Beside a button that can't work yet because no wallet is connected: types itself out, and connects on click. */
+function ConnectFirst() {
+  const connectors = useConnectors();
+  const connect = useConnect();
+  const c = connectors[0];
+  return (
+    <button type="button" className="connect-first" disabled={!c || connect.isPending} onClick={() => c && connect.mutate({ connector: c })}>
+      <span className="cf-arrow" aria-hidden="true">◂</span>
+      <span className="cf-text">{connect.isPending ? "Connecting" : "Connect first"}</span>
+    </button>
   );
 }
 

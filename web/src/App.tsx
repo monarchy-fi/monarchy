@@ -3,6 +3,7 @@ import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useConnect, useConnection, useConnectors } from "wagmi";
 import { Connect } from "./components/Connect";
 import { Crown } from "./components/Crown";
+import { GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
 import { NetworkNotice, TestnetStrip } from "./components/States";
 import { chainName } from "./lib/chains";
 import { useNetwork } from "./lib/network";
@@ -14,10 +15,19 @@ import { NotFound } from "./pages/NotFound";
 import { SandfallPage } from "./pages/Sandfall";
 
 const LINKS = [
-  { to: "/lodestar", label: "Lodestar", hint: "Fee router" },
-  { to: "/exile", label: "Exile", hint: "Locks and rewards" },
-  { to: "/sandfall", label: "Sandfall", hint: "Vesting" },
+  { to: "/lodestar", label: "Lodestar", hint: "Fee router", key: "lodestar", glyph: <StarGlyph /> },
+  { to: "/exile", label: "Exile", hint: "Locks and rewards", key: "exile", glyph: <GateGlyph /> },
+  { to: "/sandfall", label: "Sandfall", hint: "Vesting", key: "sandfall", glyph: <HourglassGlyph /> },
 ];
+
+function LinkLabel({ l }: { l: (typeof LINKS)[number] }) {
+  return (
+    <>
+      <span className="nl-icon">{l.glyph}</span>
+      <span className="nl-word">{l.label}</span>
+    </>
+  );
+}
 
 export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -37,13 +47,13 @@ export function App() {
       <header className="nav-wrap">
         <nav className="nav" aria-label="Main">
           <NavLink to="/" className="brand" aria-label="Monarchy home">
-            <Crown size={26} />
-            <span>Monarchy</span>
+            <Crown size={20} className="brand-glyph" />
+            <span>MONARCHY</span>
           </NavLink>
           <div className="nav-links">
             {LINKS.map((l) => (
-              <NavLink key={l.to} to={l.to}>
-                {l.label}
+              <NavLink key={l.to} to={l.to} className={`nl nl-${l.key}`}>
+                <LinkLabel l={l} />
               </NavLink>
             ))}
           </div>
@@ -71,8 +81,10 @@ export function App() {
         {menuOpen && (
           <div className="menu" id="mobile-menu">
             {LINKS.map((l) => (
-              <NavLink key={l.to} to={l.to} className="menu-link">
-                <span>{l.label}</span>
+              <NavLink key={l.to} to={l.to} className={`menu-link nl nl-${l.key}`}>
+                <span className="nl">
+                  <LinkLabel l={l} />
+                </span>
                 <span className="menu-hint">{l.hint}</span>
               </NavLink>
             ))}
@@ -94,10 +106,9 @@ export function App() {
       </main>
       <footer className="foot">
         <div className="foot-brand">
-          <Crown size={16} />
-          <span>Monarchy</span>
+          <span>MONARCHY</span>
           <span className="foot-sep" aria-hidden="true" />
-          <span className="muted">Built on Ascend. No fees.</span>
+          <span>Built on Ascend. No fees.</span>
         </div>
         <div className="foot-links">
           <a href="https://docs.monarchy.fi" target="_blank" rel="noreferrer">

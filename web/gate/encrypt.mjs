@@ -47,7 +47,9 @@ if (!PLAINTEXT_MARKERS.every((m) => html.includes(m))) fail("dist/index.html doe
 const PUBLIC_OK = new Set(["index.html", "CNAME", "crown.svg", "og.png", "apple-touch-icon.png"]);
 const extra = readdirSync(dist, { recursive: true }).filter((f) => !PUBLIC_OK.has(String(f)));
 if (extra.length) fail(`${extra.length} unexpected file(s) in dist would be served unencrypted. Only index.html, CNAME and the public images belong there.`);
-if (/<script[^>]+src=|<link[^>]+rel="?(stylesheet|modulepreload)/i.test(html)) fail("dist/index.html still loads external scripts or styles. Is vite-plugin-singlefile on?");
+// The one outside stylesheet allowed is Google Fonts: public font files, nothing of the app's.
+const outsideStyles = (html.match(/<link[^>]+>/gi) ?? []).filter((t) => /rel="?(stylesheet|modulepreload)/i.test(t) && !/href="https:\/\/fonts\.googleapis\.com\//i.test(t));
+if (/<script[^>]+src=/i.test(html) || outsideStyles.length) fail("dist/index.html still loads external scripts or styles. Is vite-plugin-singlefile on?");
 
 // Point the password page's icon and preview links at the deploy's base path and URL (see vite.config.ts).
 const base = (process.env.SITE_BASE ?? "").replace(/\/+$/, "") + "/";

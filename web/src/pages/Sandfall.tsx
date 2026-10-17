@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
-import { useConnection, useReadContract, useReadContracts } from "wagmi";
-import { isAddress, type Address } from "viem";
+import { useMemo, useState, type ReactNode } from "react";
+import { useConnection, useReadContracts } from "wagmi";
+import { formatUnits, isAddress, type Address } from "viem";
 import { mockERC20Abi, sandfallAbi } from "../abi";
 import { TxButton, WithApproval } from "../components/Tx";
 import { ConnectPrompt } from "../components/States";
@@ -11,6 +11,7 @@ import { POLL, useNow, usePageTitle } from "../lib/hooks";
 import { useLodestarCore } from "../lib/monarchy";
 import { NoDeployment } from "../components/States";
 import { safeParse } from "./Exile";
+import { UnlockChart, unlockedAt } from "../components/UnlockChart";
 
 const KINDS = ["Linear", "Monthly steps", "Rolling"];
 
@@ -86,39 +87,130 @@ export function SandfallPage() {
   );
 }
 
+const DAY = 86400;
+const UNITS = { hours: 3600, days: DAY, weeks: 7 * DAY, months: 30 * DAY, years: 365 * DAY } as const;
+type Unit = keyof typeof UNITS;
+const STEPS = { daily: DAY, weekly: 7 * DAY, monthly: 30 * DAY } as const;
+type Freq = "continuous" | keyof typeof STEPS;
+const FREQ_LABEL: Record<Freq, string> = { continuous: "every second", daily: "every day", weekly: "every week", monthly: "every month" };
+
+function Choice<T extends string>({ value, onChange, options, cols }: { value: T; onChange: (v: T) => void; options: { v: T; title: string; sub?: string }[]; cols?: number }) {
+  return (
+    <div className={`choice choice-${cols ?? 3}`} role="radiogroup">
+      {options.map((o) => (
+        <button key={o.v} type="button" role="radio" aria-checked={value === o.v} className={value === o.v ? "on" : ""} onClick={() => onChange(o.v)}>
+          <b>{o.title}</b>
+          {o.sub && <span>{o.sub}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <div className="create-step">
+      <div className="create-step-h">
+        <span className="create-step-n">{n}</span>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SpanInput({ label, value, unit, onValue, onUnit, min = 0 }: { label: string; value: number; unit: Unit; onValue: (n: number) => void; onUnit: (u: Unit) => void; min?: number }) {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      <div className="input-row">
+        <input className="input" type="number" min={min} value={value} onChange={(e) => onValue(Math.max(0, Number(e.target.value)))} />
+        <select className="input input-unit" value={unit} onChange={(e) => onUnit(e.target.value as Unit)}>
+          {Object.keys(UNITS).map((u) => (
+            <option key={u} value={u}>
+              {u}
+            </option>
+          ))}
+        </select>
+      </div>
+    </label>
+  );
+}
+
+/** Create a stream the way Streamflow lays it out: numbered steps on the left, a live summary and chart on the right. */
 function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sandfall: Address; quote?: Address; token?: Address; quoteSymbol?: string; tokenSymbol?: string }) {
   const [assetChoice, setAssetChoice] = useState<"quote" | "token" | "native" | "other">("quote");
   const [other, setOther] = useState("");
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  const [cliffDays, setCliffDays] = useState(0);
-  const [lengthDays, setLengthDays] = useState(90);
-  const [monthly, setMonthly] = useState(false);
-  const [cancellable, setCancellable] = useState(false);
+  const [startMode, setStartMode] = useState<"now" | "later">("now");
+  const [startAt, setStartAt] = useState("");
+  const [length, setLength] = useState(12);
+  const [lengthUnit, setLengthUnit] = useState<Unit>("months");
+  const [cliff, setCliff] = useState(0);
+  const [cliffUnit, setCliffUnit] = useState<Unit>("months");
+  const [freq, setFreq] = useState<Freq>("monthly");
+  const [cancellable, setCancellable] = useState<"no" | "yes">("no");
+  const now = useNow(15_000);
 
   const asset: Address | undefined =
     assetChoice === "quote" ? quote : assetChoice === "token" ? token : assetChoice === "native" ? ZERO : isAddress(other) ? other : undefined;
   const isNative = assetChoice === "native";
-  const dec = useReadContract({ address: asset, abi: mockERC20Abi, functionName: "decimals", query: { enabled: !!asset && !isNative } });
-  const decimals = isNative ? 18 : Number(dec.data ?? 18);
+  const meta = useReadContracts({
+    allowFailure: false,
+    contracts: [
+      { address: asset, abi: mockERC20Abi, functionName: "decimals" },
+      { address: asset, abi: mockERC20Abi, functionName: "symbol" },
+    ],
+    query: { enabled: !!asset && !isNative, staleTime: Infinity },
+  });
+  const decimals = isNative ? 18 : Number(meta.data?.[0] ?? 18);
+  const sym = isNative ? "HYPE" : (meta.data?.[1] ?? (assetChoice === "quote" ? quoteSymbol : assetChoice === "token" ? tokenSymbol : "")) ?? "";
   const value = safeParse(amount, decimals);
-  const start = Math.floor(Date.now() / 1000) + 60;
-  const cliff = start + cliffDays * 86400;
-  const end = start + lengthDays * 86400;
-  const reason = !asset ? "Pick an asset" : !isAddress(recipient) ? "Enter a recipient" : value === 0n ? "Enter an amount" : cliff >= end ? "Cliff must end before the stream" : undefined;
+
+  const later = startMode === "later" && startAt ? Math.floor(new Date(startAt).getTime() / 1000) : undefined;
+  // "now" starts a minute out so the transaction lands before the stream begins
+  const startFor = (t: number) => (startMode === "later" ? (later ?? 0) : t + 60);
+  const lengthS = length * UNITS[lengthUnit];
+  const cliffS = cliff * UNITS[cliffUnit];
+  const step = freq === "continuous" ? 0 : STEPS[freq];
+  const start = startFor(now);
+  const schedule = { start, cliff: start + cliffS, end: start + lengthS, step };
+
+  const reason = !asset
+    ? "Pick a token"
+    : !isAddress(recipient)
+      ? "Enter a recipient"
+      : value === 0n
+        ? "Enter an amount"
+        : startMode === "later" && (!later || later <= now)
+          ? "Pick a start time in the future"
+          : lengthS === 0
+            ? "Set how long it vests"
+            : cliffS >= lengthS
+              ? "The cliff must end before the stream does"
+              : step > lengthS
+                ? "Each unlock step must fit inside the stream"
+                : undefined;
+
+  const total = Number(formatUnits(value, decimals));
+  const periods = step ? Math.ceil(lengthS / step) : 0;
+  const atCliff = cliffS > 0 ? unlockedAt(schedule, schedule.cliff) : 0;
 
   const send = (
     <TxButton
       disabledReason={reason}
-      request={() =>
-        asset && {
+      request={() => {
+        if (!asset) return undefined;
+        const s = startFor(Math.floor(Date.now() / 1000));
+        return {
           address: sandfall,
           abi: sandfallAbi,
           functionName: "createFixed",
-          args: [asset, recipient as Address, value, BigInt(start), BigInt(cliff), BigInt(end), monthly ? 30 * 86400 : 0, cancellable],
+          args: [asset, recipient as Address, value, BigInt(s), BigInt(s + cliffS), BigInt(s + lengthS), step, cancellable === "yes"],
           value: isNative ? value : undefined,
-        }
-      }
+        };
+      }}
       onDone={() => setAmount("")}
     >
       Create stream
@@ -126,57 +218,96 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
   );
 
   return (
-    <Card title="New vesting stream">
-      <div className="form">
-        <label>
-          Asset
-          <select className="input" value={assetChoice} onChange={(e) => setAssetChoice(e.target.value as typeof assetChoice)}>
-            <option value="quote">{quoteSymbol ?? "Quote"}</option>
-            <option value="token">{tokenSymbol ?? "Token"}</option>
-            <option value="native">HYPE (native)</option>
-            <option value="other">Other token</option>
-          </select>
-        </label>
-        {assetChoice === "other" && (
-          <label>
-            Token address
-            <input className="input" placeholder="0x…" value={other} onChange={(e) => setOther(e.target.value.trim())} />
-          </label>
-        )}
-        <label>
-          Recipient
-          <input className="input" placeholder="0x…" value={recipient} onChange={(e) => setRecipient(e.target.value.trim())} />
-        </label>
-        <label>
-          Amount
-          <input className="input" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        </label>
-        <label>
-          Cliff (days)
-          <input className="input" type="number" min={0} value={cliffDays} onChange={(e) => setCliffDays(Number(e.target.value))} />
-        </label>
-        <label>
-          Total length (days)
-          <input className="input" type="number" min={1} value={lengthDays} onChange={(e) => setLengthDays(Number(e.target.value))} />
-        </label>
-        <label>
-          Schedule
-          <select className="input" value={monthly ? "monthly" : "linear"} onChange={(e) => setMonthly(e.target.value === "monthly")}>
-            <option value="linear">Linear (every second)</option>
-            <option value="monthly">Monthly steps</option>
-          </select>
-        </label>
+    <Card title="New vesting stream" className="card-flush">
+      <div className="create">
+        <div className="create-form">
+          <Step n={1} title="Token">
+            <Choice
+              value={assetChoice}
+              onChange={setAssetChoice}
+              cols={4}
+              options={[
+                { v: "quote", title: quoteSymbol ?? "Quote", sub: "Fee asset" },
+                { v: "token", title: tokenSymbol ?? "Token", sub: "This token" },
+                { v: "native", title: "HYPE", sub: "Native" },
+                { v: "other", title: "Other", sub: "Any ERC-20" },
+              ]}
+            />
+            {assetChoice === "other" && <input className="input" placeholder="Token address, 0x…" value={other} onChange={(e) => setOther(e.target.value.trim())} />}
+          </Step>
+
+          <Step n={2} title="Recipient and amount">
+            <label className="field">
+              <span className="field-label">Recipient wallet</span>
+              <input className="input" placeholder="0x…" value={recipient} onChange={(e) => setRecipient(e.target.value.trim())} />
+            </label>
+            <label className="field">
+              <span className="field-label">Amount{sym ? ` (${sym})` : ""}</span>
+              <input className="input" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </label>
+          </Step>
+
+          <Step n={3} title="Schedule">
+            <Choice
+              value={startMode}
+              onChange={setStartMode}
+              cols={2}
+              options={[
+                { v: "now", title: "Start now", sub: "In about a minute" },
+                { v: "later", title: "Start later", sub: "Pick a date" },
+              ]}
+            />
+            {startMode === "later" && <input className="input" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />}
+            <div className="grid-2">
+              <SpanInput label="Vests over" value={length} unit={lengthUnit} onValue={setLength} onUnit={setLengthUnit} min={1} />
+              <SpanInput label="Cliff (0 for none)" value={cliff} unit={cliffUnit} onValue={setCliff} onUnit={setCliffUnit} />
+            </div>
+            <span className="field-label">Unlocks</span>
+            <Choice
+              value={freq}
+              onChange={setFreq}
+              cols={4}
+              options={[
+                { v: "continuous", title: "Linear", sub: "Every second" },
+                { v: "daily", title: "Daily", sub: "Steps" },
+                { v: "weekly", title: "Weekly", sub: "Steps" },
+                { v: "monthly", title: "Monthly", sub: "30 day steps" },
+              ]}
+            />
+          </Step>
+
+          <Step n={4} title="Who can cancel">
+            <Choice
+              value={cancellable}
+              onChange={setCancellable}
+              cols={2}
+              options={[
+                { v: "no", title: "Nobody", sub: "Final once created" },
+                { v: "yes", title: "Only me", sub: "Unvested part returns to me" },
+              ]}
+            />
+            <p className={cancellable === "yes" ? "warn small" : "muted small"}>
+              {cancellable === "yes"
+                ? "What has vested stays claimable by the recipient. They see an amber Cancellable badge on the stream."
+                : "Nobody can stop or change this stream after it is created, not even you."}
+            </p>
+          </Step>
+        </div>
+
+        <aside className="create-side">
+          <h5>Unlock schedule</h5>
+          <UnlockChart schedule={schedule} total={total || 100} />
+          <div className="lock-body">
+            <Row k="Recipient gets" v={value ? `${fmt(value, decimals)} ${sym}` : "…"} />
+            <Row k="Starts" v={startMode === "later" && !later ? "…" : date(start)} />
+            {cliffS > 0 && <Row k="At the cliff" v={`${Math.round(atCliff * 100)}% on ${date(schedule.cliff)}`} />}
+            <Row k="Then" v={step ? `${total ? (total / periods).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "1/" + periods} ${total ? sym : "of it"} ${FREQ_LABEL[freq]}` : `a little ${FREQ_LABEL[freq]}`} />
+            <Row k="Fully vested" v={date(schedule.end)} />
+            <Row k="Cancellable" v={cancellable === "yes" ? <Badge tone="amber">By me</Badge> : <Badge tone="green">No</Badge>} />
+          </div>
+          {isNative ? send : <WithApproval token={asset} spender={sandfall} amount={value}>{send}</WithApproval>}
+        </aside>
       </div>
-      <label className="check">
-        <input type="checkbox" checked={cancellable} onChange={(e) => setCancellable(e.target.checked)} />
-        Cancellable by me
-      </label>
-      <p className={cancellable ? "warn small" : "muted small"}>
-        {cancellable
-          ? "Cancellable. You can stop this stream later. What has vested stays claimable by the recipient and the rest comes back to you. The recipient sees an amber Cancellable badge."
-          : "Not cancellable. Once created, nobody can stop or change this stream, and this choice is final."}
-      </p>
-      {isNative ? send : <WithApproval token={asset} spender={sandfall} amount={value}>{send}</WithApproval>}
     </Card>
   );
 }
@@ -224,6 +355,14 @@ function StreamCard({ sandfall, id, rollingTitle }: { sandfall: Address; id: big
       <div className="progress">
         <div className="progress-bar" style={{ width: `${progress}%` }} />
       </div>
+      {!rolling && !s.cancelled && (
+        <UnlockChart
+          height={130}
+          schedule={{ start: Number(s.start), cliff: Number(s.cliff), end: Number(s.end), step: Number(s.stepSeconds) }}
+          total={Number(formatUnits(total, decimals))}
+          now={now}
+        />
+      )}
       <div className="lock-body">
         <Row k="Vested" v={`${fmt(vested, decimals, 4)} / ${fmt(total, decimals)} ${sym}`} />
         <Row k="Claimed" v={`${fmt(s.claimed, decimals, 4)} ${sym}`} />

@@ -223,7 +223,7 @@ type Cfg = { burnBps: number; holdersBps: number; treasuryBps: number; swapper: 
 /** Burn the token-side fees, or pay all of them to Exile lockers. One choice per token, behind the timelock. */
 function TokenRoute({ value, onChange, name }: { value: boolean; onChange: (v: boolean) => void; name: string }) {
   return (
-    <div className="form">
+    <div className="check-list">
       <label className="check">
         <input type="radio" name={name} checked={!value} onChange={() => onChange(false)} />
         Burn all token-side fees
@@ -240,9 +240,8 @@ function Steward({ lodestar, cfg, lockedUntil, listingLive }: { lodestar: Addres
   const l = { address: lodestar, abi: lodestarAbi } as const;
   const [split, setSplit] = useState({ burn: cfg.burnBps / 100, holders: cfg.holdersBps / 100, treasury: cfg.treasuryBps / 100 });
   const [toHolders, setToHolders] = useState(cfg.tokenToHolders);
-  const [lockDays, setLockDays] = useState(365);
+  const [sure, setSure] = useState(false);
   const sum = split.burn + split.holders + split.treasury;
-  const until = BigInt(Math.floor(Date.now() / 1000) + lockDays * 86400);
   return (
     <Card title="Steward controls" right={<span className="muted small">Only the steward sees this</span>}>
       <h4>Change the split</h4>
@@ -259,17 +258,20 @@ function Steward({ lodestar, cfg, lockedUntil, listingLive }: { lodestar: Addres
         Propose (takes effect after 12 hours)
       </TxButton>
       <h4>Lock the creator role</h4>
-      <p className="muted small">Promise holders the router can't be swapped out. A lock can only be extended. Current: {lockedUntil > 0n ? date(lockedUntil) : "none"}.</p>
-      <div className="extend">
-        <input className="input input-sm" type="number" min={1} value={lockDays} onChange={(e) => setLockDays(Number(e.target.value))} />
-        <span className="muted small">days</span>
-        <TxButton className="btn btn-sm" disabledReason={until <= lockedUntil ? "Must be later than the current lock" : undefined} request={() => ({ ...l, functionName: "lockCreatorRole", args: [until] })}>
-          Lock until {date(until)}
-        </TxButton>
-        <TxButton className="btn btn-sm btn-ghost" disabledReason={lockedUntil >= 2n ** 63n ? "Already forever" : undefined} request={() => ({ ...l, functionName: "lockCreatorRole", args: [2n ** 64n - 1n] })}>
-          Lock forever
-        </TxButton>
-      </div>
+      {lockedUntil >= 2n ** 63n ? (
+        <p className="muted small">Locked for good. The fee stream can never leave this router.</p>
+      ) : (
+        <>
+          <p className="muted small">Promise holders the router can't be swapped out, ever. Current lock: {lockedUntil > 0n ? `until ${date(lockedUntil)}` : "none"}.</p>
+          <label className="check">
+            <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
+            Lock it for good. I understand this can't be undone.
+          </label>
+          <TxButton className="btn btn-sm" disabledReason={!sure ? "Tick the box first" : undefined} request={() => ({ ...l, functionName: "lockCreatorRole", args: [2n ** 64n - 1n] })}>
+            Lock forever
+          </TxButton>
+        </>
+      )}
       {listingLive && (
         <>
           <h4>Listing set-aside</h4>
@@ -314,7 +316,7 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
   const [listing, setListing] = useState(true);
   // the cap is counted in the quote asset, so 5,000 only makes sense as a default for the deployment's USDC
   const [cap, setCap] = useState(quote.toLowerCase() === d.quote.toLowerCase() ? "5000" : "");
-  const [lockDays, setLockDays] = useState(365);
+  const [lockForever, setLockForever] = useState(true);
 
   if (!r.data) return <LoadingCard />;
   const [creator, pendingCreator, owedQ, owedT] = r.data;
@@ -396,25 +398,37 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
                 Treasury stream window (days)
                 <input className="input" type="number" min={1} max={365} value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} />
               </label>
-              <label>
-                Lock creator role for (days, 0 = no lock)
-                <input className="input" type="number" min={0} value={lockDays} onChange={(e) => setLockDays(Number(e.target.value))} />
-              </label>
             </div>
+            <h5>Creator role</h5>
+            <label className="check">
+              <input type="checkbox" checked={lockForever} onChange={(e) => setLockForever(e.target.checked)} />
+              Lock the creator role to this router for good
+            </label>
+            <p className="muted small">
+              {lockForever
+                ? "Holders can see that the fee stream can never be moved away from this router. This can't be undone."
+                : "Without a lock the steward could hand the creator role away later. You can still lock it for good from the steward controls."}
+            </p>
+            <h5>HyperCore listing savings</h5>
             <label className="check">
               <input type="checkbox" checked={listing} onChange={(e) => setListing(e.target.checked)} />
-              Enrol in Ascend's listing set-aside (20% of the creator quote share is saved toward a HyperCore listing until the cap)
+              Save toward a HyperCore listing
             </label>
+            <div className="note-box">
+              Ascend can list a token on <b>HyperCore</b>, Hyperliquid's order book. If you opt in, <b>20% of the creator's {quoteMeta?.symbol ?? "quote"} fees</b> are
+              set aside for that listing until they reach the savings goal below, and the rest is routed as usual. Once the goal is reached,
+              everything is routed as usual again. The steward can stop saving at any time.
+            </div>
             {listing && (
-              <label>
-                Cap{quoteMeta ? ` (${quoteMeta.symbol})` : ""}
-                <input className="input input-sm" value={cap} onChange={(e) => setCap(e.target.value)} />
+              <label className="field">
+                <span className="field-label">Savings goal{quoteMeta ? ` (${quoteMeta.symbol})` : ""}</span>
+                <input className="input" style={{ maxWidth: 220 }} inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="Amount to save" />
               </label>
             )}
           </div>
           <TxButton
             disabledReason={
-              !you ? "Only the current creator can activate" : !handedOver ? "Do step 1 first" : sum !== 100 ? `Splits add up to ${sum}%` : !recipient ? "Enter the Team Treasury recipient" : listing && !quoteMeta ? "Reading the quote asset" : listing && !(Number(cap) > 0) ? "Enter a listing cap" : deskOk.data && deskOk.data !== d.desk ? "Listing desk mismatch" : undefined
+              !you ? "Only the current creator can activate" : !handedOver ? "Do step 1 first" : sum !== 100 ? `Splits add up to ${sum}%` : !recipient ? "Enter the Team Treasury recipient" : listing && !quoteMeta ? "Reading the quote asset" : listing && !(Number(cap) > 0) ? "Enter a savings goal" : deskOk.data && deskOk.data !== d.desk ? "Listing desk mismatch" : undefined
             }
             request={() => recipient && ({
               address: d.factory,
@@ -433,7 +447,8 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
                   enrolListing: listing,
                   // the cap is in the pool's quote asset, whatever its decimals
                   listingCap: listing ? parseUnits(cap || "0", quoteMeta?.decimals ?? 18) : 0n,
-                  creatorLockUntil: lockDays > 0 ? BigInt(Math.floor(Date.now() / 1000) + lockDays * 86400) : 0n,
+                  // locked for good: the largest unlock time the router accepts
+                  creatorLockUntil: lockForever ? 2n ** 64n - 1n : 0n,
                 },
               ],
             })}
@@ -479,23 +494,38 @@ function SplitBar({ burn, holders, treasury }: { burn: number; holders: number; 
 }
 
 type Split = { burn: number; holders: number; treasury: number };
+
+/** One bar, two handles: left of the first is buyback and burn, between them holder rewards, right of the
+ * second the Team Treasury. It always adds up to 100%, and a handle pushes the other one along. */
 function SplitInputs({ split, setSplit }: { split: Split; setSplit: (s: Split) => void }) {
-  const sum = split.burn + split.holders + split.treasury;
-  const field = (k: keyof Split, name: string) => (
-    <label>
-      {name} %
-      <input className="input" type="number" min={0} max={100} value={split[k]} onChange={(e) => setSplit({ ...split, [k]: Math.max(0, Math.min(100, Number(e.target.value))) })} />
-    </label>
-  );
+  const a = split.burn;
+  const b = split.burn + split.holders;
+  const set = (na: number, nb: number) => setSplit({ burn: na, holders: nb - na, treasury: 100 - nb });
   return (
-    <>
-      <div className="form form-3">
-        {field("burn", "Buyback and burn")}
-        {field("holders", "Holder rewards")}
-        {field("treasury", "Team Treasury")}
+    <div className="slider3">
+      <div className="slider3-track">
+        <div className="slider3-bar" aria-hidden="true">
+          <div className="seg seg-burn" style={{ width: `${a}%` }} />
+          <div className="seg seg-holders" style={{ width: `${b - a}%` }} />
+          <div className="seg seg-treasury" style={{ width: `${100 - b}%` }} />
+        </div>
+        <input type="range" min={0} max={100} value={a} aria-label="Buyback and burn share" onChange={(e) => { const v = Number(e.target.value); set(v, Math.max(b, v)); }} />
+        <input type="range" min={0} max={100} value={b} aria-label="Buyback and holder rewards share, the rest goes to the Team Treasury" onChange={(e) => { const v = Number(e.target.value); set(Math.min(a, v), v); }} />
       </div>
-      <SplitBar burn={split.burn * 100} holders={split.holders * 100} treasury={split.treasury * 100} />
-      {sum !== 100 && <p className="warn small">Adds up to {sum}%. Needs to be exactly 100%.</p>}
-    </>
+      <div className="slider3-legend">
+        <div>
+          <span className="lg-k"><i className="dot seg-burn" />Buyback and burn</span>
+          <b>{split.burn}%</b>
+        </div>
+        <div>
+          <span className="lg-k"><i className="dot seg-holders" />Holder rewards</span>
+          <b>{split.holders}%</b>
+        </div>
+        <div>
+          <span className="lg-k"><i className="dot seg-treasury" />Team Treasury</span>
+          <b>{split.treasury}%</b>
+        </div>
+      </div>
+    </div>
   );
 }
