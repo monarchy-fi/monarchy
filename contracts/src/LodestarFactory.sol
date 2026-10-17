@@ -89,7 +89,7 @@ contract LodestarFactory {
     }
 
     /// @notice Activate a Lodestar. Caller must be the pool's current Ascend creator and must already
-    /// have called `transferCreator(poolId, predicted)` on Ascend. Send at least 3M gas when
+    /// have called `transferCreator(poolId, predicted)` on Ascend. Send about 6M gas when
     /// `enrolListing` is set (Ascend's desk checks a gas floor).
     function deploy(DeployParams calldata p) external returns (address lodestar) {
         bytes32 poolId;
