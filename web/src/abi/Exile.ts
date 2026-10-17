@@ -54,6 +54,19 @@ export const exileAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_MULTIPLIER_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_TIERS",
     "inputs": [],
     "outputs": [
@@ -123,6 +136,30 @@ export const exileAbi = [
     "outputs": [
       {
         "name": "total",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "claimRewardsTo",
+    "inputs": [
+      {
+        "name": "lockId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -730,6 +767,11 @@ export const exileAbi = [
                 "internalType": "bytes32"
               }
             ]
+          },
+          {
+            "name": "carry",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -1140,6 +1182,11 @@ export const exileAbi = [
   {
     "type": "error",
     "name": "NotAdmin",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAnERC20",
     "inputs": []
   },
   {

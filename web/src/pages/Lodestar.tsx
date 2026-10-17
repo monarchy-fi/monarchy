@@ -371,7 +371,8 @@ function Activate({ d, token, predicted, poolId }: { d: Deployment; token: Addre
                 {
                   token,
                   quote: d.quote,
-                  cfg: { burnBps: split.burn * 100, holdersBps: split.holders * 100, treasuryBps: split.treasury * 100, swapper: ZERO, maxSlippageBps: 1000 },
+                  // the buyback route is the AscendSwapper this deployment recorded, never the factory's default of the day
+                  cfg: { burnBps: split.burn * 100, holdersBps: split.holders * 100, treasuryBps: split.treasury * 100, swapper: d.swapper, maxSlippageBps: 1000 },
                   treasuryRecipient: recipient,
                   treasuryWindow: windowDays * 86400,
                   tiers: tiers.map((t) => ({ minDuration: Math.round(t.days * 86400), multiplierBps: Math.round(t.mult * 10_000), label: stringToHex(t.name, { size: 32 }) })),

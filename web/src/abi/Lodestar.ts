@@ -20,6 +20,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "BUYBACK_INTERVAL",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "DEAD",
     "inputs": [],
     "outputs": [
@@ -192,6 +205,13 @@ export const lodestarAbi = [
   {
     "type": "function",
     "name": "cancelConfig",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelTiers",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -470,6 +490,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "lastBuybackAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lastDistributeAt",
     "inputs": [],
     "outputs": [
@@ -516,6 +549,19 @@ export const lodestarAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextBuybackAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -670,6 +716,36 @@ export const lodestarAbi = [
             "name": "maxSlippageBps",
             "type": "uint16",
             "internalType": "uint16"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "proposeTiers",
+    "inputs": [
+      {
+        "name": "tiers",
+        "type": "tuple[]",
+        "internalType": "struct IExile.Tier[]",
+        "components": [
+          {
+            "name": "minDuration",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "multiplierBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "label",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -1008,6 +1084,12 @@ export const lodestarAbi = [
   },
   {
     "type": "event",
+    "name": "CreatorAccepted",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "CreatorRoleLocked",
     "inputs": [
       {
@@ -1254,11 +1336,6 @@ export const lodestarAbi = [
   {
     "type": "error",
     "name": "NotExtending",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "OnlyFactory",
     "inputs": []
   },
   {
