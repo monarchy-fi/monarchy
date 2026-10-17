@@ -9,7 +9,7 @@
      token fees ─┼─▶ burned (0xdEAD…2069; Ascend tokens reject 0x…dEaD)
                  │
      quote fees ─┼─ burnBps ────▶ AscendSwapper ─▶ buy token ─▶ burned
-                 ├─ holdersBps ─▶ Exile.notifyReward ─▶ 7 day drip to lockers by points
+                 ├─ holdersBps ─▶ Exile.notifyReward ─▶ 3 day drip to lockers by points
                  └─ treasuryBps ▶ Sandfall.topUp ─▶ rolling stream to the Team Treasury
 ```
 
@@ -24,15 +24,16 @@
 ## Exile
 
 - Points = amount × tier multiplier, chosen by the time still committed: from now to the unlock time, both when locking and when extending. Keeping Monarch means keeping 30 days ahead; a lock can't hold 3x through one-hour extensions. Tiers must not pay a longer lock less than a shorter one.
-- Rewards accrue Synthetix-style per second, shared by points. Each `notifyReward` drips over 7 days, so a lock taken right before a payout only catches a sliver. When a payout lands mid-drip, the new end is weighted by amount: what is still dripping keeps its remaining time, and the payout plus anything that dripped while nobody was locked get a full 7 days. Dust barely moves the end and splitting a payout changes nothing.
+- Rewards accrue Synthetix-style per second, shared by points. Each `notifyReward` drips over 3 days, so a lock taken right before a payout only catches a sliver. When a payout lands mid-drip, the new end is weighted by amount: what is still dripping keeps its remaining time, and the payout plus anything that dripped while nobody was locked get a full 3 days. Dust barely moves the end and splitting a payout changes nothing.
 - Unlock times near the uint64 limit are rejected rather than rounded, so they can't wrap into the past.
 - Unlock times round up to the hour. Points expiring in each hour are kept in a bucket, and the pool snapshots the reward index at each hour boundary it passes, so a lock stops earning exactly at unlock even if nobody touches it. A pool idle for more than 720 hours can be caught up with `poke`.
 - Tier changes are timelocked 12 hours and must be executed within 7 days after that. They apply to new locks and to extensions. NFT locks hold the item and earn nothing.
+- The team runs a keeper (`.github/workflows/distribute.yml`) that calls `distribute` every 3 hours and pays the gas. Small, steady payouts keep the drip rate nearly flat, so there is no pile of pending fees worth timing a lock for, and each buyback stays small next to the depth cap and the EMA guard.
 - A reward pool more than 720 hours behind makes lock, claim, extend and withdraw on its locks wait for a `poke` (permissionless, chunked). Lodestar's `distribute` keeps the pool current, and if catching up ever fails inside `distribute`, the holder share waits in `holdersReserve` instead of blocking the other steps.
 
 ## Sandfall
 
-- Fixed streams: linear or steps with an optional cliff. Steps count from `start`, not the cliff, and a short last step pays a full equal share. Rolling streams start empty; on each `topUp` the new end is weighted by amount: what was still vesting keeps its remaining time and the new amount gets a full window (Lodestar's treasury uses 30 days). Splitting a top-up into pieces changes nothing.
+- Fixed streams: linear or steps with an optional cliff. Steps count from `start`, not the cliff, and a short last step pays a full equal share. Rolling streams start empty; on each `topUp` the new end is weighted by amount: what was still vesting keeps its remaining time and the new amount gets a full window (Lodestar's treasury uses 7 days). Splitting a top-up into pieces changes nothing.
 - Use non-rebasing tokens: balances are measured once, at deposit.
 - `claimTo` lets a recipient that can't receive the asset (no native receive, or blocked by the token) claim to another address.
 - `cancellable` is fixed at creation. Cancelling returns the unvested rest to the creator; the vested part stays claimable by the recipient, so a recipient that can't receive can't block a cancel. In the `Cancelled` event, `toRecipient` is the amount left claimable, not paid.

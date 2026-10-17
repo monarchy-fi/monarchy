@@ -83,18 +83,18 @@ contract ExileTest is Test {
 
     // ---------------------------------------------------------------- drip
 
-    function test_dripOverSevenDays() public {
+    function test_dripOverThreeDays() public {
         uint256 id = _lock(alice, 1000e18, 30 days);
-        _notify(7000e18);
+        _notify(3000e18);
         _skip(1 days);
         assertApproxEqRel(exile.pendingRewards(id), 1000e18, 1e12);
-        _skip(6 days);
-        assertApproxEqRel(exile.pendingRewards(id), 7000e18, 1e12);
+        _skip(2 days);
+        assertApproxEqRel(exile.pendingRewards(id), 3000e18, 1e12);
         _skip(1 days);
-        assertApproxEqRel(exile.pendingRewards(id), 7000e18, 1e12);
+        assertApproxEqRel(exile.pendingRewards(id), 3000e18, 1e12);
         uint256 got = _claim(alice, id);
-        assertApproxEqRel(got, 7000e18, 1e12);
-        assertLe(got, 7000e18);
+        assertApproxEqRel(got, 3000e18, 1e12);
+        assertLe(got, 3000e18);
         assertEq(reward.balanceOf(alice), got);
     }
 
@@ -106,17 +106,17 @@ contract ExileTest is Test {
         uint256 pa = exile.pendingRewards(a);
         uint256 pb = exile.pendingRewards(b);
         assertApproxEqRel(pa, 2 * pb, 1e12);
-        assertApproxEqRel(pa + pb, uint256(6000e18) * 2 / 7, 1e12);
+        assertApproxEqRel(pa + pb, uint256(6000e18) * 2 / 3, 1e12);
     }
 
     function test_topUpMidDripRestreamsLeftover() public {
         uint256 a = _lock(alice, 1000e18, 30 days);
-        _notify(7000e18);
-        _skip(3.5 days);
-        _notify(3500e18); // leftover 3500 over its 3.5 days + 3500 new over 7: ends 5.25 days out
-        assertApproxEqAbs(exile.poolInfo(poolId).periodFinish, block.timestamp + 5.25 days, 1);
-        _skip(7 days);
-        assertApproxEqRel(exile.pendingRewards(a), 10_500e18, 1e12);
+        _notify(3000e18);
+        _skip(1.5 days);
+        _notify(1500e18); // leftover 1500 over its 1.5 days + 1500 new over 3: ends 2.25 days out
+        assertApproxEqAbs(exile.poolInfo(poolId).periodFinish, block.timestamp + 2.25 days, 1);
+        _skip(3 days);
+        assertApproxEqRel(exile.pendingRewards(a), 4500e18, 1e12);
     }
 
     // ---------------------------------------------------------------- expiry
@@ -124,12 +124,12 @@ contract ExileTest is Test {
     function test_expiryStopsEarningWithoutAnyoneTouching() public {
         uint256 a = _lock(alice, 1000e18, 30 days); // 3000 points
         uint256 b = _lock(bob, 6000e18, 1 days); // Peasant, 3000 points
-        _notify(7000e18);
+        _notify(3000e18);
         _skip(1 days);
         assertApproxEqRel(exile.pendingRewards(b), 500e18, 1e12);
-        _skip(7 days); // nobody pokes, withdraws or claims
+        _skip(3 days); // nobody pokes, withdraws or claims
         assertApproxEqRel(exile.pendingRewards(b), 500e18, 1e12, "Bob stopped at unlock");
-        assertApproxEqRel(exile.pendingRewards(a), 6500e18, 1e12, "Alice got the rest");
+        assertApproxEqRel(exile.pendingRewards(a), 2500e18, 1e12, "Alice got the rest");
 
         uint256 shown = exile.pendingRewards(b);
         vm.prank(bob);
@@ -187,7 +187,8 @@ contract ExileTest is Test {
         vm.prank(bob);
         exile.withdraw(b);
         uint256 sniped = _claim(bob, b);
-        assertLt(sniped, 7000e18 * 15 / 100, "under 15% instead of 50%");
+        // half the points for one day of a three day drip: a sixth, not half
+        assertLt(sniped, 7000e18 * 17 / 100, "under 17% instead of 50%");
     }
 
     function test_splittingWalletsGivesNoEdge() public {
@@ -363,15 +364,15 @@ contract ExileTest is Test {
 
     function test_dustNotifyDoesNotDelayTheDrip() public {
         _lock(alice, 1000e18, 30 days);
-        _notify(7000e18);
+        _notify(3000e18);
         uint64 finish = exile.poolInfo(poolId).periodFinish;
         _skip(1 days);
         _notify(1); // dust: joins the running drip
         uint64 finishAfterDust = exile.poolInfo(poolId).periodFinish;
         assertEq(finishAfterDust, finish, "dust pushed the drip back");
-        _notify(6000e18); // a real payout moves the end out by its weight: 6k left over 6 days + 6k over 7
+        _notify(2000e18); // a real payout moves the end out by its weight: 2k left over 2 days + 2k over 3
         uint64 finishAfterReal = exile.poolInfo(poolId).periodFinish;
-        assertApproxEqAbs(finishAfterReal, block.timestamp + 6.5 days, 60);
+        assertApproxEqAbs(finishAfterReal, block.timestamp + 2.5 days, 60);
     }
 
     function test_expiredLockIsReTieredOnExtend() public {

@@ -20,7 +20,7 @@ import {IExile} from "./interfaces/IExile.sol";
 ///
 /// Rewards: a reward pool is attached to one stake token. Each lock earns points =
 /// amount x tier multiplier, where the tier is picked by lock length. Deposits from
-/// `notifyReward` drip out evenly over 7 days and are shared every second by points, so
+/// `notifyReward` drip out evenly over 3 days and are shared every second by points, so
 /// locking right before a payout only catches a sliver of it. A lock stops earning exactly at
 /// its unlock time: unlock times are rounded up to the hour, points expiring in each hour are
 /// tracked in a bucket, and the pool removes them as it passes each hour boundary.
@@ -82,7 +82,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     }
 
     uint64 public constant BUCKET = 1 hours;
-    uint64 public constant DRIP = 7 days;
+    uint64 public constant DRIP = 3 days;
     uint64 public constant TIMELOCK = 12 hours;
     /// @dev A ready tier change must be executed within this window, or proposed again.
     uint64 public constant EXECUTION_WINDOW = 7 days;
@@ -177,7 +177,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         uint256 received = rt.balanceOf(address(this)) - before;
 
         // The new end is weighted by amount: what is still dripping keeps its remaining time, while the
-        // payout and anything that dripped with nobody locked get a full 7 days. Dust barely moves the
+        // payout and anything that dripped with nobody locked get a full 3 days. Dust barely moves the
         // end, splitting a payout changes nothing, and the empty-pool carry can't be squeezed into the
         // last seconds of a drip.
         uint256 left = p.periodFinish > block.timestamp ? p.periodFinish - block.timestamp : 0;

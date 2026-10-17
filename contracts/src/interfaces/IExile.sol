@@ -17,6 +17,6 @@ interface IExile {
         external
         returns (uint256 poolId);
 
-    /// @notice Add rewards to a pool. They drip out over 7 days. Anyone may call.
+    /// @notice Add rewards to a pool. They drip out over 3 days. Anyone may call.
     function notifyReward(uint256 poolId, uint256 amount) external;
 }
