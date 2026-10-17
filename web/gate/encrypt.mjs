@@ -8,7 +8,8 @@
 //
 // The password only ever comes from the environment. Never commit it, and never pass it on a
 // command line. This script refuses to run without it, so a missing secret can't ship the app
-// unencrypted.
+// unencrypted. Its output lands in a public Actions log, so every message it prints is a fixed
+// string or a marker name: nothing about the password (not even its length) and no page content.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -36,7 +37,6 @@ function fail(msg) {
 
 const password = process.env.SITE_PASSWORD ?? "";
 if (password.trim() === "") fail("SITE_PASSWORD is not set or is empty. Refusing to build an unencrypted site.");
-if (password.length < 12) console.warn("gate: warning, SITE_PASSWORD is shorter than 12 characters. A longer one is much harder to guess.");
 
 if (!existsSync(index)) fail("dist/index.html is missing. Run `npm run build` first.");
 const html = readFileSync(index, "utf8");
@@ -46,12 +46,13 @@ if (!PLAINTEXT_MARKERS.every((m) => html.includes(m))) fail("dist/index.html doe
 // Everything readable must be inside index.html. Only public, non-app files may sit next to it.
 const PUBLIC_OK = new Set(["index.html", "CNAME", "crown.svg", "og.png", "apple-touch-icon.png"]);
 const extra = readdirSync(dist, { recursive: true }).filter((f) => !PUBLIC_OK.has(String(f)));
-if (extra.length) fail(`unexpected files in dist would be served unencrypted: ${extra.join(", ")}`);
+if (extra.length) fail(`${extra.length} unexpected file(s) in dist would be served unencrypted. Only index.html, CNAME and the public images belong there.`);
 if (/<script[^>]+src=|<link[^>]+rel="?(stylesheet|modulepreload)/i.test(html)) fail("dist/index.html still loads external scripts or styles. Is vite-plugin-singlefile on?");
 
 // Point the password page's icon and preview links at the deploy's base path and URL (see vite.config.ts).
 const base = (process.env.SITE_BASE ?? "").replace(/\/+$/, "") + "/";
-const siteUrl = (process.env.SITE_URL || "https://monarchy.fi").replace(/\/+$/, "") + "/";
+// configure-pages reports http:// until HTTPS enforcement is on for the domain; the site is https only.
+const siteUrl = (process.env.SITE_URL || "https://monarchy.fi").replace(/^http:\/\//i, "https://").replace(/\/+$/, "") + "/";
 const templateDir = mkdtempSync(join(tmpdir(), "monarchy-template-"));
 const templateFile = join(templateDir, "template.html");
 writeFileSync(
@@ -86,7 +87,6 @@ const encrypted = readFileSync(encryptedPath, "utf8");
 if (!encrypted.includes(CIPHER_MARKER)) fail("output is missing the ciphertext.");
 const leaked = PLAINTEXT_MARKERS.filter((m) => encrypted.includes(m));
 if (leaked.length) fail(`output still contains app code (${leaked.join(", ")}).`);
-if (encrypted.includes(password)) fail("output contains the password in plain text.");
 
 renameSync(encryptedPath, index);
 rmSync(out, { recursive: true, force: true });

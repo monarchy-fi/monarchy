@@ -6,7 +6,7 @@ import { Crown } from "../components/Crown";
 import { DISTRIBUTE_EVERY_HOURS } from "../lib/constants";
 import { HourglassIcon, LockIcon, StarIcon } from "../components/Icons";
 import { NoDeployment } from "../components/States";
-import { TAGLINES, TierBadge } from "../components/Tiers";
+import { tagline, TierBadge } from "../components/Tiers";
 import { Amt, Card, Skel, Stat, Sym } from "../components/Ui";
 import { useDeployment } from "../lib/deployments";
 import { fmt, label, mult, pct } from "../lib/format";
@@ -140,7 +140,7 @@ export function Home() {
                 <TierBadge name={name} />
                 <div className="tier-mult">{mult(t.multiplierBps)}</div>
                 <div className="tier-len">{days(t.minDuration)} lock</div>
-                <div className="tier-tag">{TAGLINES[name] ?? ""}</div>
+                <div className="tier-tag">{tagline(name) ?? ""}</div>
               </div>
             );
           })}

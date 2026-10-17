@@ -147,8 +147,10 @@ Use a **fresh burner wallet**, never your main wallet. Get testnet HYPE from the
 cp .env.example .env     # set PRIVATE_KEY (the burner), keep the Ascend addresses as they are
 set -a; source .env; set +a
 
-# 1. Monarchy core: Exile, Sandfall, Lodestar implementation, AscendSwapper, LodestarFactory
-npm run deploy:testnet          # writes deployments/99801.json
+# 1. Monarchy core: Exile, Sandfall, Lodestar implementation, AscendSwapper, LodestarFactory.
+#    The script refuses to replace a core that deployments/99801.json already records (this repo
+#    ships the live testnet one), so a fresh deploy from a clone needs OVERWRITE_DEPLOYMENT=1.
+OVERWRITE_DEPLOYMENT=1 npm run deploy:testnet   # writes deployments/99801.json
 
 # 2. A token on Ascend. Either launch on Ascend's site and record it:
 TOKEN=0xYourToken npm run launch:testnet
@@ -158,7 +160,8 @@ npm run launch:testnet -- --broadcast
 
 # 3. Hand the creator role to the token's Lodestar and activate it (40/40/20 split, the four
 #    tiers, 7 day treasury stream, listing set-aside on, creator role locked for a year).
-#    TREASURY is the address that receives the Team Treasury stream.
+#    TREASURY is the address that receives the Team Treasury stream; it can never be changed.
+#    Buybacks go through the AscendSwapper from deployments/99801.json unless SWAPPER is set.
 TREASURY=0xYourTreasury npm run activate:testnet
 
 # 4. The website reads deployments/99801.json
@@ -168,7 +171,9 @@ npm run abis && npm run web
 Mock USDC on Elysium has a public `mint`, so you can fund wallets for trading with
 `cast send $QUOTE "mint(address,uint256)" $YOUR_ADDRESS 1000000000000 --rpc-url $RPC_URL --private-key $PRIVATE_KEY`.
 
-If buybacks through the Infinity vault misbehave, Lodestar keeps the buyback share in `buybackReserve` and still pays holders and the treasury. To activate with no buyback route at all, have the factory owner run `setDefaultSwapper(0x0)` at least 12 hours before step 3 (a new default only applies after 12 hours).
+If buybacks through the Infinity vault misbehave, Lodestar keeps the buyback share in `buybackReserve` and still pays holders and the treasury. To activate with no buyback route at all, have the factory owner run `setDefaultSwapper(0x0)` at least 12 hours before step 3 (a new default only applies after 12 hours), then run step 3 with `SWAPPER=0x0000000000000000000000000000000000000000`, which asks for the factory's default instead of the deployed AscendSwapper.
+
+The keeper (`.github/workflows/distribute.yml`) calls `distribute()` every 3 hours from a wallet that holds only gas money, set as the `KEEPER_PRIVATE_KEY` Actions secret. Each run checks that `RPC_URL` serves chain 99801, lets `cast` estimate the gas, and fails when the receipt shows a revert, so a broken distribute is a red run rather than a green one. If the call fails after a long outage, the run first catches Exile's reward pool up with `poke(poolId, 720)` until it is current, then tries `distribute()` once more.
 
 ## Status and roadmap
 

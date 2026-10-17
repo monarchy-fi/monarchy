@@ -4,8 +4,9 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 
 // Set by the Pages workflow from actions/configure-pages: "" on a custom domain, "/monarchy" on github.io.
 const base = (process.env.SITE_BASE ?? "").replace(/\/+$/, "") + "/";
-// Absolute URL for link previews (og:url, og:image).
-const siteUrl = (process.env.SITE_URL || "https://monarchy.fi").replace(/\/+$/, "") + "/";
+// Absolute URL for link previews (og:url, og:image). configure-pages reports http:// until HTTPS
+// enforcement is on for the domain; the site is https only, so the scheme is forced here.
+const siteUrl = (process.env.SITE_URL || "https://monarchy.fi").replace(/^http:\/\//i, "https://").replace(/\/+$/, "") + "/";
 
 export default defineConfig(({ command }) => ({
   base,

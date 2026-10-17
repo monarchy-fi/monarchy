@@ -5,33 +5,70 @@ name: Distribute
 # The team pays the gas from a keeper wallet that only holds gas money. Set its key as the
 # KEEPER_PRIVATE_KEY secret; without it the job is skipped. distribute() is permissionless, so anyone
 # can also call it in between.
+#
+# How this file stays safe:
+# - The secret is read through step-level env by the two plain `run` steps that need it. It is never
+#   job-level env, so no third-party action (checkout, the Foundry installer) can see it.
+# - Every action is pinned to a commit SHA and Foundry to a release, so a moved tag can't change the
+#   code that runs next to the key.
+# - Nothing is sent unless the RPC answers chain id 99801: RPC_URL is a repository variable, and a
+#   wrong or hostile RPC must stop the job, not get a signed transaction.
+# - The send lets cast estimate the gas (no fixed limit) and checks the receipt, so a reverted
+#   transaction makes the run red. (`cast send` alone exits 0 on a revert.)
+# - Recovery after an outage: Exile walks every idle hour of its reward pool inside notifyReward, so
+#   a pool that fell weeks behind can make distribute() need more gas than a block allows. When the
+#   estimate or the send fails, tools/keeper-distribute.sh calls Exile.poke(poolId, 720) until the
+#   pool reports it is caught up (at most 40 times), then retries distribute() once. If that still
+#   fails, the job fails: red is the point.
 
 on:
   schedule:
     - cron: "0 */3 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: distribute
   cancel-in-progress: false
 
+env:
+  RPC_URL: ${{ vars.RPC_URL || 'https://testnet-rpc.elysium.kinetiq.xyz' }}
+  CHAIN_ID: "99801"
+
 jobs:
   distribute:
     runs-on: ubuntu-latest
-    env:
-      KEEPER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
-      RPC_URL: ${{ vars.RPC_URL || 'https://testnet-rpc.elysium.kinetiq.xyz' }}
     steps:
-      - uses: actions/checkout@v4
-        if: env.KEEPER_PRIVATE_KEY != ''
-      - uses: foundry-rs/foundry-toolchain@v1
-        if: env.KEEPER_PRIVATE_KEY != ''
-      - name: distribute()
-        if: env.KEEPER_PRIVATE_KEY != ''
+      - name: Check for the keeper key
+        id: key
+        env:
+          KEEPER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
         run: |
-          LODESTAR=$(jq -r .lodestar deployments/99801.json)
-          cast send "$LODESTAR" "distribute()" --gas-limit 3000000 \
-            --rpc-url "$RPC_URL" --private-key "$KEEPER_PRIVATE_KEY"
-      - name: No keeper key
-        if: env.KEEPER_PRIVATE_KEY == ''
-        run: echo "KEEPER_PRIVATE_KEY is not set; skipping."
+          if [ -n "${KEEPER_PRIVATE_KEY// /}" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "KEEPER_PRIVATE_KEY is not set; skipping."
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.key.outputs.has_key == 'true'
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        if: steps.key.outputs.has_key == 'true'
+        with:
+          version: v1.7.1
+          cache: false
+      - name: Check that RPC_URL serves Elysium testnet
+        if: steps.key.outputs.has_key == 'true'
+        run: |
+          got=$(cast chain-id --rpc-url "$RPC_URL")
+          if [ "$got" != "$CHAIN_ID" ]; then
+            echo "::error::RPC_URL answers chain id '$got', expected $CHAIN_ID. Not sending anything."
+            exit 1
+          fi
+      - name: distribute()
+        if: steps.key.outputs.has_key == 'true'
+        env:
+          KEEPER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
+        run: tools/keeper-distribute.sh deployments/99801.json "$CHAIN_ID"

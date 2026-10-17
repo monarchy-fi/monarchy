@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { erc721Abi, isAddress, parseUnits, type Address } from "viem";
 import { exileAbi, mockERC20Abi } from "../abi";
-import { TAGLINES, TierBadge } from "../components/Tiers";
+import { tagline, TierBadge } from "../components/Tiers";
 import { TxButton, WithApproval } from "../components/Tx";
 import { ConnectPrompt, NoDeployment } from "../components/States";
 import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
@@ -108,7 +108,9 @@ function LockTokens({
   const [lockDays, setLockDays] = useState(30);
   const [plain, setPlain] = useState(false);
   const drip = useDripDays();
-  const token = plain && isAddress(custom) ? custom : defaultToken;
+  // With "a different token" ticked nothing is sent until a valid address is typed: never the default token.
+  const token = plain ? (isAddress(custom) ? custom : undefined) : defaultToken;
+  const badCustom = plain && custom !== "" && !isAddress(custom);
   const meta = useReadContracts({
     allowFailure: false,
     contracts: [
@@ -131,7 +133,12 @@ function LockTokens({
         Lock a different token or LP (no rewards)
       </label>
       {plain && (
-        <input className="input" placeholder="Token or LP address 0x…" value={custom} onChange={(e) => setCustom(e.target.value.trim())} />
+        <>
+          <input className="input mono-input" placeholder="Token or LP address 0x…" value={custom} onChange={(e) => setCustom(e.target.value.trim())} spellCheck={false} autoComplete="off" />
+          <p className={badCustom ? "warn small" : "muted small"}>
+            {badCustom ? "That isn't a valid address yet." : "A plain lock: the tokens are held until the unlock date and earn no rewards."}
+          </p>
+        </>
       )}
       {!plain && tiersLoading && (
         <div className="tiers pick" aria-busy="true">
@@ -150,7 +157,7 @@ function LockTokens({
                 <TierBadge name={name} />
                 <div className="tier-mult">{mult(t.multiplierBps)}</div>
                 <div className="tier-len">{days(t.minDuration)}</div>
-                <div className="tier-tag">{TAGLINES[name] ?? ""}</div>
+                <div className="tier-tag">{tagline(name) ?? ""}</div>
               </button>
             );
           })}
@@ -194,11 +201,12 @@ function LockTokens({
           />
         )}
         {!plain && value > 0n && tier && <Row k="Points" v={fmt((value * BigInt(tier.multiplierBps)) / 10_000n, Number(decimals))} />}
+        {plain && <Row k="Rewards" v={<Badge tone="grey">None for this lock</Badge>} />}
         <Row k="Cancellable" v={<Badge tone="green">Not cancellable</Badge>} />
       </div>
       <WithApproval token={token} spender={exile} amount={value}>
         <TxButton
-          disabledReason={!token ? "Pick a token" : !plain && tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : lockDays <= 0 ? "Pick a lock length" : undefined}
+          disabledReason={!token ? (plain ? "Enter the token or LP address" : "Pick a token") : !plain && tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : lockDays <= 0 ? "Pick a lock length" : undefined}
           request={() =>
             token && {
               address: exile,
