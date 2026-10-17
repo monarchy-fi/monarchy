@@ -33,7 +33,7 @@ contract ActivateLodestar is BaseScript {
             holdersBps: uint16(vm.envOr("HOLDERS_BPS", uint256(4_000))),
             treasuryBps: uint16(vm.envOr("TREASURY_BPS", uint256(2_000))),
             swapper: vm.envOr("SWAPPER", address(0)),
-            maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(300)))
+            maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(1_000)))
         });
         p.treasuryRecipient = vm.envOr("TREASURY", me);
         p.treasuryWindow = 30 days;
