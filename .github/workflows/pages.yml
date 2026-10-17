@@ -28,6 +28,9 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@v4
+      # base_path is "" on a custom domain and "/monarchy" on monarchy-fi.github.io
+      - id: pages
+        uses: actions/configure-pages@v5
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -38,6 +41,9 @@ jobs:
       - name: Build and encrypt
         run: npm run build:gated
         working-directory: web
+        env:
+          SITE_BASE: ${{ steps.pages.outputs.base_path }}
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
       - name: Check nothing is served unencrypted
         working-directory: web/dist
         run: |

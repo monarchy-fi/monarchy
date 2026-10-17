@@ -10,7 +10,7 @@
 // command line. This script refuses to run without it, so a missing secret can't ship the app
 // unencrypted.
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -49,6 +49,16 @@ const extra = readdirSync(dist, { recursive: true }).filter((f) => !PUBLIC_OK.ha
 if (extra.length) fail(`unexpected files in dist would be served unencrypted: ${extra.join(", ")}`);
 if (/<script[^>]+src=|<link[^>]+rel="?(stylesheet|modulepreload)/i.test(html)) fail("dist/index.html still loads external scripts or styles. Is vite-plugin-singlefile on?");
 
+// Point the password page's icon and preview links at the deploy's base path and URL (see vite.config.ts).
+const base = (process.env.SITE_BASE ?? "").replace(/\/+$/, "") + "/";
+const siteUrl = (process.env.SITE_URL || "https://monarchy.fi").replace(/\/+$/, "") + "/";
+const templateDir = mkdtempSync(join(tmpdir(), "monarchy-template-"));
+const templateFile = join(templateDir, "template.html");
+writeFileSync(
+  templateFile,
+  readFileSync(template, "utf8").replaceAll("https://monarchy.fi/", siteUrl).replace(/(href|src)="\/(?!\/)/g, `$1="${base}`),
+);
+
 const require = createRequire(import.meta.url);
 const cli = require.resolve("staticrypt/cli/index.js");
 const out = mkdtempSync(join(tmpdir(), "monarchy-gate-"));
@@ -58,7 +68,7 @@ const res = spawnSync(
     cli,
     index,
     "--directory", out,
-    "--template", template,
+    "--template", templateFile,
     "--config", "false",
     "--salt", SALT,
     "--remember", REMEMBER_DAYS,
@@ -80,6 +90,7 @@ if (encrypted.includes(password)) fail("output contains the password in plain te
 
 renameSync(encryptedPath, index);
 rmSync(out, { recursive: true, force: true });
+rmSync(templateDir, { recursive: true, force: true });
 // GitHub Pages has no SPA rewrites: unknown paths get 404.html, which is the same gate.
 copyFileSync(index, join(dist, "404.html"));
 console.log(`gate: encrypted dist/index.html and dist/404.html (${Math.round(encrypted.length / 1024)} KB).`);
