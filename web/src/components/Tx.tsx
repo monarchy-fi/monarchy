@@ -1,0 +1,116 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { useChainId, useConnection, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useQueryClient } from "@tanstack/react-query";
+import { maxUint256, type Abi, type Address } from "viem";
+import { useReadContract } from "wagmi";
+import { mockERC20Abi } from "../abi";
+import { explorerTx } from "../lib/chains";
+
+// Loose on purpose: each call site passes a typed abi + functionName; wagmi checks args there.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type WriteRequest = { address: Address; abi: Abi; functionName: string; args?: readonly unknown[]; value?: bigint; gas?: bigint } & Record<string, any>;
+
+type Props = {
+  request: () => WriteRequest | undefined;
+  children: ReactNode;
+  disabledReason?: string;
+  onDone?: () => void;
+  className?: string;
+};
+
+/** Sends one transaction and shows pending / confirmed / error, with an explorer link when there is one. */
+export function TxButton({ request, children, disabledReason, onDone, className }: Props) {
+  const chainId = useChainId();
+  const { isConnected } = useConnection();
+  const qc = useQueryClient();
+  const write = useWriteContract();
+  const [hash, setHash] = useState<`0x${string}`>();
+  const receipt = useWaitForTransactionReceipt({ hash });
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    if (receipt.isSuccess) {
+      qc.invalidateQueries();
+      onDone?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receipt.isSuccess]);
+
+  const busy = write.isPending || (!!hash && receipt.isLoading);
+  const reason = !isConnected ? "Connect a wallet" : disabledReason;
+
+  async function send() {
+    setError(undefined);
+    setHash(undefined);
+    const req = request();
+    if (!req) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const h = await write.mutateAsync(req as any);
+      setHash(h);
+    } catch (e) {
+      setError(shortError(e));
+    }
+  }
+
+  const link = hash ? explorerTx(chainId, hash) : undefined;
+  return (
+    <div className="tx">
+      <button className={className ?? "btn"} disabled={!!reason || busy} onClick={send} title={reason}>
+        {busy ? "Confirming…" : children}
+      </button>
+      {reason && !busy && <span className="tx-note">{reason}</span>}
+      {hash && receipt.isSuccess && (
+        <span className="tx-ok">
+          Confirmed{" "}
+          {link && (
+            <a href={link} target="_blank" rel="noreferrer">
+              view tx
+            </a>
+          )}
+        </span>
+      )}
+      {receipt.isError && <span className="tx-err">Transaction failed</span>}
+      {error && <span className="tx-err">{error}</span>}
+    </div>
+  );
+}
+
+/** Shows an Approve button until `spender` may move `amount` of `token`, then the action button. */
+export function WithApproval({
+  token,
+  spender,
+  amount,
+  children,
+}: {
+  token?: Address;
+  spender?: Address;
+  amount: bigint;
+  children: ReactNode;
+}) {
+  const { address } = useConnection();
+  const allowance = useReadContract({
+    address: token,
+    abi: mockERC20Abi,
+    functionName: "allowance",
+    args: address && spender ? [address, spender] : undefined,
+    query: { enabled: !!token && !!address && !!spender, refetchInterval: 2000 },
+  });
+  if (!token || !spender) return <>{children}</>;
+  if (allowance.data !== undefined && allowance.data >= amount) return <>{children}</>;
+  return (
+    <TxButton
+      request={() => ({ address: token, abi: mockERC20Abi, functionName: "approve", args: [spender, maxUint256] })}
+      disabledReason={amount === 0n ? "Enter an amount" : undefined}
+    >
+      Approve
+    </TxButton>
+  );
+}
+
+export function shortError(e: unknown): string {
+  const err = e as { shortMessage?: string; message?: string; cause?: { reason?: string; data?: { errorName?: string } } };
+  const name = err.cause?.data?.errorName;
+  if (name) return name;
+  return err.shortMessage ?? err.message?.split("\n")[0] ?? "Something went wrong";
+}
