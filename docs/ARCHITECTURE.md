@@ -6,7 +6,7 @@
                  ▼
   dev ──transferCreator──▶ Lodestar (one clone per token) ◀── distribute() by anyone
                  │
-     token fees ─┼─▶ burned (0x…dEaD)
+     token fees ─┼─▶ burned (0xdEAD…2069; Ascend tokens reject 0x…dEaD)
                  │
      quote fees ─┼─ burnBps ────▶ AscendSwapper ─▶ buy token ─▶ burned
                  ├─ holdersBps ─▶ Exile.notifyReward ─▶ 7 day drip to lockers by points

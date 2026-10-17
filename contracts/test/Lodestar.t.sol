@@ -140,6 +140,24 @@ contract LodestarTest is MonarchyFixture {
         assertEq(l.buybackReserve(), 0);
     }
 
+    /// @dev Ascend tokens reject the usual 0x…dEaD address (found on Elysium testnet), so Lodestar burns
+    /// to a different dead address. Both the direct burn and the buyback must land there.
+    function test_burnsDespiteTokenRejectingZeroXDead() public {
+        Lodestar l = _activate(_params(token, 4_000, 4_000, 2_000, address(0), false));
+        address classicDead = 0x000000000000000000000000000000000000dEaD;
+        _buy(poolId, trader, 1_000e6);
+        vm.prank(trader);
+        vm.expectRevert();
+        token.transfer(classicDead, 1);
+
+        launchpad.injectFees(poolId, 1000e18, 1000e6);
+        l.distribute();
+        assertGe(l.totalTokenBurned(), 500e18, "token fees burned");
+        assertGt(l.totalBuybackTokensBurned(), 0, "buyback went through the real swapper");
+        assertEq(l.buybackReserve(), 0);
+        assertEq(token.balanceOf(address(l)), 0);
+    }
+
     function test_distributeWithoutListing() public {
         Lodestar l = _activateDefault(false);
         launchpad.injectFees(poolId, 1000e18, 1000e6);

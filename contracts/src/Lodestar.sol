@@ -28,7 +28,9 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     uint256 public constant SWAP_FEE_BPS = 100; // Ascend's 1% pool fee
     uint256 public constant MAX_SLIPPAGE_BPS = 2_000;
     uint64 public constant TIMELOCK = 72 hours;
-    address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
+    /// @dev Burn sink. Ascend's launch tokens reject transfers to address(0) and to 0x…dEaD, so burns go
+    /// to this widely used dead address instead. Nobody holds its key.
+    address public constant DEAD = 0xdEAD000000000000000042069420694206942069;
 
     address public factory;
     IAscendLaunchpad public launchpad;

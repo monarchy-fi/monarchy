@@ -24,7 +24,7 @@ abstract contract MonarchyFixture is Test {
     uint256 internal constant T0 = 1_700_000_000 - (1_700_000_000 % 3600);
     uint256 internal constant TOKEN_SEED = 800_000_000e18;
     uint256 internal constant QUOTE_SEED = 50_000e6;
-    address internal constant DEAD = 0x000000000000000000000000000000000000dEaD;
+    address internal constant DEAD = 0xdEAD000000000000000042069420694206942069;
 
     MockAscendPool internal pool;
     MockAscendLaunchpad internal launchpad;

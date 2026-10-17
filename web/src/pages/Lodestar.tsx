@@ -138,7 +138,7 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
           <Stat label="Treasury" value={`${fmt(preview[4], qd)} ${qs}`} />
         </div>
         <p className="muted small">Plus any fees still sitting in the pool, which distribute collects first.</p>
-        <TxButton request={() => ({ ...l, functionName: "distribute", gas: 1_500_000n })}>Distribute</TxButton>
+        <TxButton request={() => ({ ...l, functionName: "distribute" })}>Distribute</TxButton>
       </Card>
 
       {eta > 0n && (

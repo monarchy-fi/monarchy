@@ -9,7 +9,8 @@ import { compact, fmt, label, mult } from "../lib/format";
 import { POLL } from "../lib/hooks";
 import { useLodestarCore } from "../lib/monarchy";
 
-const DEAD = "0x000000000000000000000000000000000000dEaD";
+// Lodestar burns to this address; Ascend tokens reject 0x…dEaD
+const DEAD = "0xdEAD000000000000000042069420694206942069";
 
 export function Home() {
   const d = useDeployment();

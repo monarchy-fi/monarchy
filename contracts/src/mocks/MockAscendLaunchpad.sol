@@ -7,6 +7,7 @@ import {IAscendLaunchpad} from "../interfaces/IAscendLaunchpad.sol";
 import {AscendPoolKey} from "../libraries/AscendPoolKey.sol";
 import {PoolKey} from "../interfaces/IInfinity.sol";
 import {MockERC20} from "./MockERC20.sol";
+import {MockAscendToken} from "./MockAscendToken.sol";
 import {MockAscendPool} from "./MockAscendPool.sol";
 
 /// @notice Stand-in for Ascend's launchpad with the same creator-fee semantics, for tests and anvil:
@@ -67,7 +68,7 @@ contract MockAscendLaunchpad is IAscendLaunchpad {
         returns (address token, bytes32 poolId)
     {
         if (creator == address(0)) revert ZeroCreator();
-        MockERC20 t = new MockERC20(name, symbol, 18);
+        MockAscendToken t = new MockAscendToken(name, symbol);
         token = address(t);
         t.mint(address(this), TOTAL_SUPPLY);
         PoolKey memory key = AscendPoolKey.key(token, quote, address(this), address(pool));
