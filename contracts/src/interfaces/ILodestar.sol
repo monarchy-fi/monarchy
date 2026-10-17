@@ -8,7 +8,7 @@ interface ILodestar {
         uint16 holdersBps; // Exile holder rewards
         uint16 treasuryBps; // Team Treasury, streamed through Sandfall
         address swapper; // buyback route; 0 = keep the buyback share in reserve
-        uint16 maxSlippageBps; // vs Ascend's on-chain EMA price, on top of the 1% pool fee
+        uint16 maxSlippageBps; // vs the stricter of Ascend's on-chain EMA price and spot, on top of the 1% pool fee
     }
 
     struct InitParams {

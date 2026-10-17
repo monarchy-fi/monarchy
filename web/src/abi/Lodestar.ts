@@ -516,6 +516,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "lastHalvingAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "launchpad",
     "inputs": [],
     "outputs": [
@@ -1368,6 +1381,11 @@ export const lodestarAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "SelfTransfer",
+    "inputs": []
   },
   {
     "type": "error",

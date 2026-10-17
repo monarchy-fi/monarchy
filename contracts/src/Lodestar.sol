@@ -77,11 +77,14 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// @notice Each attempt buys `due >> buybackShift`. Rises by one after a skipped buyback and falls by
     /// one after a successful one, so a reserve too big for the pool is bought back in smaller pieces.
     uint8 public buybackShift;
+    /// @notice When the last buyback went through; the next one waits `BUYBACK_INTERVAL`.
+    uint64 public lastBuybackAt;
+    /// @notice When the attempt size was last halved. It halves at most once per `BUYBACK_INTERVAL`, the
+    /// same rate at which successes double it back, so a burst of failed calls can't shrink it for hours.
+    uint64 public lastHalvingAt;
     /// @notice Holder rewards or treasury top-ups that couldn't be paid out yet; retried on the next distribute.
     uint256 public holdersReserve;
     uint256 public treasuryReserve;
-    /// @notice When the last buyback went through; the next one waits `BUYBACK_INTERVAL`.
-    uint64 public lastBuybackAt;
 
     event Initialized(bytes32 indexed poolId, address indexed token, address quote, address steward, Config config);
     event Distributed(
@@ -121,6 +124,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     error OnlySelf();
     error BuybackShort();
     error CreatorTransferPending();
+    error SelfTransfer();
 
     constructor() {
         _initialized = true; // the implementation itself can never be initialized
@@ -164,6 +168,9 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// `transferCreator(poolId, thisLodestar)` on Ascend first; that call is the consent, so anyone may
     /// finish the hand-off. The factory calls this at deploy, and it works again later if the role ever
     /// left (an expired lock, a hand-out the steward reverses), so a token can come back to Monarchy.
+    /// A creator handing the role back should claim their own fees first: whatever is still owed when the
+    /// hand-off completes is paid to the new creator, this router, and routed. Accepting also clears the
+    /// listing election on Ascend, so the steward enrols again afterwards if wanted.
     function acceptCreator() external {
         if (launchpad.pendingCreator(poolId) != address(this)) revert CreatorNotPending();
         launchpad.acceptCreator(poolId);
@@ -270,9 +277,14 @@ contract Lodestar is ILodestar, ReentrancyGuard {
                 if (buybackShift > 0) --buybackShift;
             } else {
                 // only a real attempt counts: with no EMA nothing was tried, and dust attempts are exempt,
-                // so neither an EMA-less first day nor a few wei can shrink the next real buyback
-                if (ema != 0 && buybackShift < MAX_BUYBACK_SHIFT && (cap == 0 || attempt * 256 >= cap)) {
+                // so neither an EMA-less first day nor a few wei can shrink the next real buyback; and it
+                // halves at most once an hour, so repeated calls during one pump can't run it to 1/256
+                if (
+                    ema != 0 && buybackShift < MAX_BUYBACK_SHIFT && (cap == 0 || attempt * 256 >= cap)
+                        && block.timestamp >= lastHalvingAt + BUYBACK_INTERVAL
+                ) {
                     ++buybackShift;
+                    lastHalvingAt = uint64(block.timestamp);
                 }
                 emit BuybackSkipped(attempt, minOut);
             }
@@ -312,9 +324,9 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         return _maxBuyback(_ema(), _spot());
     }
 
-    /// @notice Earliest time the next buyback can go through.
+    /// @notice Earliest time the next buyback can go through (0 = nothing bought yet, no wait).
     function nextBuybackAt() external view returns (uint64) {
-        return lastBuybackAt + BUYBACK_INTERVAL;
+        return lastBuybackAt == 0 ? 0 : lastBuybackAt + BUYBACK_INTERVAL;
     }
 
     function _ema() internal view returns (uint256 sp) {
@@ -405,6 +417,8 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// pending hand-off and is always allowed.
     function transferCreatorOut(address next) external onlySteward {
         if (next != address(0) && block.timestamp < creatorLockedUntil) revert CreatorRoleIsLocked();
+        // a hand-off to itself would let anyone "accept" and clear the listing election for nothing
+        if (next == address(this)) revert SelfTransfer();
         launchpad.transferCreator(poolId, next);
         emit CreatorTransferOutStarted(next);
     }

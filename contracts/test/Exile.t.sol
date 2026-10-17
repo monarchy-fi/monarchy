@@ -441,7 +441,7 @@ contract ExileTest is Test {
         vm.expectRevert(Exile.NotOwner.selector);
         exile.claimRewardsTo(a, bob);
         vm.prank(alice);
-        vm.expectRevert(Exile.NotOwner.selector);
+        vm.expectRevert(Exile.ZeroAddress.selector);
         exile.claimRewardsTo(a, address(0));
         vm.prank(alice);
         uint256 got = exile.claimRewardsTo(a, carol);

@@ -122,7 +122,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     event Extended(uint256 indexed lockId, uint64 oldUnlockAt, uint64 newUnlockAt, uint16 multiplierBps, uint256 points);
     event Withdrawn(uint256 indexed lockId, address indexed owner);
     event RewardAdded(uint256 indexed poolId, address indexed from, uint256 amount, uint256 rewardRate, uint64 periodFinish);
-    event RewardsClaimed(uint256 indexed lockId, address indexed owner, uint256 amount);
+    event RewardsClaimed(uint256 indexed lockId, address indexed to, uint256 amount);
     event TiersProposed(uint256 indexed poolId, uint64 eta);
     event TiersExecuted(uint256 indexed poolId);
     event TiersCancelled(uint256 indexed poolId);
@@ -144,6 +144,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
     error ProposalExpired();
     error UnexpectedNFT();
     error NotAnERC20();
+    error ZeroAddress();
 
     // ================================================================ pools
 
@@ -359,7 +360,7 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
 
     /// @notice Claim to another address, for an owner the reward token won't pay (a blocklisted wallet).
     function claimRewardsTo(uint256 lockId, address to) external nonReentrant returns (uint256 amount) {
-        if (to == address(0)) revert NotOwner();
+        if (to == address(0)) revert ZeroAddress();
         amount = _claim(lockId, to);
     }
 

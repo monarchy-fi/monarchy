@@ -315,6 +315,7 @@ contract LodestarTest is MonarchyFixture {
         Lodestar l = _activate(_params(token, 10_000, 0, 0, address(mockSwapper), false));
         launchpad.injectFees(poolId, 0, 4_000e6); // 2,000 USDC to buy back
         uint256 cap = l.maxBuyback();
+        assertEq(l.nextBuybackAt(), 0, "nothing bought yet: no wait");
         l.distribute();
         assertEq(l.totalBuybackQuote(), cap, "one capped piece per distribute");
         assertEq(l.buybackReserve(), 2_000e6 - cap);
@@ -608,6 +609,7 @@ contract LodestarTest is MonarchyFixture {
         Lodestar l = _activate(_params(token, 10_000, 0, 0, address(mockSwapper), false));
         launchpad.injectFees(poolId, 0, 4_000e6); // 2,000 USDC to buy back
         uint256 cap = l.maxBuyback();
+        assertEq(l.nextBuybackAt(), 0, "nothing bought yet: no wait");
         l.distribute();
         assertEq(l.totalBuybackQuote(), cap);
         assertEq(l.nextBuybackAt(), block.timestamp + 1 hours);
@@ -708,6 +710,39 @@ contract LodestarTest is MonarchyFixture {
         l.distribute();
         assertEq(l.totalBuybackQuote(), 0, "no buyback at the pumped price");
         assertEq(l.buybackReserve(), 220e6, "40% of 500, plus 40% of the pump's own 50 USDC creator fee");
+    }
+
+    /// @dev A pump that blocks the buyback can't be milked for halvings: however many times distribute is
+    /// called during it, the attempt size halves once an hour, the same rate at which successes double it back.
+    function test_halvingIsAtMostHourly() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(swapper), false);
+        p.cfg.maxSlippageBps = 1_000;
+        Lodestar l = _activate(p);
+        launchpad.injectFees(poolId, 0, 10_000e6);
+        (uint160 emaBefore,,,) = pool.getSlot0(poolId);
+        address attacker = makeAddr("attacker");
+        _buy(poolId, attacker, 3_500e6); // +14%, past the fee plus 10% slippage
+        launchpad.setEma(poolId, emaBefore); // the EMA has not seen the pump yet, so the floor holds
+
+        for (uint256 i; i < 8; ++i) {
+            l.distribute();
+        }
+        assertEq(l.totalBuybackQuote(), 0, "the pumped price is refused");
+        assertEq(l.buybackShift(), 1, "eight failed calls in one block halve once");
+        assertEq(l.lastHalvingAt(), block.timestamp);
+
+        vm.warp(block.timestamp + 1 hours);
+        l.distribute();
+        assertEq(l.buybackShift(), 2, "an hour later it can halve again");
+    }
+
+    /// @dev The steward can't hand the role to the router itself: that would let anyone "accept" a no-op
+    /// hand-off and clear the listing election.
+    function test_cannotHandTheRoleToTheRouterItself() public {
+        Lodestar l = _activateDefault(false);
+        vm.prank(dev);
+        vm.expectRevert(Lodestar.SelfTransfer.selector);
+        l.transferCreatorOut(address(l));
     }
 
     /// @dev Skips with no EMA (a fresh pool, or the read failing) don't count as attempts, so a day of
