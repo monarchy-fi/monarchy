@@ -407,3 +407,5 @@ input[type="checkbox"] { accent-color: var(--gold); width: 16px; height: 16px; f
 .lock-actions:empty { display: none; }
 .card > .tx, .steps li > .tx { margin-top: 14px; }
 .card > .stats + p.small { margin-top: 12px; }
+.cadence { color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.cadence::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); flex: none; box-shadow: 0 0 8px rgba(232, 184, 74, 0.6); }

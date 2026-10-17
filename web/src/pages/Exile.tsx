@@ -9,6 +9,7 @@ import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../componen
 import { useDeployment } from "../lib/deployments";
 import { date, duration, fmt, label, mult } from "../lib/format";
 import { POLL, useNow, usePageTitle, useTicking } from "../lib/hooks";
+import { DISTRIBUTE_NOTE } from "../lib/constants";
 import { dayLabel, useDripDays, useLodestarCore, type TokenMeta } from "../lib/monarchy";
 import { days } from "./Home";
 
@@ -63,6 +64,7 @@ export function ExilePage() {
           <Stat label="Locked points" value={<Amt value={pool.data?.totalPoints} decimals={core.tokenMeta?.decimals ?? 18} digits={0} />} hint="Amount times multiplier" />
           <Stat label="Drip ends" value={pool.data ? (Number(pool.data.periodFinish) > now ? duration(Number(pool.data.periodFinish) - now) : "Idle") : <Skel w="5em" />} hint="Refills on every distribute" />
         </div>
+        <p className="small cadence">{DISTRIBUTE_NOTE}</p>
       </Card>
 
       <div className="tabs" role="tablist">

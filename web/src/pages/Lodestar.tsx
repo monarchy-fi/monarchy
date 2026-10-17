@@ -5,7 +5,7 @@ import { iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
 import { TAGLINES } from "../components/Tiers";
 import { TxButton } from "../components/Tx";
 import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
-import { DEFAULT_TREASURY_WINDOW_DAYS } from "../lib/constants";
+import { DEFAULT_TREASURY_WINDOW_DAYS, DISTRIBUTE_NOTE } from "../lib/constants";
 import { isSet, useDeployment, ZERO, type Deployment } from "../lib/deployments";
 import { date, duration, fmt, pct } from "../lib/format";
 import { POLL, useNow, usePageTitle } from "../lib/hooks";
@@ -161,6 +161,7 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
           <Stat label="Treasury" value={<Amt value={preview[4]} decimals={qd} symbol={qs} />} />
         </div>
         <p className="muted small">Plus any fees still sitting in the pool, which distribute collects first.</p>
+        <p className="small cadence">{DISTRIBUTE_NOTE}</p>
         <TxButton request={() => ({ ...l, functionName: "distribute" })}>Distribute</TxButton>
       </Card>
 

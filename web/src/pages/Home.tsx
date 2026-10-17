@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useReadContracts } from "wagmi";
 import { exileAbi, lodestarAbi, mockERC20Abi } from "../abi";
 import { Crown } from "../components/Crown";
+import { DISTRIBUTE_EVERY_HOURS } from "../lib/constants";
 import { HourglassIcon, LockIcon, StarIcon } from "../components/Icons";
 import { NoDeployment } from "../components/States";
 import { TAGLINES, TierBadge } from "../components/Tiers";
@@ -175,7 +176,7 @@ function FeeFlow({ drip, burn, holders, treasury }: { drip: number; burn?: numbe
         <div className="flow-node flow-hub">
           <Crown size={22} />
           <div className="flow-title">Lodestar</div>
-          <p>Anyone can call distribute. It takes 0%.</p>
+          <p>Called every {DISTRIBUTE_EVERY_HOURS} hours by the team. Anyone can call it. It takes 0%.</p>
         </div>
         <svg className="flow-branch" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {[12.5, 37.5, 62.5, 87.5].map((y, i) => (
