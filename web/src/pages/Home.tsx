@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useReadContracts } from "wagmi";
 import { exileAbi, lodestarAbi, mockERC20Abi } from "../abi";
-import { Crown } from "../components/Crown";
+import { AsciiCrown } from "../components/AsciiCrown";
 import { DISTRIBUTE_EVERY_HOURS } from "../lib/constants";
-import { HourglassIcon, LockIcon, StarIcon } from "../components/Icons";
+import { GateGlyph, HourglassGlyph, StarGlyph } from "../components/NavGlyphs";
 import { NoDeployment } from "../components/States";
 import { tagline, TierBadge } from "../components/Tiers";
 import { Amt, Card, Skel, Stat, Sym } from "../components/Ui";
@@ -49,12 +49,9 @@ export function Home() {
   return (
     <div className="page page-home">
       <section className="hero">
-        <div className="hero-halo" aria-hidden="true" />
-        <div className="eyebrow">For tokens launched on Ascend</div>
-        <Crown size={84} className="hero-crown" />
-        <h1>
-          Ascend to <span className="gold-text">Monarchy</span>
-        </h1>
+        <div className="hero-eyebrow">For tokens launched on Ascend</div>
+        <h1 className="wordmark">Monarchy</h1>
+        <AsciiCrown />
         <p className="hero-sub">Dethrone the Duke. Become the Monarch.</p>
         <p className="hero-body">
           Fee routing, locks and vesting for every Ascend token. Creator fees are burned, bought back, paid to locked
@@ -118,15 +115,15 @@ export function Home() {
       )}
 
       <div className="grid3">
-        <Feature to="/lodestar" title="Lodestar" kicker="Fee router" icon={<StarIcon />}>
+        <Feature to="/lodestar" title="Lodestar" kicker="Fee router" icon={<StarGlyph />} cls="nl-lodestar">
           Holds your token's Ascend creator role. You keep your dev buy. Fees split by your percentages into buyback and
           burn, holder rewards and a Team Treasury.
         </Feature>
-        <Feature to="/exile" title="Exile" kicker="Locks and rewards" icon={<LockIcon />}>
+        <Feature to="/exile" title="Exile" kicker="Locks and rewards" icon={<GateGlyph />} cls="nl-exile">
           Lock tokens, v2 LP and NFTs. Locks can be extended, never shortened or cancelled. Longer locks earn a bigger
           share, paid as a {dayLabel(drip)} drip.
         </Feature>
-        <Feature to="/sandfall" title="Sandfall" kicker="Vesting" icon={<HourglassIcon />}>
+        <Feature to="/sandfall" title="Sandfall" kicker="Vesting" icon={<HourglassGlyph />} cls="nl-sandfall">
           Linear, cliff or monthly vesting in any token or HYPE. Every stream shows whether its creator can cancel it.
         </Feature>
       </div>
@@ -138,6 +135,7 @@ export function Home() {
             return (
               <div key={name} className={`tier tier-${name.toLowerCase()}`}>
                 <TierBadge name={name} />
+                <div className="tier-bars" aria-hidden="true">{tierBars(t.multiplierBps)}</div>
                 <div className="tier-mult">{mult(t.multiplierBps)}</div>
                 <div className="tier-len">{days(t.minDuration)} lock</div>
                 <div className="tier-tag">{tagline(name) ?? ""}</div>
@@ -156,11 +154,11 @@ function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { drip: numb
   const share = (bps?: number) => (bps === undefined ? "Quote share" : `${pct(bps)} of quote fees`);
   const dests = [
     tokenToHolders
-      ? { key: "fire", title: "Exile lockers", tag: "All token-side fees", body: `Paid to locked holders in the token itself, over ${drip} days.` }
-      : { key: "fire", title: "Burned", tag: "All token-side fees", body: "Sent straight to the burn address, or, if the creator chooses, paid to Exile lockers." },
-    { key: "burn", title: "Buyback and burn", tag: share(burn), body: "Buys the token on Ascend, then burns it." },
-    { key: "hold", title: "Exile holders", tag: share(holders), body: `Paid to locked holders by tier, over ${drip} days.` },
-    { key: "treas", title: "Sandfall treasury", tag: share(treasury), body: "Streamed to the Team Treasury in the open." },
+      ? { key: "fire", mark: "[+]", title: "Exile lockers", tag: "All token-side fees", body: `Paid to locked holders in the token itself, over ${drip} days.` }
+      : { key: "fire", mark: "[x]", title: "Burned", tag: "All token-side fees", body: "Sent straight to the burn address, or, if the creator chooses, paid to Exile lockers." },
+    { key: "burn", mark: "[x]", title: "Buyback and burn", tag: share(burn), body: "Buys the token on Ascend, then burns it." },
+    { key: "hold", mark: "[+]", title: "Exile holders", tag: share(holders), body: `Paid to locked holders by tier, over ${drip} days.` },
+    { key: "treas", mark: "[~]", title: "Sandfall treasury", tag: share(treasury), body: "Streamed to the Team Treasury in the open." },
   ];
   return (
     <section className="flow" aria-labelledby="flow-title">
@@ -169,14 +167,14 @@ function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { drip: numb
         <p className="muted">Every creator fee follows the same public path. Nothing stops at Monarchy.</p>
       </div>
       <div className="flow-body">
-        <div className="flow-node flow-src">
+        <div className="flow-node flow-src ascii-box">
           <div className="flow-kicker">Source</div>
           <div className="flow-title">Ascend pool fees</div>
           <p>The creator half of every 1% swap fee, in the token and the quote asset.</p>
         </div>
         <FlowArrow />
-        <div className="flow-node flow-hub">
-          <Crown size={22} />
+        <div className="flow-node flow-hub ascii-box">
+          <span className="flow-glyph" aria-hidden="true">*</span>
           <div className="flow-title">Lodestar</div>
           <p>Called every {DISTRIBUTE_EVERY_HOURS} hours by the team. Anyone can call it. It takes 0%.</p>
         </div>
@@ -189,7 +187,7 @@ function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { drip: numb
         <ul className="flow-dests">
           {dests.map((x) => (
             <li key={x.key} className={`flow-dest dest-${x.key}`}>
-              <i className="dest-dot" />
+              <span className="dest-mark" aria-hidden="true">{x.mark}</span>
               <div>
                 <div className="flow-title">{x.title}</div>
                 <div className="dest-tag">{x.tag}</div>
@@ -205,18 +203,23 @@ function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { drip: numb
 
 function FlowArrow({ className }: { className?: string }) {
   return (
-    <svg className={`flow-arrow ${className ?? ""}`} viewBox="0 0 48 24" aria-hidden="true">
-      <path d="M2 12 H40" />
-      <path d="M34 5 L42 12 L34 19" />
-    </svg>
+    <div className={`flow-arrow ${className ?? ""}`} aria-hidden="true">
+      <span>──▶</span>
+    </div>
   );
 }
 
-function Feature({ to, title, kicker, icon, children }: { to: string; title: string; kicker: string; icon: ReactNode; children: ReactNode }) {
+/** A tier's multiplier as signal bars: one bar per half x, up to six. */
+function tierBars(bps: number): string {
+  const n = Math.max(1, Math.min(6, Math.round(bps / 5000)));
+  return "▮".repeat(n) + "▯".repeat(6 - n);
+}
+
+function Feature({ to, title, kicker, icon, cls, children }: { to: string; title: string; kicker: string; icon: ReactNode; cls: string; children: ReactNode }) {
   return (
-    <Link to={to} className="card feature">
+    <Link to={to} className={`card feature ${cls}`}>
       <div className="feature-top">
-        <span className="feature-icon" aria-hidden="true">
+        <span className="feature-icon nl-icon" aria-hidden="true">
           {icon}
         </span>
         <span className="kicker">{kicker}</span>

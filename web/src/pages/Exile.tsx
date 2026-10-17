@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { erc721Abi, isAddress, parseUnits, type Address } from "viem";
-import { exileAbi, mockERC20Abi } from "../abi";
+import { exileAbi, lodestarAbi, lodestarFactoryAbi, mockERC20Abi } from "../abi";
 import { tagline, TierBadge } from "../components/Tiers";
 import { TxButton, WithApproval } from "../components/Tx";
 import { ConnectPrompt, NoDeployment } from "../components/States";
 import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
-import { useDeployment } from "../lib/deployments";
+import { useDeployment, ZERO } from "../lib/deployments";
 import { date, duration, fmt, label, mult } from "../lib/format";
 import { POLL, useNow, usePageTitle, useTicking } from "../lib/hooks";
 import { DISTRIBUTE_NOTE } from "../lib/constants";
@@ -21,7 +21,7 @@ export function ExilePage() {
   usePageTitle("Exile");
   const d = useDeployment();
   const core = useLodestarCore();
-  const [tab, setTab] = useState<"tokens" | "nfts">("tokens");
+  const [mode, setMode] = useState<"main" | "else">("main");
   const poolId = core.exilePoolId;
   const pool = useReadContract({
     address: d?.exile,
@@ -45,6 +45,7 @@ export function ExilePage() {
   const hasStakeRewards = !!pool.data && (pool.data.stakeTotalDistributed > 0n || pool.data.stakeCarry > 0n);
 
   if (!d) return <NoDeployment />;
+  const sym = core.tokenMeta?.symbol;
   return (
     <div className="page">
       <header className="page-head">
@@ -54,6 +55,28 @@ export function ExilePage() {
           locks earn a bigger share of holder rewards.
         </p>
       </header>
+
+      <Card
+        title={mode === "main" ? <>Lock <Sym s={sym} /></> : "Lock something else"}
+        right={
+          <Switch
+            options={[
+              { key: "main", label: sym ?? "Token" },
+              { key: "else", label: "Something else" },
+            ]}
+            value={mode}
+            onChange={(k) => setMode(k as "main" | "else")}
+          />
+        }
+      >
+        <div key={mode} className="swap-in">
+          {mode === "main" ? (
+            <LockForm exile={d.exile} token={core.token} tokenMeta={core.tokenMeta} poolId={poolId} tiers={tiers} tiersLoading={tiersLoading} />
+          ) : (
+            <SomethingElse exile={d.exile} factory={d.factory} />
+          )}
+        </div>
+      </Card>
 
       <Card
         title={
@@ -78,29 +101,15 @@ export function ExilePage() {
         <p className="small cadence">{DISTRIBUTE_NOTE}</p>
       </Card>
 
-      <div className="tabs" role="tablist">
-        <button role="tab" aria-selected={tab === "tokens"} className={tab === "tokens" ? "tab active" : "tab"} onClick={() => setTab("tokens")}>
-          Lock tokens
-        </button>
-        <button role="tab" aria-selected={tab === "nfts"} className={tab === "nfts" ? "tab active" : "tab"} onClick={() => setTab("nfts")}>
-          Lock NFTs
-        </button>
-      </div>
-
-      {tab === "tokens" ? (
-        <LockTokens exile={d.exile} token={core.token} tokenMeta={core.tokenMeta} poolId={poolId} tiers={tiers} tiersLoading={tiersLoading} />
-      ) : (
-        <LockNfts exile={d.exile} />
-      )}
-
       <MyLocks exile={d.exile} tiers={tiers} rewardMeta={rewardMeta} stakeMeta={stakeMeta} />
     </div>
   );
 }
 
-function LockTokens({
+/** A lock form for one token. With a reward pool (poolId > 0) it shows the pool's tiers along the slider. */
+function LockForm({
   exile,
-  token: defaultToken,
+  token,
   tokenMeta,
   poolId,
   tiers,
@@ -114,57 +123,40 @@ function LockTokens({
   tiersLoading: boolean;
 }) {
   const { address } = useConnection();
-  const [custom, setCustom] = useState("");
   const [amount, setAmount] = useState("");
-  const [lockDays, setLockDays] = useState(30);
-  const [plain, setPlain] = useState(false);
+  const [seconds, setSeconds] = useState(30 * 86400);
   const drip = useDripDays();
-  // With "a different token" ticked nothing is sent until a valid address is typed: never the default token.
-  const token = plain ? (isAddress(custom) ? custom : undefined) : defaultToken;
-  const badCustom = plain && custom !== "" && !isAddress(custom);
+  const rewards = !!poolId && tiers.length > 0;
   const meta = useReadContracts({
     allowFailure: false,
     contracts: [
       { address: token, abi: mockERC20Abi, functionName: "decimals" },
       { address: token, abi: mockERC20Abi, functionName: "symbol" },
-      { address: token, abi: mockERC20Abi, functionName: "balanceOf", args: [address ?? "0x0000000000000000000000000000000000000000"] },
+      { address: token, abi: mockERC20Abi, functionName: "balanceOf", args: [address ?? ZERO] },
     ],
     query: { enabled: !!token, ...POLL.query },
   });
   const [decimals, symbol, balance] = meta.data ?? [tokenMeta?.decimals ?? 18, tokenMeta?.symbol ?? "", undefined];
   const value = safeParse(amount, Number(decimals));
-  const seconds = lockDays * 86400;
-  const tier = plain ? undefined : pickTier(tiers, seconds);
+  const tier = rewards ? pickTier(tiers, seconds) : undefined;
   const unlockAt = Math.floor(Date.now() / 1000) + seconds + BUFFER;
 
   return (
-    <Card title="New lock">
-      <label className="check">
-        <input type="checkbox" checked={plain} onChange={(e) => setPlain(e.target.checked)} />
-        Lock a different token or LP (no rewards)
-      </label>
-      {plain && (
-        <>
-          <input className="input mono-input" placeholder="Token or LP address 0x…" value={custom} onChange={(e) => setCustom(e.target.value.trim())} spellCheck={false} autoComplete="off" />
-          <p className={badCustom ? "warn small" : "muted small"}>
-            {badCustom ? "That isn't a valid address yet." : "A plain lock: the tokens are held until the unlock date and earn no rewards."}
-          </p>
-        </>
-      )}
-      {!plain && tiersLoading && (
+    <>
+      {rewards && tiersLoading && (
         <div className="tiers pick" aria-busy="true">
           {[0, 1, 2, 3].map((i) => (
             <Skel key={i} block h="118px" w="auto" />
           ))}
         </div>
       )}
-      {!plain && !tiersLoading && (
+      {rewards && !tiersLoading && (
         <div className="tiers pick">
           {tiers.map((t) => {
             const name = label(t.label);
             const active = tier?.label === t.label;
             return (
-              <button key={name} type="button" aria-pressed={active} className={`tier tier-${name.toLowerCase()} ${active ? "active" : ""}`} onClick={() => setLockDays(t.minDuration / 86400)}>
+              <button key={name} type="button" aria-pressed={active} className={`tier tier-${name.toLowerCase()} ${active ? "active" : ""}`} onClick={() => setSeconds(t.minDuration)}>
                 <TierBadge name={name} />
                 <div className="tier-mult">{mult(t.multiplierBps)}</div>
                 <div className="tier-len">{days(t.minDuration)}</div>
@@ -174,56 +166,48 @@ function LockTokens({
           })}
         </div>
       )}
-      <div className="form">
-        <label>
-          <span>Amount {symbol && <span className="faint">({symbol})</span>}</span>
-          <div className="input-row">
-            <input className="input" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            {balance !== undefined && (
-              <button className="btn btn-ghost btn-sm" onClick={() => setAmount(fmtPlain(balance as bigint, Number(decimals)))}>
-                Max {fmt(balance as bigint, Number(decimals))}
-              </button>
-            )}
-          </div>
-        </label>
-        <label>
-          Lock for (days)
-          <input className="input" type="number" min={1} value={lockDays} onChange={(e) => setLockDays(Math.max(0, Number(e.target.value)))} />
-        </label>
-      </div>
+      <DurationSlider seconds={seconds} onChange={setSeconds} tiers={rewards ? tiers : []} tierName={tier ? label(tier.label) : undefined} />
+      <label className="field" style={{ marginTop: 14 }}>
+        <span className="field-label">Amount {symbol && <span className="faint">({symbol})</span>}</span>
+        <div className="input-row">
+          <input className="input" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          {balance !== undefined && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setAmount(fmtPlain(balance as bigint, Number(decimals)))}>
+              Max {fmt(balance as bigint, Number(decimals))}
+            </button>
+          )}
+        </div>
+      </label>
       <div className="summary">
         <Row k="Unlocks" v={date(unlockAt)} />
-        {!plain && (
-          <Row
-            k="Tier"
-            v={
-              tiersLoading ? (
-                <Skel w="8em" />
-              ) : tier ? (
-                <>
-                  <TierBadge name={label(tier.label)} /> {mult(tier.multiplierBps)}
-                </>
-              ) : tiers.length === 0 ? (
-                <Badge tone="grey">No reward pool for this token</Badge>
-              ) : (
-                <Badge tone="red">Shorter than the first tier, so no rewards</Badge>
-              )
-            }
-          />
-        )}
-        {!plain && value > 0n && tier && <Row k="Points" v={fmt((value * BigInt(tier.multiplierBps)) / 10_000n, Number(decimals))} />}
-        {plain && <Row k="Rewards" v={<Badge tone="grey">None for this lock</Badge>} />}
+        <Row
+          k="Tier"
+          v={
+            !rewards ? (
+              <Badge tone="grey">No rewards for this token</Badge>
+            ) : tiersLoading ? (
+              <Skel w="8em" />
+            ) : tier ? (
+              <>
+                <TierBadge name={label(tier.label)} /> {mult(tier.multiplierBps)}
+              </>
+            ) : (
+              <Badge tone="red">Shorter than the first tier, so no rewards</Badge>
+            )
+          }
+        />
+        {rewards && value > 0n && tier && <Row k="Points" v={fmt((value * BigInt(tier.multiplierBps)) / 10_000n, Number(decimals))} />}
         <Row k="Cancellable" v={<Badge tone="green">Not cancellable</Badge>} />
       </div>
       <WithApproval token={token} spender={exile} amount={value}>
         <TxButton
-          disabledReason={!token ? (plain ? "Enter the token or LP address" : "Pick a token") : !plain && tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : lockDays <= 0 ? "Pick a lock length" : undefined}
+          disabledReason={!token ? "Enter the token or LP address" : rewards && tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : undefined}
           request={() =>
             token && {
               address: exile,
               abi: exileAbi,
               functionName: "lockERC20",
-              args: [token, value, BigInt(unlockAt), plain ? 0n : (poolId ?? 0n)],
+              args: [token, value, BigInt(unlockAt), rewards ? (poolId ?? 0n) : 0n],
             }
           }
           onDone={() => setAmount("")}
@@ -231,8 +215,133 @@ function LockTokens({
           {symbol ? `Lock ${symbol}` : "Lock"}
         </TxButton>
       </WithApproval>
-      <p className="muted small">Unlock times round up to the next hour. Rewards drip in over {drip} days and stop the second a lock ends.</p>
-    </Card>
+      <p className="muted small">
+        Unlock times round up to the next hour.{rewards ? ` Rewards drip in over ${drip} days and stop the second a lock ends.` : ""}
+      </p>
+    </>
+  );
+}
+
+/** "Something else": any token or LP (with rewards when it has a Lodestar), or an NFT. */
+function SomethingElse({ exile, factory }: { exile: Address; factory: Address }) {
+  const [kind, setKind] = useState<"token" | "nft">("token");
+  const [input, setInput] = useState("");
+  const token = isAddress(input) ? input : undefined;
+  const bad = input !== "" && !token;
+  // a token with its own Lodestar has its own Exile reward pool and tiers
+  const lodestar = useReadContract({ address: factory, abi: lodestarFactoryAbi, functionName: "lodestarOf", args: [token ?? ZERO], query: { enabled: !!token } });
+  const router = lodestar.data && lodestar.data !== ZERO ? lodestar.data : undefined;
+  const pid = useReadContract({ address: router, abi: lodestarAbi, functionName: "exilePoolId", query: { enabled: !!router } });
+  const pool = useReadContract({ address: exile, abi: exileAbi, functionName: "poolInfo", args: [pid.data ?? 0n], query: { enabled: pid.data !== undefined } });
+  const tiers = (pool.data?.tiers ?? []) as readonly Tier[];
+  const checking = !!token && (lodestar.isLoading || (!!router && (pid.isLoading || pool.isLoading)));
+  return (
+    <>
+      <div className="note-box">
+        <b>Tokens that use Lodestar earn rewards here too.</b> Every Lodestar token gets its own Exile reward pool and tiers. Anything
+        else can still be locked, it just earns nothing.
+      </div>
+      <div className="tabs" role="tablist" style={{ marginBottom: 16 }}>
+        <button role="tab" aria-selected={kind === "token"} className={kind === "token" ? "tab active" : "tab"} onClick={() => setKind("token")}>
+          Token or LP
+        </button>
+        <button role="tab" aria-selected={kind === "nft"} className={kind === "nft" ? "tab active" : "tab"} onClick={() => setKind("nft")}>
+          NFT
+        </button>
+      </div>
+      {kind === "nft" ? (
+        <LockNfts exile={exile} />
+      ) : (
+        <>
+          <label className="field">
+            <span className="field-label">Token or LP address</span>
+            <input className="input mono-input" placeholder="0x…" value={input} onChange={(e) => setInput(e.target.value.trim())} spellCheck={false} autoComplete="off" />
+          </label>
+          <p className={bad ? "warn small" : "muted small"}>
+            {bad
+              ? "That isn't a valid address yet."
+              : !token
+                ? "Paste the address of the token or LP to lock."
+                : checking
+                  ? "Checking for a Lodestar…"
+                  : router
+                    ? "This token uses Lodestar, so this lock earns rewards by tier."
+                    : "No Lodestar for this token: a plain lock, held until the unlock date, with no rewards."}
+          </p>
+          {token && !checking && (
+            <div style={{ marginTop: 16 }}>
+              <LockForm key={token} exile={exile} token={token} poolId={router ? pid.data : 0n} tiers={router ? tiers : []} tiersLoading={false} />
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/** A sliding knob between options. */
+function Switch({ options, value, onChange }: { options: { key: string; label: string }[]; value: string; onChange: (k: string) => void }) {
+  const i = Math.max(0, options.findIndex((o) => o.key === value));
+  return (
+    <div className="switch" role="tablist">
+      <span className="switch-knob" style={{ width: `calc((100% - 6px) / ${options.length})`, transform: `translateX(${i * 100}%)` }} aria-hidden="true" />
+      {options.map((o) => (
+        <button key={o.key} role="tab" aria-selected={o.key === value} className={o.key === value ? "on" : ""} onClick={() => onChange(o.key)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// The duration slider runs from an hour to a year on a log scale, so short and long locks both get room.
+const MIN_S = 3600;
+const MAX_S = 365 * 86400;
+const toPos = (sec: number) => (Math.log(Math.max(MIN_S, Math.min(MAX_S, sec)) / MIN_S) / Math.log(MAX_S / MIN_S)) * 1000;
+function fromPos(pos: number): number {
+  const raw = MIN_S * Math.pow(MAX_S / MIN_S, pos / 1000);
+  // whole hours below two days, whole days above
+  return raw < 2 * 86400 ? Math.round(raw / 3600) * 3600 : Math.round(raw / 86400) * 86400;
+}
+function lockLength(sec: number): string {
+  if (sec < 86400) return `${Math.round(sec / 3600)} hour${sec === 3600 ? "" : "s"}`;
+  const dd = Math.round(sec / 86400);
+  if (dd === 365) return "1 year";
+  return `${dd} day${dd === 1 ? "" : "s"}`;
+}
+
+/** Tick labels under the slider: 1h, 3d, 1y. Short enough that close tiers don't collide on a phone. */
+function shortLength(sec: number) {
+  if (sec >= 365 * 86400) return `${Math.round(sec / (365 * 86400))}y`;
+  if (sec >= 86400) return `${Math.round(sec / 86400)}d`;
+  return `${Math.max(1, Math.round(sec / 3600))}h`;
+}
+
+function DurationSlider({ seconds, onChange, tiers, tierName }: { seconds: number; onChange: (s: number) => void; tiers: readonly Tier[]; tierName?: string }) {
+  return (
+    <div className="dur">
+      <div className="dur-top">
+        <span className="field-label muted">Lock for</span>
+        <span className="dur-value">
+          {lockLength(seconds)}
+          {tierName && <span className="amt-sym"> · {tierName}</span>}
+        </span>
+      </div>
+      <input type="range" min={0} max={1000} value={toPos(seconds)} onChange={(e) => onChange(fromPos(Number(e.target.value)))} aria-label="Lock length" aria-valuetext={lockLength(seconds)} />
+      <div className="dur-marks">
+        {tiers.length > 0
+          ? tiers.map((t) => (
+              <button key={t.label} type="button" className={`dur-mark ${seconds >= t.minDuration ? "on" : ""}`} style={{ left: `${toPos(t.minDuration) / 10}%` }} onClick={() => onChange(t.minDuration)} title={label(t.label)}>
+                {shortLength(t.minDuration)}
+              </button>
+            ))
+          : [3600, 86400, 7 * 86400, 30 * 86400, MAX_S].map((sec) => (
+              <button key={sec} type="button" className={`dur-mark ${seconds >= sec ? "on" : ""}`} style={{ left: `${toPos(sec) / 10}%` }} onClick={() => onChange(sec)}>
+                {shortLength(sec)}
+              </button>
+            ))}
+      </div>
+    </div>
   );
 }
 
@@ -242,7 +351,7 @@ function LockNfts({ exile }: { exile: Address }) {
   const [collection, setCollection] = useState("");
   const [id, setId] = useState("");
   const [amount, setAmount] = useState("1");
-  const [lockDays, setLockDays] = useState(30);
+  const [seconds, setSeconds] = useState(30 * 86400);
   const ok = isAddress(collection);
   const approved = useReadContract({
     address: ok ? collection : undefined,
@@ -251,10 +360,10 @@ function LockNfts({ exile }: { exile: Address }) {
     args: [address ?? "0x0000000000000000000000000000000000000000", exile],
     query: { enabled: ok && !!address, ...POLL.query },
   });
-  const unlockAt = BigInt(Math.floor(Date.now() / 1000) + lockDays * 86400 + BUFFER);
+  const unlockAt = BigInt(Math.floor(Date.now() / 1000) + seconds + BUFFER);
   const tokenId = /^\d+$/.test(id) ? BigInt(id) : undefined;
   return (
-    <Card title="Lock an NFT">
+    <>
       <p className="muted small">ERC-721 or ERC-1155. NFT locks hold the item until the unlock date and don't earn rewards.</p>
       <div className="form">
         <label>
@@ -278,11 +387,8 @@ function LockNfts({ exile }: { exile: Address }) {
             <input className="input" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </label>
         )}
-        <label>
-          Lock for (days)
-          <input className="input" type="number" min={1} value={lockDays} onChange={(e) => setLockDays(Number(e.target.value))} />
-        </label>
       </div>
+      <DurationSlider seconds={seconds} onChange={setSeconds} tiers={[]} />
       {ok && approved.data === false ? (
         <TxButton request={() => ({ address: collection as Address, abi: erc721Abi, functionName: "setApprovalForAll", args: [exile, true] })}>
           Approve collection
@@ -299,7 +405,7 @@ function LockNfts({ exile }: { exile: Address }) {
           Lock NFT
         </TxButton>
       )}
-    </Card>
+    </>
   );
 }
 
