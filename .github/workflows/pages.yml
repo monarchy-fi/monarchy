@@ -1,0 +1,64 @@
+name: Site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # The site password lives only in this Actions secret. Never write it anywhere else.
+      SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+    steps:
+      - name: Require the site password
+        run: |
+          if [ -z "${SITE_PASSWORD// /}" ]; then
+            echo "::error::The SITE_PASSWORD secret is missing or empty. Refusing to deploy the site unencrypted."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: web
+      # Builds one self-contained index.html, encrypts it with staticrypt and copies it to 404.html,
+      # so deep links like /exile show the same password page and then open the right route.
+      - name: Build and encrypt
+        run: npm run build:gated
+        working-directory: web
+      - name: Check nothing is served unencrypted
+        working-directory: web/dist
+        run: |
+          for f in index.html 404.html; do
+            grep -q staticryptEncryptedMsgUniqueVariableName "$f" || { echo "::error::$f is not encrypted"; exit 1; }
+            if grep -q lockERC20 "$f"; then echo "::error::$f contains app code in plain text"; exit 1; fi
+          done
+          if find . -type f \( -name '*.js' -o -name '*.css' -o -name '*.json' -o -name '*.map' \) | grep -q .; then
+            echo "::error::dist has script, style or data files outside the encrypted page"; exit 1
+          fi
+          ls -la
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

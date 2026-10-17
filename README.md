@@ -130,6 +130,17 @@ npm run web           # http://localhost:5173
 
 Point MetaMask or Rabby at `http://127.0.0.1:8545` (chain 31337) and import anvil's first account to act as the creator. On a dev server, `http://localhost:5173/?mock` connects that account without a browser wallet.
 
+The dev server reads the local chain when `deployments/31337.json` exists; a production build always reads Elysium testnet. Set `VITE_CHAIN_ID` to override either.
+
+### The website deploy
+
+The site at monarchy.fi is password protected. The Pages workflow builds the app into one self-contained HTML file, encrypts it with [staticrypt](https://github.com/robinmoisson/staticrypt) using the `SITE_PASSWORD` Actions secret, and serves the same password page as `404.html` so deep links work. The workflow fails if the secret is missing. To try it locally with a throwaway password:
+
+```bash
+cd web
+SITE_PASSWORD='any-test-password' npm run build:gated   # writes dist/index.html and dist/404.html
+```
+
 ### Deploy to Elysium testnet
 
 Use a **fresh burner wallet**, never your main wallet. Get testnet HYPE from the [Elysium faucet](https://elysium.kinetiq.xyz/testnet-faucet).

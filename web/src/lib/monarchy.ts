@@ -1,9 +1,10 @@
-import { useReadContracts } from "wagmi";
+import { useReadContract, useReadContracts } from "wagmi";
 import type { Address } from "viem";
-import { lodestarAbi, mockERC20Abi } from "../abi";
+import { exileAbi, lodestarAbi, mockERC20Abi } from "../abi";
+import { DEFAULT_DRIP_DAYS } from "./constants";
 import { isSet, useDeployment } from "./deployments";
 
-/** The router and assets for the deployment's token (MONARCH), or any Lodestar passed in. */
+/** The router and assets for the deployment's token, or any Lodestar passed in. */
 export function useLodestarCore(lodestar?: Address) {
   const d = useDeployment();
   const address = lodestar ?? (isSet(d?.lodestar) ? d!.lodestar : undefined);
@@ -53,4 +54,16 @@ export function useTokenMeta(tokens: (Address | undefined)[]): (TokenMeta | unde
     if (!s || !dec || s.status !== "success" || dec.status !== "success") return undefined;
     return { symbol: s.result as string, decimals: Number(dec.result) };
   });
+}
+
+/** Exile's reward drip length in days, read from the contract (falls back to the default while loading). */
+export function useDripDays(): number {
+  const d = useDeployment();
+  const r = useReadContract({ address: d?.exile, abi: exileAbi, functionName: "DRIP", query: { enabled: !!d, staleTime: Infinity } });
+  return r.data !== undefined ? Number(r.data) / 86400 : DEFAULT_DRIP_DAYS;
+}
+
+/** "7 day" style label for a number of days. */
+export function dayLabel(days: number): string {
+  return `${Number.isInteger(days) ? days : days.toFixed(1)} day`;
 }
