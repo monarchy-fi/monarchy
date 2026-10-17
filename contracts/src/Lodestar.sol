@@ -19,7 +19,7 @@ import {ILodestar} from "./interfaces/ILodestar.sol";
 ///   - project-token fees are burned;
 ///   - quote fees are split by the creator's chosen percentages between buyback and burn,
 ///     Exile holder rewards and the Team Treasury (a Sandfall stream).
-/// Split changes wait behind a 72 hour timelock. The creator role can be locked here so the router
+/// Split changes wait behind a 12 hour timelock. The creator role can be locked here so the router
 /// can't be swapped out. No protocol fee. Deployed as one minimal clone per token by LodestarFactory.
 contract Lodestar is ILodestar, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -27,7 +27,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     uint256 public constant BPS = 10_000;
     uint256 public constant SWAP_FEE_BPS = 100; // Ascend's 1% pool fee
     uint256 public constant MAX_SLIPPAGE_BPS = 2_000;
-    uint64 public constant TIMELOCK = 72 hours;
+    uint64 public constant TIMELOCK = 12 hours;
     /// @dev Burn sink. Ascend's launch tokens reject transfers to address(0) and to 0x…dEaD, so burns go
     /// to this widely used dead address instead. Nobody holds its key.
     address public constant DEAD = 0xdEAD000000000000000042069420694206942069;

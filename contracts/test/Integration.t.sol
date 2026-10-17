@@ -82,12 +82,12 @@ contract IntegrationTest is MonarchyFixture {
         sandfall.claim(sid);
         assertEq(usdc.balanceOf(treasury), claimable);
 
-        // split change waits 72 hours
+        // split change waits 12 hours
         vm.prank(dev);
         l.proposeConfig(ILodestar.Config(2_000, 6_000, 2_000, address(swapper), 300));
         vm.expectRevert(Lodestar.TimelockActive.selector);
         l.executeConfig();
-        vm.warp(block.timestamp + 72 hours);
+        vm.warp(block.timestamp + 12 hours);
         l.executeConfig();
         assertEq(l.config().holdersBps, 6_000);
 

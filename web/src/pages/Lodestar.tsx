@@ -142,7 +142,7 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
       </Card>
 
       {eta > 0n && (
-        <Card title="Pending split change" right={<Badge tone="amber">72 hour timelock</Badge>}>
+        <Card title="Pending split change" right={<Badge tone="amber">12 hour timelock</Badge>}>
           <SplitBar burn={pending.burnBps} holders={pending.holdersBps} treasury={pending.treasuryBps} />
           <Row k="Executable" v={Number(eta) > now ? `in ${duration(Number(eta) - now)} (${date(eta)})` : "now"} />
           <div className="lock-actions">
@@ -183,7 +183,7 @@ function Steward({ lodestar, cfg, lockedUntil, listingLive }: { lodestar: Addres
           args: [{ ...cfg, burnBps: Math.round(split.burn * 100), holdersBps: Math.round(split.holders * 100), treasuryBps: Math.round(split.treasury * 100) }],
         })}
       >
-        Propose (takes effect after 72 hours)
+        Propose (takes effect after 12 hours)
       </TxButton>
       <h4>Lock the creator role</h4>
       <p className="muted small">Promise holders the router can't be swapped out. A lock can only be extended. Current: {lockedUntil > 0n ? date(lockedUntil) : "none"}.</p>

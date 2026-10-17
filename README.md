@@ -4,7 +4,7 @@
 
 | | What it does |
 |---|---|
-| **Lodestar** | A fee router for one Ascend token. The dev launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. From then on every creator fee lands in the router, and anyone can call `distribute()`: token-side fees are burned, and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. Split changes wait behind a 72 hour timelock, and the creator role can be locked so the router can't be swapped out. |
+| **Lodestar** | A fee router for one Ascend token. The dev launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. From then on every creator fee lands in the router, and anyone can call `distribute()`: token-side fees are burned, and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. Split changes wait behind a 12 hour timelock, and the creator role can be locked so the router can't be swapped out. |
 | **Exile** | Locks ERC-20s (including v2 LP), ERC-721s and ERC-1155s. Locks can be extended, never shortened, cancelled or transferred. ERC-20 locks earn holder rewards by tier, paid as a 7 day drip, and stop earning the second they unlock. |
 | **Sandfall** | Vesting streams (linear, cliff, monthly steps) in any ERC-20 or native HYPE. The creator decides at creation whether a stream can be cancelled, and the UI badges it. Streams aren't transferable. Rolling streams back Lodestar's Team Treasury. |
 

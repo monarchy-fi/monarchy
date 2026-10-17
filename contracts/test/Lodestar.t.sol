@@ -245,7 +245,7 @@ contract LodestarTest is MonarchyFixture {
         Lodestar l = _activateDefault(false);
         vm.prank(dev);
         l.proposeConfig(ILodestar.Config(4_000, 4_000, 2_000, address(0), 300));
-        vm.warp(block.timestamp + 72 hours);
+        vm.warp(block.timestamp + 12 hours);
         l.executeConfig();
         // factory default only applies at deploy; a later config may set no swapper
         assertEq(l.config().swapper, address(0));
@@ -270,7 +270,7 @@ contract LodestarTest is MonarchyFixture {
         vm.prank(dev);
         l.proposeConfig(c);
         (, uint64 eta) = l.pendingConfig();
-        assertEq(eta, block.timestamp + 72 hours);
+        assertEq(eta, block.timestamp + 12 hours);
 
         vm.warp(eta - 1);
         vm.expectRevert(Lodestar.TimelockActive.selector);
@@ -283,7 +283,7 @@ contract LodestarTest is MonarchyFixture {
         vm.expectRevert(Lodestar.TimelockActive.selector);
         l.executeConfig();
 
-        vm.warp(block.timestamp + 72 hours);
+        vm.warp(block.timestamp + 12 hours);
         vm.prank(trader); // anyone can execute once the timelock passes
         l.executeConfig();
         assertEq(l.config().holdersBps, 6_000);
