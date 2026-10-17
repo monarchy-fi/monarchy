@@ -52,7 +52,9 @@ contract LodestarHandler is Test {
     function distribute() external {
         l.distribute();
         ++distributes;
-        if (usdc.balanceOf(address(l)) != l.buybackReserve()) leftoverAfterDistribute = true;
+        if (usdc.balanceOf(address(l)) != l.buybackReserve() + l.holdersReserve() + l.treasuryReserve()) {
+            leftoverAfterDistribute = true;
+        }
         if (token.balanceOf(address(l)) != 0) tokenLeftAfterDistribute = true;
     }
 

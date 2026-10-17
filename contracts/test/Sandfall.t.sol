@@ -173,12 +173,13 @@ contract SandfallTest is Test {
         sf.topUp(id, 700e6);
         vm.warp(block.timestamp + 3.5 days);
         assertApproxEqAbs(sf.vestedAmount(id), 350e6, 1);
-        // second top-up re-streams leftover + new over a fresh window
+        // second top-up: 350 left with 3.5 days to go plus 350 new over 7 days ends after 5.25 days
         vm.prank(creator);
         sf.topUp(id, 350e6);
         assertApproxEqAbs(sf.vestedAmount(id), 350e6, 1);
-        vm.warp(block.timestamp + 3.5 days);
-        assertApproxEqAbs(sf.vestedAmount(id), 350e6 + 350e6, 2);
+        assertApproxEqAbs(sf.stream(id).periodFinish, block.timestamp + 5.25 days, 1);
+        vm.warp(sf.stream(id).periodFinish);
+        assertEq(sf.vestedAmount(id), 1050e6);
         vm.warp(block.timestamp + 7 days);
         assertEq(sf.vestedAmount(id), 1050e6, "everything vested after window, no dust");
         vm.prank(alice);
@@ -237,12 +238,43 @@ contract SandfallTest is Test {
         vm.warp(block.timestamp + 10 days);
         vm.prank(creator);
         sf.topUp(id, 1); // a dust amount
-        assertEq(sf.stream(id).periodFinish, finish, "dust pushed vesting back");
-        vm.warp(finish);
+        assertApproxEqAbs(sf.stream(id).periodFinish, finish, 1, "dust pushed vesting back");
+        vm.warp(sf.stream(id).periodFinish);
         assertEq(sf.vestedAmount(id), 3000e6 + 1);
         vm.prank(creator);
-        sf.topUp(id, 100e6); // a real top-up starts a fresh window
+        sf.topUp(id, 100e6); // nothing left vesting: the new amount gets a full window
         assertEq(sf.stream(id).periodFinish, block.timestamp + 30 days);
+    }
+
+    function test_splitTopUpsCannotSkipTheWindow() public {
+        uint256 id = sf.createRolling(address(usdc), alice, 30 days, creator, true);
+        vm.prank(creator);
+        sf.topUp(id, 1000e6);
+        vm.warp(block.timestamp + 30 days - 1 hours); // an hour before the window ends
+        // many small top-ups in a row can't drag a big one into the ending window
+        for (uint256 i; i < 200; ++i) {
+            vm.prank(creator);
+            sf.topUp(id, 9e6);
+        }
+        vm.prank(creator);
+        sf.topUp(id, 10_000e6);
+        vm.warp(block.timestamp + 1 hours);
+        // the 10k (and the 1.8k) still mostly vest over about 30 days, not in the next hour
+        assertLt(sf.vestedAmount(id), 1000e6 + 100e6, "top-up vested far too fast");
+    }
+
+    function test_claimToAnotherAddress() public {
+        RejectingRecipient r = new RejectingRecipient(sf);
+        vm.prank(creator);
+        uint256 id = sf.createFixed{value: 1 ether}(address(0), address(r), 1 ether, t0, t0, t0 + 1 days, 0, false);
+        vm.warp(t0 + 1 days);
+        address safe = makeAddr("safe");
+        vm.prank(address(r));
+        assertEq(sf.claimTo(id, safe), 1 ether);
+        assertEq(safe.balance, 1 ether);
+        vm.prank(alice);
+        vm.expectRevert(Sandfall.NotRecipient.selector);
+        sf.claimTo(id, alice);
     }
 
     function test_listings() public {

@@ -59,6 +59,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_BUY_DEPTH_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_SLIPPAGE_BPS",
     "inputs": [],
     "outputs": [
@@ -324,6 +337,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "holdersReserve",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "initialize",
     "inputs": [
       {
@@ -480,6 +506,19 @@ export const lodestarAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "maxBuyback",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -820,6 +859,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "treasuryReserve",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "treasuryStreamId",
     "inputs": [],
     "outputs": [
@@ -848,6 +900,12 @@ export const lodestarAbi = [
         "internalType": "uint256"
       }
     ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ClaimFailed",
+    "inputs": [],
     "anonymous": false
   },
   {
@@ -1019,6 +1077,19 @@ export const lodestarAbi = [
   },
   {
     "type": "event",
+    "name": "HoldersPayoutFailed",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Initialized",
     "inputs": [
       {
@@ -1133,6 +1204,19 @@ export const lodestarAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "TreasuryPayoutFailed",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "AlreadyInitialized",
     "inputs": []
@@ -1150,6 +1234,11 @@ export const lodestarAbi = [
   {
     "type": "error",
     "name": "CreatorRoleIsLocked",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CreatorTransferPending",
     "inputs": []
   },
   {

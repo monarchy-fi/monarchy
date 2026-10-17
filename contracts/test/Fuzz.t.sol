@@ -107,17 +107,17 @@ contract ExileFuzzTest is Test {
         assertLe(got, payout * lockedFor / 7 days, "sniper earned past its lock");
     }
 
-    /// Extending never lowers the multiplier, and an extended lock keeps earning.
-    function testFuzz_extendNeverLowersMultiplier(uint256 first, uint256 extra) public {
+    /// Extending re-tiers the lock by what is still committed from now.
+    function testFuzz_extendTiersByRemainingTime(uint256 first, uint256 extra) public {
         first = bound(first, 1 hours, 60 days);
         extra = bound(extra, 1 hours, 60 days);
         uint256 id = _lock(alice, 1e24, first);
-        uint16 before = exile.lockInfo(id).multiplierBps;
         vm.warp(block.timestamp + first / 2);
         uint64 newUnlock = exile.lockInfo(id).unlockAt + uint64(extra);
         vm.prank(alice);
         exile.extend(id, newUnlock);
-        assertGe(exile.lockInfo(id).multiplierBps, before, "multiplier dropped");
+        (uint16 expected,) = exile.tierFor(poolId, newUnlock - block.timestamp);
+        assertEq(exile.lockInfo(id).multiplierBps, expected, "multiplier doesn't match the remaining time");
     }
 }
 

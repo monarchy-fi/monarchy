@@ -58,12 +58,12 @@ contract ExileHandler is Test {
         if (l.withdrawn) return;
         uint256 base = l.unlockAt > block.timestamp ? l.unlockAt : block.timestamp;
         uint64 newUnlock = uint64(base + bound(extra, 1 hours, 45 days));
-        bool running = l.unlockAt > block.timestamp;
         vm.prank(l.owner);
         exile.extend(id, newUnlock);
         uint16 m = exile.lockInfo(id).multiplierBps;
-        // a running lock keeps its multiplier; an expired one is re-tiered from scratch
-        if (running && m < multiplierSeen[id]) multiplierDropped = true;
+        // the multiplier always matches what is still committed from now
+        (uint16 expected,) = exile.tierFor(poolId, newUnlock - block.timestamp);
+        if (m != expected) multiplierDropped = true;
         multiplierSeen[id] = m;
     }
 
@@ -157,7 +157,7 @@ contract ExileInvariantTest is Test {
     /// forge-config: default.invariant.depth = 60
     /// forge-config: offline.invariant.runs = 64
     /// forge-config: offline.invariant.depth = 60
-    function invariant_multiplierNeverDropsWhileLocked() public view {
-        assertFalse(handler.multiplierDropped(), "extending a running lock lowered its multiplier");
+    function invariant_multiplierMatchesCommitment() public view {
+        assertFalse(handler.multiplierDropped(), "an extension's multiplier doesn't match its remaining time");
     }
 }

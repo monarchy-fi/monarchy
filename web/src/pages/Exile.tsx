@@ -340,7 +340,12 @@ function LockCard({ exile, id, tiers, rewardMeta }: { exile: Address; id: bigint
             <input className="input input-sm" type="number" min={1} value={extendDays} onChange={(e) => setExtendDays(Number(e.target.value))} />
             <span className="muted small">days</span>
             <TxButton className="btn btn-sm btn-ghost" request={() => ({ ...base, functionName: "extend", args: [id, BigInt(newUnlock + BUFFER)] })}>
-              Extend{lock.poolId !== 0n && newTier && newTier.multiplierBps > lock.multiplierBps ? ` to ${label(newTier.label)}` : ""}
+              Extend
+              {lock.poolId !== 0n && (newTier?.multiplierBps ?? 0) !== lock.multiplierBps
+                ? newTier
+                  ? ` (${newTier.multiplierBps > lock.multiplierBps ? "up" : "down"} to ${label(newTier.label)})`
+                  : " (below the first tier)"
+                : ""}
             </TxButton>
           </div>
         )}

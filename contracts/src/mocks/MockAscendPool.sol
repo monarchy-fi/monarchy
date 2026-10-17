@@ -155,6 +155,12 @@ contract MockAscendPool is IVault, ICLPoolManager {
         return (sqrtPriceX96, 0, 0, 10_000);
     }
 
+    /// @dev Constant product, so the whole pool is one full-range position with L = sqrt(r0 * r1).
+    function getLiquidity(bytes32 id) external view returns (uint128) {
+        PoolState storage p = _pool(id);
+        return uint128(Math.sqrt(p.reserve0 * p.reserve1));
+    }
+
     function poolIdToPoolKey(bytes32 id)
         external
         view

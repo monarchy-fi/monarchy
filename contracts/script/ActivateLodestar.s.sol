@@ -13,7 +13,8 @@ import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 /// a 30-day rolling treasury stream, listing set-aside on (5,000 USDC cap), creator role locked a year.
 /// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER (unset = the factory default),
 /// MAX_SLIPPAGE_BPS, ENROL_LISTING, LISTING_CAP, LOCK_DAYS (0 = no lock). To keep buybacks in reserve
-/// instead, the factory owner first runs setDefaultSwapper(0x0).
+/// instead, the factory owner runs setDefaultSwapper(0x0) at least 12 hours before activating.
+/// TREASURY (the Team Treasury recipient) must be set explicitly.
 contract ActivateLodestar is BaseScript {
     function run() external {
         Deployment memory d = _load();
@@ -35,7 +36,7 @@ contract ActivateLodestar is BaseScript {
             swapper: vm.envOr("SWAPPER", address(0)),
             maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(1_000)))
         });
-        p.treasuryRecipient = vm.envOr("TREASURY", me);
+        p.treasuryRecipient = vm.envAddress("TREASURY");
         p.treasuryWindow = 30 days;
         p.tiers = MonarchTiers.defaults();
         p.enrolListing = vm.envOr("ENROL_LISTING", true);

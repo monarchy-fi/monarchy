@@ -113,7 +113,8 @@ contract ExileTest is Test {
         uint256 a = _lock(alice, 1000e18, 30 days);
         _notify(7000e18);
         _skip(3.5 days);
-        _notify(3500e18); // leftover 3500 + 3500 new over a fresh 7 days
+        _notify(3500e18); // leftover 3500 over its 3.5 days + 3500 new over 7: ends 5.25 days out
+        assertApproxEqAbs(exile.poolInfo(poolId).periodFinish, block.timestamp + 5.25 days, 1);
         _skip(7 days);
         assertApproxEqRel(exile.pendingRewards(a), 10_500e18, 1e12);
     }
@@ -257,12 +258,40 @@ contract ExileTest is Test {
         exile.extend(a, unlockAt + 1 days);
     }
 
-    function test_extendNeverLowersMultiplier() public {
+    function test_extendReTiersFromNow() public {
         uint256 a = _lock(alice, 1000e18, 30 days);
         _skip(28 days);
         vm.prank(alice);
-        exile.extend(a, uint64(block.timestamp + 3 days)); // 3 days left would be Knight, keeps Monarch
+        exile.extend(a, uint64(block.timestamp + 3 days)); // only 3 days still committed: Knight
+        assertEq(exile.lockInfo(a).multiplierBps, 10000);
+        vm.prank(alice);
+        exile.extend(a, uint64(block.timestamp + 30 days)); // 30 days ahead again: Monarch
         assertEq(exile.lockInfo(a).multiplierBps, 30000);
+    }
+
+    function test_hourlyExtensionsCannotHoldMonarch() public {
+        uint256 a = _lock(alice, 1000e18, 30 days);
+        _skip(30 days - 1 hours);
+        exile.poke(poolId, 744);
+        vm.prank(alice);
+        exile.extend(a, uint64(block.timestamp + 2 hours));
+        assertEq(exile.lockInfo(a).points, 0, "two hours committed earns no tier");
+    }
+
+    function test_unlockNearMaxCannotWrapIntoThePast() public {
+        vm.prank(alice);
+        vm.expectRevert(Exile.InvalidUnlock.selector);
+        exile.lockERC20(address(monarch), 1000e18, type(uint64).max, poolId);
+    }
+
+    function test_emptyPoolCarryIsNotSqueezedIntoTheLastSecond() public {
+        _notify(7000e18); // drips with nobody locked, so it all goes to the carry
+        _skip(7 days - 1);
+        uint256 jit = _lock(bob, 1000e18, 1 days);
+        _notify(1); // dust right before the drip ends
+        _skip(1);
+        // the carry re-drips over about 7 days, so the late locker gets a sliver, not all of it
+        assertLt(exile.pendingRewards(jit), 10e18, "just-in-time lock scooped the carry");
     }
 
     function test_extendExpiredLockResumesWithoutBackpay() public {
@@ -340,9 +369,9 @@ contract ExileTest is Test {
         _notify(1); // dust: joins the running drip
         uint64 finishAfterDust = exile.poolInfo(poolId).periodFinish;
         assertEq(finishAfterDust, finish, "dust pushed the drip back");
-        _notify(100e18); // a real payout restarts the 7 days
+        _notify(6000e18); // a real payout moves the end out by its weight: 6k left over 6 days + 6k over 7
         uint64 finishAfterReal = exile.poolInfo(poolId).periodFinish;
-        assertEq(finishAfterReal, block.timestamp + 7 days);
+        assertApproxEqAbs(finishAfterReal, block.timestamp + 6.5 days, 60);
     }
 
     function test_expiredLockIsReTieredOnExtend() public {
@@ -373,6 +402,11 @@ contract ExileTest is Test {
         exile.createPool(address(monarch), address(reward), t, admin);
         vm.expectRevert(Exile.InvalidTiers.selector);
         exile.createPool(address(monarch), address(reward), new IExile.Tier[](0), admin);
+        // a longer tier can't pay less than a shorter one
+        t[0] = IExile.Tier({minDuration: 1 days, multiplierBps: 30000, label: "A"});
+        t[1] = IExile.Tier({minDuration: 3 days, multiplierBps: 10000, label: "B"});
+        vm.expectRevert(Exile.InvalidTiers.selector);
+        exile.createPool(address(monarch), address(reward), t, admin);
     }
 
     // ---------------------------------------------------------------- misc

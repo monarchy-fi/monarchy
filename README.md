@@ -7,7 +7,7 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 117 passing](https://img.shields.io/badge/Foundry-117%20tests%20passing-2E7D5B.svg)](contracts/test)
+[![Tests: 131 passing](https://img.shields.io/badge/Foundry-131%20tests%20passing-2E7D5B.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
 [![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-6930EA.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-C9A24A.svg)](#how-it-works)
@@ -42,7 +42,7 @@ flowchart LR
 |---|---|
 | **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`: token-side fees are burned, and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. |
 | **Exile** | Locks ERC-20s (including v2 LP), ERC-721s and ERC-1155s. Locks can be extended, never shortened, cancelled or transferred. ERC-20 locks earn holder rewards by tier, paid as a 7 day drip, and stop earning the second they unlock. |
-| **Sandfall** | Vesting streams (linear, cliff or monthly steps) in any ERC-20 or native HYPE. The creator decides at creation whether a stream can be cancelled, and the site badges it. Rolling streams back Lodestar's Team Treasury. |
+| **Sandfall** | Vesting streams (linear, cliff or monthly steps) in any non-rebasing ERC-20 or native HYPE. The creator decides at creation whether a stream can be cancelled, and the site badges it. Rolling streams back Lodestar's Team Treasury. |
 
 ### Exile tiers
 
@@ -58,10 +58,10 @@ No lock, no rewards. With four holders each locking 10,000 tokens and fees dripp
 ## Security model
 
 - **No upgrades.** Each Lodestar is an EIP-1167 clone of a fixed implementation. Nobody can change its code.
-- **No sweep.** There is no rescue or withdraw function. Funds can only go to the burn address, Exile, Sandfall or the swapper.
+- **No sweep.** There is no rescue or withdraw function. Funds can only go to the burn address, Exile, Sandfall or the swapper. Locked tokens and vesting streams can only go to their owners.
 - **Slow changes.** Split, swapper and slippage changes, and Exile tier changes, wait behind a 12 hour timelock and expire if not executed within 7 days after it. Settings chosen at activation apply immediately.
-- **Locked router.** The creator role can be locked to the Lodestar for a chosen period, so the router can't be swapped out.
-- **Guarded buybacks.** The minimum output comes from Ascend's on-chain EMA price, never the spot price, less the pool fee and a slippage allowance (default 10%, min 1%, max 20%). A skipped buyback stays in reserve and retries on the next distribute at half size, so a big reserve is bought back in pieces; holders and treasury are still paid. Every buyback must actually deliver its minimum to the burn address.
+- **Locked router.** The creator role can be locked to the Lodestar for a chosen period, so the router can't be swapped out. A lock can't be placed while a hand-off is pending.
+- **Guarded buybacks.** The minimum output comes from Ascend's on-chain EMA price, never the spot price, less the pool fee and a slippage allowance (default 10%, min 1%, max 20%). Each buy spends at most 0.5% of the pool's quote depth, so it moves the price less than a sandwich pays in fees. Bigger amounts and skipped buys wait in reserve and go out in pieces; holders and treasury are still paid. Every buyback must actually deliver its minimum to the burn address. The swapper is chosen by the steward behind the timelock, and a dishonest one could keep the margin above that minimum, so swapper changes are worth watching.
 - **Front-run safe activation.** Only the pool's current creator can deploy its Lodestar, at an address derived from the pool id.
 - **Fuzz and invariant tested.** Random sequences of locks, payouts, claims, top-ups, cancels, fees and failed buybacks check that Exile stays solvent and never pays out more than it received, that every Sandfall stream stays fully backed, and that every unit of quote a Lodestar handles ends up burned, locked, streamed or held in its buyback reserve.
 
@@ -148,8 +148,9 @@ npm run launch:testnet
 npm run launch:testnet -- --broadcast
 
 # 3. Hand the creator role to the token's Lodestar and activate it (40/40/20 split, the four
-#    tiers, 30 day treasury stream, listing set-aside on, creator role locked for a year)
-npm run activate:testnet
+#    tiers, 30 day treasury stream, listing set-aside on, creator role locked for a year).
+#    TREASURY is the address that receives the Team Treasury stream.
+TREASURY=0xYourTreasury npm run activate:testnet
 
 # 4. The website reads deployments/99801.json
 npm run abis && npm run web
@@ -158,7 +159,7 @@ npm run abis && npm run web
 Mock USDC on Elysium has a public `mint`, so you can fund wallets for trading with
 `cast send $QUOTE "mint(address,uint256)" $YOUR_ADDRESS 1000000000000 --rpc-url $RPC_URL --private-key $PRIVATE_KEY`.
 
-If buybacks through the Infinity vault misbehave, Lodestar keeps the buyback share in `buybackReserve` and still pays holders and the treasury. To activate with no buyback route at all, have the factory owner run `setDefaultSwapper(0x0)` before step 3.
+If buybacks through the Infinity vault misbehave, Lodestar keeps the buyback share in `buybackReserve` and still pays holders and the treasury. To activate with no buyback route at all, have the factory owner run `setDefaultSwapper(0x0)` at least 12 hours before step 3 (a new default only applies after 12 hours).
 
 ## Status and roadmap
 

@@ -66,6 +66,33 @@ contract LodestarTest is MonarchyFixture {
         factory.deploy(p);
     }
 
+    function test_deployRejectsSwappedTokenAndQuote() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        (p.token, p.quote) = (p.quote, p.token);
+        (address predicted,) = factory.predict(p.token, p.quote);
+        vm.prank(dev);
+        launchpad.transferCreator(poolId, predicted);
+        vm.prank(dev);
+        vm.expectRevert(LodestarFactory.WrongTokenOrder.selector);
+        factory.deploy(p);
+    }
+
+    function test_newDefaultSwapperWaitsTwelveHours() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(0), false);
+        (address predicted,) = factory.predict(p.token, p.quote);
+        vm.prank(dev);
+        launchpad.transferCreator(poolId, predicted);
+        factory.setDefaultSwapper(makeAddr("skimmer")); // the owner tries to slip in a new default
+        vm.prank(dev);
+        vm.expectRevert(LodestarFactory.DefaultSwapperJustChanged.selector);
+        factory.deploy(p);
+        // naming a swapper explicitly still works
+        p.cfg.swapper = address(mockSwapper);
+        vm.prank(dev);
+        Lodestar l = Lodestar(factory.deploy{gas: 5_000_000}(p));
+        assertEq(l.config().swapper, address(mockSwapper));
+    }
+
     function test_cannotDeployTwice() public {
         LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
         _activate(p);
@@ -211,10 +238,18 @@ contract LodestarTest is MonarchyFixture {
         l.distribute();
 
         uint256 q = uint256(quoteFees) * 5_000 / 10_000;
-        assertEq(l.totalBuybackQuote() + l.totalHoldersQuote() + l.totalTreasuryQuote(), q);
-        assertEq(l.totalBuybackQuote(), q * burn / 10_000);
-        assertEq(l.totalHoldersQuote(), q * holders / 10_000);
-        assertEq(usdc.balanceOf(address(l)), 0);
+        uint256 burnQ = q * burn / 10_000;
+        uint256 holdQ = q * holders / 10_000;
+        uint256 rest = q - burnQ - holdQ;
+        if (treas == 0) {
+            if (holders > 0) holdQ += rest;
+            else burnQ += rest;
+        }
+        // big buybacks are capped per call; the rest waits in reserve
+        assertEq(l.totalBuybackQuote() + l.buybackReserve(), burnQ, "buyback share");
+        assertEq(l.totalHoldersQuote(), holdQ, "holder share");
+        assertEq(l.totalBuybackQuote() + l.buybackReserve() + l.totalHoldersQuote() + l.totalTreasuryQuote(), q);
+        assertEq(usdc.balanceOf(address(l)), l.buybackReserve());
     }
 
     // ---------------------------------------------------------------- 6. buyback skip
@@ -234,14 +269,17 @@ contract LodestarTest is MonarchyFixture {
 
         mockSwapper.setFail(false);
         launchpad.injectFees(poolId, 0, 1000e6);
+        uint256 cap = l.maxBuyback(); // 0.5% of the pool's 50k USDC side
+        assertApproxEqRel(cap, 250e6, 1e15);
         l.distribute();
-        // after a skip the next attempt is half size
-        assertEq(l.totalBuybackQuote(), 200e6, "half of new share plus reserve");
-        assertEq(l.buybackReserve(), 200e6);
+        // after a skip the next attempt is half of the capped size
+        assertEq(l.totalBuybackQuote(), cap / 2, "half size after a skip");
         assertEq(l.totalHoldersQuote(), 400e6, "reserve is not split again");
 
-        l.distribute();
-        assertEq(l.totalBuybackQuote(), 400e6, "rest bought back at full size");
+        for (uint256 i; i < 5 && l.buybackReserve() > 0; ++i) {
+            l.distribute();
+        }
+        assertEq(l.totalBuybackQuote(), 400e6, "everything bought back in pieces");
         assertEq(l.buybackReserve(), 0);
         assertEq(usdc.balanceOf(address(l)), 0);
         assertEq(l.buybackShift(), 0);
@@ -265,6 +303,57 @@ contract LodestarTest is MonarchyFixture {
         assertEq(l.buybackReserve(), 0, "reserve unstuck");
         assertEq(l.totalBuybackQuote(), 6_000e6);
         assertEq(usdc.balanceOf(address(mockSwapper)), 6_000e6);
+    }
+
+    function test_eachBuybackIsCappedByPoolDepth() public {
+        Lodestar l = _activate(_params(token, 10_000, 0, 0, address(mockSwapper), false));
+        launchpad.injectFees(poolId, 0, 4_000e6); // 2,000 USDC to buy back
+        uint256 cap = l.maxBuyback();
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), cap, "one capped piece per distribute");
+        assertEq(l.buybackReserve(), 2_000e6 - cap);
+    }
+
+    function test_dustDoesNotShrinkTheNextBuyback() public {
+        Lodestar l = _activateDefault(false);
+        mockSwapper.setMaxIn(1e6); // dust-sized attempts fail, like a pool rounding its fee up
+        for (uint256 i; i < 10; ++i) {
+            usdc.mint(address(l), 3);
+            l.distribute();
+        }
+        assertEq(l.buybackShift(), 0, "dust failures don't count");
+    }
+
+    function test_emaFailureDoesNotBlockDistribute() public {
+        Lodestar l = _activateDefault(false);
+        launchpad.injectFees(poolId, 0, 1000e6);
+        vm.mockCallRevert(address(launchpad), abi.encodeWithSignature("emaSqrtPrice(bytes32)", poolId), "down");
+        l.distribute();
+        assertEq(l.buybackReserve(), 200e6, "buyback waits");
+        assertEq(l.totalHoldersQuote(), 200e6, "holders still paid");
+        assertEq(l.totalTreasuryQuote(), 100e6, "treasury still paid");
+    }
+
+    function test_failedHolderPayoutIsKeptForThem() public {
+        Lodestar l = _activateDefault(false);
+        launchpad.injectFees(poolId, 0, 1000e6);
+        vm.mockCallRevert(address(exile), abi.encodeWithSignature("notifyReward(uint256,uint256)"), "stuck");
+        l.distribute();
+        assertEq(l.holdersReserve(), 200e6);
+        assertEq(l.totalTreasuryQuote(), 100e6, "treasury still paid");
+        vm.clearMockedCalls();
+        l.distribute();
+        assertEq(l.holdersReserve(), 0);
+        assertEq(l.totalHoldersQuote(), 200e6, "holders get all of it, not a re-split");
+        assertEq(l.totalTreasuryQuote(), 100e6);
+    }
+
+    function test_noTreasuryShareSendsRemainderToHolders() public {
+        Lodestar l = _activate(_params(token, 5_000, 5_000, 0, address(mockSwapper), false));
+        launchpad.injectFees(poolId, 0, 3); // 1 quote unit to split, all rounding
+        usdc.mint(address(l), 2);
+        l.distribute();
+        assertEq(l.totalTreasuryQuote(), 0, "treasury stream untouched");
     }
 
     function test_swapperThatBurnsNothingIsRejected() public {
@@ -395,6 +484,32 @@ contract LodestarTest is MonarchyFixture {
         vm.prank(dev);
         l.transferCreatorOut(dev);
         assertEq(launchpad.pendingCreator(poolId), dev);
+    }
+
+    function test_cannotLockWhileAHandOffIsPending() public {
+        Lodestar l = _activateDefault(false);
+        address alt = makeAddr("alt");
+        vm.startPrank(dev);
+        l.transferCreatorOut(alt);
+        vm.expectRevert(Lodestar.CreatorTransferPending.selector);
+        l.lockCreatorRole(type(uint64).max);
+        // cancelling the hand-off, then locking, works
+        l.transferCreatorOut(address(0));
+        l.lockCreatorRole(type(uint64).max);
+        vm.stopPrank();
+        vm.prank(alt);
+        vm.expectRevert();
+        launchpad.acceptCreator(poolId);
+        assertTrue(l.isCreator());
+    }
+
+    function test_cancelAllowedWhileLocked() public {
+        Lodestar l = _activateDefault(false);
+        vm.prank(dev);
+        l.lockCreatorRole(type(uint64).max);
+        vm.prank(dev);
+        l.transferCreatorOut(address(0)); // cancelling never hands the role anywhere
+        assertEq(launchpad.pendingCreator(poolId), address(0));
     }
 
     function test_creatorLockForever() public {

@@ -43,6 +43,19 @@ export const lodestarFactoryAbi = [
   },
   {
     "type": "function",
+    "name": "DEFAULT_SWAPPER_DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "allLodestars",
     "inputs": [
       {
@@ -82,6 +95,19 @@ export const lodestarFactoryAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "defaultSwapperSetAt",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -438,6 +464,11 @@ export const lodestarFactoryAbi = [
   },
   {
     "type": "error",
+    "name": "DefaultSwapperJustChanged",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "DeskMismatch",
     "inputs": []
   },
@@ -475,6 +506,11 @@ export const lodestarFactoryAbi = [
   {
     "type": "error",
     "name": "TransferCreatorFirst",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongTokenOrder",
     "inputs": []
   },
   {

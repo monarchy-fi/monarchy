@@ -41,6 +41,10 @@ contract LodestarFactory {
 
     address public owner;
     address public defaultSwapper;
+    /// @notice When the default swapper last changed. A new default only applies to deploys 12 hours
+    /// later, so it can't be swapped in between a dev's `transferCreator` and `deploy`.
+    uint64 public defaultSwapperSetAt;
+    uint64 public constant DEFAULT_SWAPPER_DELAY = 12 hours;
     mapping(address token => address) public lodestarOf;
     address[] public allLodestars;
 
@@ -60,6 +64,8 @@ contract LodestarFactory {
     error TransferCreatorFirst();
     error OnlyOwner();
     error ZeroAddress();
+    error WrongTokenOrder();
+    error DefaultSwapperJustChanged();
 
     constructor(
         address implementation_,
@@ -97,13 +103,18 @@ contract LodestarFactory {
         if (launchpad.poolCreator(poolId) != msg.sender) revert NotPoolCreator();
         if (launchpad.pendingCreator(poolId) != lodestar) revert TransferCreatorFirst();
         if (p.treasuryRecipient == address(0)) revert ZeroAddress();
+        // the pool id sorts the pair, so check token and quote weren't passed the wrong way round
+        if (launchpad.poolTokenIs0(poolId) != (p.token < p.quote)) revert WrongTokenOrder();
 
         Clones.cloneDeterministic(implementation, poolId);
         uint256 exilePoolId = exile.createPool(p.token, p.quote, p.tiers, msg.sender);
         uint256 streamId = sandfall.createRolling(p.quote, p.treasuryRecipient, p.treasuryWindow, lodestar, false);
 
         ILodestar.Config memory cfg = p.cfg;
-        if (cfg.swapper == address(0)) cfg.swapper = defaultSwapper;
+        if (cfg.swapper == address(0)) {
+            if (block.timestamp < defaultSwapperSetAt + DEFAULT_SWAPPER_DELAY) revert DefaultSwapperJustChanged();
+            cfg.swapper = defaultSwapper;
+        }
 
         ILodestar(lodestar).initialize(
             ILodestar.InitParams({
@@ -141,6 +152,7 @@ contract LodestarFactory {
     function setDefaultSwapper(address swapper) external {
         if (msg.sender != owner) revert OnlyOwner();
         defaultSwapper = swapper;
+        defaultSwapperSetAt = uint64(block.timestamp);
         emit DefaultSwapperSet(swapper);
     }
 

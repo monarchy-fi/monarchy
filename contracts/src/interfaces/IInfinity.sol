@@ -28,6 +28,8 @@ interface ICLPoolManager {
         view
         returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee);
 
+    function getLiquidity(bytes32 id) external view returns (uint128 liquidity);
+
     function poolIdToPoolKey(bytes32 id)
         external
         view

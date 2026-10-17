@@ -4,13 +4,16 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /// @title Sandfall
 /// @notice Vesting streams for ERC-20 tokens or native HYPE. No fees.
 /// - FIXED_LINEAR: optional cliff, then a straight line to `end`.
 /// - FIXED_STEPS: optional cliff, then equal steps every `stepSeconds` (e.g. monthly).
-/// - ROLLING: starts empty and can be topped up by anyone; each top-up re-streams the unvested
-///   balance over `window`. Lodestar uses this for a project's Team Treasury.
+/// - ROLLING: starts empty and can be topped up by anyone. Each top-up streams over `window`; what was
+///   already vesting keeps its remaining time, and the new end is the amount-weighted mix of the two.
+///   Lodestar uses this for a project's Team Treasury.
+/// Use non-rebasing tokens: balances are measured once, at deposit.
 /// Whether a stream can be cancelled is chosen at creation and can never change.
 /// Streams are not transferable.
 contract Sandfall is ReentrancyGuard {
@@ -44,9 +47,6 @@ contract Sandfall is ReentrancyGuard {
     }
 
     uint256 internal constant RATE_PREC = 1e18;
-    /// @dev A top-up under 1/100 of what is still unvested joins the current window instead of restarting
-    /// it, so dust top-ups can't keep pushing the recipient's vesting back.
-    uint256 internal constant RESTART_MIN_DIVISOR = 100;
     uint32 public constant MIN_WINDOW = 1 days;
     uint32 public constant MAX_WINDOW = 365 days;
 
@@ -154,7 +154,9 @@ contract Sandfall is ReentrancyGuard {
         emit StreamCreated(id, Kind.ROLLING, creator, recipient, asset, 0, s.start, s.start, 0, 0, window, cancellable);
     }
 
-    /// @notice Add funds to a rolling stream. The unvested balance plus `amount` streams over a fresh window.
+    /// @notice Add funds to a rolling stream. The new end is weighted by amount: what was still vesting keeps
+    /// its remaining time and `amount` gets a full window. Dust barely moves the end, and splitting a
+    /// top-up into pieces changes nothing.
     function topUp(uint256 id, uint128 amount) external payable nonReentrant {
         Stream storage s = _get(id);
         if (s.kind != Kind.ROLLING) revert NotRolling();
@@ -166,25 +168,25 @@ contract Sandfall is ReentrancyGuard {
         uint256 stillVesting = uint256(s.total) - s.accrued;
         uint256 unvested = stillVesting + received;
         s.total += received;
-        if (uint256(received) * RESTART_MIN_DIVISOR < stillVesting && s.periodFinish > block.timestamp) {
-            s.rate = unvested * RATE_PREC / (s.periodFinish - block.timestamp);
-        } else {
-            s.rate = unvested * RATE_PREC / s.window;
-            s.periodFinish = uint64(block.timestamp) + s.window;
-        }
+        uint256 left = s.periodFinish > block.timestamp ? s.periodFinish - block.timestamp : 0;
+        uint256 duration = (stillVesting * left + uint256(received) * s.window) / unvested;
+        if (duration == 0) duration = 1;
+        s.rate = unvested * RATE_PREC / duration;
+        s.periodFinish = uint64(block.timestamp + duration);
         emit ToppedUp(id, msg.sender, received, s.rate, s.periodFinish);
     }
 
     // ---------------------------------------------------------------- claim / cancel
 
     function claim(uint256 id) external nonReentrant returns (uint256 due) {
-        Stream storage s = _get(id);
-        if (msg.sender != s.recipient) revert NotRecipient();
-        due = _vested(s) - s.claimed;
-        if (due == 0) return 0;
-        s.claimed += uint128(due);
-        _send(s.asset, s.recipient, due);
-        emit Claimed(id, s.recipient, due);
+        return _claim(id, msg.sender);
+    }
+
+    /// @notice Claim to another address, for a recipient that can't receive the asset itself
+    /// (e.g. a wallet without a native receive, or one the token has blocked).
+    function claimTo(uint256 id, address to) external nonReentrant returns (uint256 due) {
+        if (to == address(0)) revert InvalidRecipient();
+        return _claim(id, to);
     }
 
     /// @notice Stop a cancellable stream. The unvested rest returns to the creator; what has vested stays
@@ -241,6 +243,16 @@ contract Sandfall is ReentrancyGuard {
 
     // ---------------------------------------------------------------- internals
 
+    function _claim(uint256 id, address to) internal returns (uint256 due) {
+        Stream storage s = _get(id);
+        if (msg.sender != s.recipient) revert NotRecipient();
+        due = _vested(s) - s.claimed;
+        if (due == 0) return 0;
+        s.claimed += uint128(due);
+        _send(s.asset, to, due);
+        emit Claimed(id, to, due);
+    }
+
     function _get(uint256 id) internal view returns (Stream storage s) {
         if (id == 0 || id >= _streams.length) revert UnknownStream();
         s = _streams[id];
@@ -282,7 +294,7 @@ contract Sandfall is ReentrancyGuard {
         token.safeTransferFrom(msg.sender, address(this), amount);
         uint256 received = token.balanceOf(address(this)) - before;
         if (received == 0) revert InvalidAmount();
-        return uint128(received);
+        return SafeCast.toUint128(received);
     }
 
     function _send(address asset, address to, uint256 amount) internal {
