@@ -70,17 +70,19 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [SECURI
 
 ## Live on Elysium testnet
 
-Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its creator role held by a Lodestar. Every feature has been exercised on chain through the real PancakeSwap Infinity pool: fee burns, an EMA-guarded buyback, holder rewards dripping to Exile locks at several tiers, the Team Treasury stream, lock extension and a config change waiting out its 12 hour timelock. Contract sources are verified on the explorer.
+Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its creator role held by a Lodestar. Every feature has been exercised on chain through the real PancakeSwap Infinity pool: fee burns, an EMA-guarded buyback, holder rewards dripping to Exile locks at several tiers, the Team Treasury stream, lock extension and a config change waiting out its 12 hour timelock. A second token, Sample Stock Token (SMPLS), is quoted in the mock NVDA stock token (mNVDAx) and sends its token-side fees to Exile lockers, so lockers earn and claim both SMPLS and mNVDAx, while the buyback, holder rewards and treasury run in mNVDAx. Contract sources are verified on the explorer.
 
 | Contract | Address |
 |---|---|
-| LodestarFactory | [`0x9B6B1166469431587bF4d0ADf4eB7b7da2079716`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x9B6B1166469431587bF4d0ADf4eB7b7da2079716) |
-| Lodestar implementation | [`0x153f4efAe53791120Bc34e09D2333e7bA1B09508`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x153f4efAe53791120Bc34e09D2333e7bA1B09508) |
-| Exile | [`0x92a87165f0F4C8C288Cd57918b89274e21394125`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x92a87165f0F4C8C288Cd57918b89274e21394125) |
-| Sandfall | [`0xC119BEcefaF9711B1F7311943aeA9E4f0669EFf1`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xC119BEcefaF9711B1F7311943aeA9E4f0669EFf1) |
-| AscendSwapper | [`0xDab7bD5CfA4021Fd604948EbF4616690Daaed658`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xDab7bD5CfA4021Fd604948EbF4616690Daaed658) |
-| Sample Token (SMPL) | [`0xe43F98f8A8D724609243D5abAB15bBaF072BC633`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xe43F98f8A8D724609243D5abAB15bBaF072BC633) |
-| SMPL Lodestar | [`0x618D5678287fdFC0ee83cB35221cCc1F138098F5`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x618D5678287fdFC0ee83cB35221cCc1F138098F5) |
+| LodestarFactory | [`0xd0Db85a7BddF88fD19625ab7A1C12860176D0710`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xd0Db85a7BddF88fD19625ab7A1C12860176D0710) |
+| Lodestar implementation | [`0xdF26E0b534474F3b623bceE7d210c134d9677377`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xdF26E0b534474F3b623bceE7d210c134d9677377) |
+| Exile | [`0xC5f3fB6d49c7Ea4019B8A6b0Bf2E183861BB8234`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xC5f3fB6d49c7Ea4019B8A6b0Bf2E183861BB8234) |
+| Sandfall | [`0x9D878d63eF6647E08386a63E394cBaCba4777C97`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x9D878d63eF6647E08386a63E394cBaCba4777C97) |
+| AscendSwapper | [`0x01250294eabf3Cf468F35e209Af86A96050Aa795`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x01250294eabf3Cf468F35e209Af86A96050Aa795) |
+| Sample Token (SMPL) | [`0xEAf4aA06618C5E0633d57FCF7731b02be45Af08c`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xEAf4aA06618C5E0633d57FCF7731b02be45Af08c) |
+| SMPL Lodestar | [`0x4C16A230Fdd33380dAAb6fc20690897cE7544440`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x4C16A230Fdd33380dAAb6fc20690897cE7544440) |
+| Sample Stock Token (SMPLS, quoted in mNVDAx) | [`0xA1A358a6946E2f92F9AffC546b5BAB6a118dD554`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xA1A358a6946E2f92F9AffC546b5BAB6a118dD554) |
+| SMPLS Lodestar | [`0x089D334bf894beeDd9D494e476C862988cD5E487`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x089D334bf894beeDd9D494e476C862988cD5E487) |
 
 <details>
 <summary>Ascend addresses used</summary>
@@ -92,6 +94,7 @@ Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its cre
 | PancakeSwap Infinity CLPoolManager | `0x12E84206cB53aE0df055482ebc4658635096E1aA` |
 | Infinity Vault | `0x2B738A9A69b7a45C9dA6B519f6bE6efBfb912aec` |
 | Mock USDC (quote) | `0x84Cc00D13173f7016Bbab22A736dBf75A154cFE2` |
+| Mock NVDA stock token, mNVDAx (SMPLS quote) | `0xa7CDbE6342A2eF5f789BCdd3653c7f48c7F16A51` |
 
 </details>
 
