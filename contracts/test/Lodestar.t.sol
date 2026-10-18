@@ -487,37 +487,27 @@ contract LodestarTest is MonarchyFixture {
 
     // ---------------------------------------------------------------- 9. creator lock
 
-    /// @dev Activation only locks forever: a shorter lock, or none, is refused before anything is created.
-    function test_factoryOnlyLocksForever() public {
+    function test_creatorLock() public {
         LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
-        (address predicted, bytes32 id) = factory.predict(p.token, p.quote);
-        vm.prank(dev);
-        launchpad.transferCreator(id, predicted);
+        p.creatorLockUntil = uint64(block.timestamp + 365 days);
+        Lodestar l = _activate(p);
+        assertEq(l.creatorLockedUntil(), p.creatorLockUntil);
 
-        p.creatorLockUntil = uint64(block.timestamp + 3650 days);
-        vm.prank(dev);
-        vm.expectRevert(LodestarFactory.LockMustBeForever.selector);
-        factory.deploy{gas: 5_000_000}(p);
-        p.creatorLockUntil = 0;
-        vm.prank(dev);
-        vm.expectRevert(LodestarFactory.LockMustBeForever.selector);
-        factory.deploy{gas: 5_000_000}(p);
-
-        p.creatorLockUntil = type(uint64).max;
-        vm.prank(dev);
-        Lodestar l = Lodestar(factory.deploy{gas: 5_000_000}(p));
-        assertEq(l.creatorLockedUntil(), type(uint64).max);
         vm.startPrank(dev);
         vm.expectRevert(Lodestar.CreatorRoleIsLocked.selector);
         l.transferCreatorOut(dev);
         vm.expectRevert(Lodestar.NotExtending.selector);
-        l.lockCreatorRole(type(uint64).max);
+        l.lockCreatorRole(uint64(block.timestamp + 30 days));
         vm.stopPrank();
+
+        vm.warp(p.creatorLockUntil);
+        vm.prank(dev);
+        l.transferCreatorOut(dev);
+        assertEq(launchpad.pendingCreator(poolId), dev);
     }
 
     function test_cannotLockWhileAHandOffIsPending() public {
         Lodestar l = _activateDefault(false);
-        _clearLock(l);
         address alt = makeAddr("alt");
         vm.startPrank(dev);
         l.transferCreatorOut(alt);
@@ -534,14 +524,18 @@ contract LodestarTest is MonarchyFixture {
     }
 
     function test_cancelAllowedWhileLocked() public {
-        Lodestar l = _activateDefault(false); // locked for good at activation
+        Lodestar l = _activateDefault(false);
+        vm.prank(dev);
+        l.lockCreatorRole(type(uint64).max);
         vm.prank(dev);
         l.transferCreatorOut(address(0)); // cancelling never hands the role anywhere
         assertEq(launchpad.pendingCreator(poolId), address(0));
     }
 
     function test_creatorLockForever() public {
-        Lodestar l = _activateDefault(false); // locked for good at activation
+        Lodestar l = _activateDefault(false);
+        vm.prank(dev);
+        l.lockCreatorRole(type(uint64).max);
         vm.warp(block.timestamp + 100 * 365 days);
         vm.prank(dev);
         vm.expectRevert(Lodestar.CreatorRoleIsLocked.selector);
@@ -764,7 +758,6 @@ contract LodestarTest is MonarchyFixture {
     /// hand-off and clear the listing election.
     function test_cannotHandTheRoleToTheRouterItself() public {
         Lodestar l = _activateDefault(false);
-        _clearLock(l);
         vm.prank(dev);
         vm.expectRevert(Lodestar.SelfTransfer.selector);
         l.transferCreatorOut(address(l));
@@ -797,8 +790,7 @@ contract LodestarTest is MonarchyFixture {
     /// @dev The creator role can come back: once the current creator hands it to the router on Ascend,
     /// anyone can complete the hand-off, and a second deploy fails cheaply instead of burning its gas.
     function test_creatorRoleCanComeBack() public {
-        Lodestar l = _activateDefault(false);
-        _clearLock(l);
+        Lodestar l = _activateDefault(false); // no lock
         vm.startPrank(dev);
         l.transferCreatorOut(dev);
         launchpad.acceptCreator(poolId);
@@ -951,6 +943,14 @@ contract LodestarTest is MonarchyFixture {
 
     // ---------------------------------------------------------------- 15. upgrade to a newer Lodestar
 
+    /// @dev Activated with the creator role locked for good, the box ticked by default on the site.
+    function _activateForever() internal returns (Lodestar l) {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        p.creatorLockUntil = type(uint64).max;
+        l = _activate(p);
+        assertEq(l.creatorLockedUntil(), type(uint64).max);
+    }
+
     function _successor() internal returns (address next, address router) {
         router = makeAddr("v2 router");
         next = address(new MockSuccessorFactory(router));
@@ -958,7 +958,7 @@ contract LodestarTest is MonarchyFixture {
     }
 
     function test_upgradeNeedsASuccessor() public {
-        Lodestar l = _activateDefault(false);
+        Lodestar l = _activateForever();
         vm.prank(dev);
         vm.expectRevert(Lodestar.NoSuccessor.selector);
         l.proposeUpgrade();
@@ -970,7 +970,7 @@ contract LodestarTest is MonarchyFixture {
     }
 
     function test_onlyOwnerNamesSuccessorAndOnlyStewardProposes() public {
-        Lodestar l = _activateDefault(false);
+        Lodestar l = _activateForever();
         vm.startPrank(trader);
         vm.expectRevert(LodestarFactory.OnlyOwner.selector);
         factory.setSuccessor(trader);
@@ -990,7 +990,7 @@ contract LodestarTest is MonarchyFixture {
     /// @dev The forever lock still blocks every other hand-off; the proposed move waits 7 days, then anyone
     /// can start it, and the new router finishes it on Ascend.
     function test_upgradeWaitsSevenDaysThenMovesTheRole() public {
-        Lodestar l = _activateDefault(false);
+        Lodestar l = _activateForever();
         (address next, address router) = _successor();
         vm.prank(dev);
         vm.expectEmit(address(l));
@@ -1021,7 +1021,7 @@ contract LodestarTest is MonarchyFixture {
 
     /// @dev Until the new router accepts, the steward can still call the move off and the role stays put.
     function test_stewardCanStopAnExecutedUpgradeBeforeItIsAccepted() public {
-        Lodestar l = _activateDefault(false);
+        Lodestar l = _activateForever();
         (, address router) = _successor();
         vm.prank(dev);
         l.proposeUpgrade();
@@ -1037,7 +1037,7 @@ contract LodestarTest is MonarchyFixture {
     }
 
     function test_upgradeStopsIfTheSuccessorChanges() public {
-        Lodestar l = _activateDefault(false);
+        Lodestar l = _activateForever();
         _successor();
         vm.prank(dev);
         l.proposeUpgrade();
@@ -1052,7 +1052,7 @@ contract LodestarTest is MonarchyFixture {
     }
 
     function test_upgradeExpires() public {
-        Lodestar l = _activateDefault(false);
+        Lodestar l = _activateForever();
         _successor();
         vm.prank(dev);
         l.proposeUpgrade();
@@ -1062,7 +1062,7 @@ contract LodestarTest is MonarchyFixture {
     }
 
     function test_cancelUpgrade() public {
-        Lodestar l = _activateDefault(false);
+        Lodestar l = _activateForever();
         _successor();
         vm.startPrank(dev);
         vm.expectRevert(Lodestar.NoPendingUpgrade.selector);

@@ -19,6 +19,7 @@ contract IntegrationTest is MonarchyFixture {
 
         // dev launched on Ascend and activates Lodestar: 40/40/20, listing on, role locked for good
         LodestarFactory.DeployParams memory p = _params(monarch, 4_000, 4_000, 2_000, address(0), true);
+        p.creatorLockUntil = type(uint64).max;
         Lodestar l = _activate(p);
         assertTrue(l.isCreator());
 

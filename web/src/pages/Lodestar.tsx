@@ -383,6 +383,7 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
   const [listing, setListing] = useState(true);
   // the cap is counted in the quote asset, so 5,000 only makes sense as a default for the deployment's USDC
   const [cap, setCap] = useState(quote.toLowerCase() === d.quote.toLowerCase() ? "5000" : "");
+  const [lockForever, setLockForever] = useState(true);
 
   if (!r.data) return <LoadingCard />;
   const [creator, pendingCreator, owedQ, owedT] = r.data;
@@ -466,7 +467,15 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
               </label>
             </div>
             <h5>Creator role</h5>
-            <p className="muted small">Activating locks the creator role to this router forever. The only way it can ever move is to this token's router on a newer Monarchy Lodestar, announced to holders 7 days ahead.</p>
+            <label className="check">
+              <input type="checkbox" checked={lockForever} onChange={(e) => setLockForever(e.target.checked)} />
+              Lock the creator role to this router forever
+            </label>
+            <p className="muted small">
+              {lockForever
+                ? "Holders can see the fee stream can't be moved away from this router. The only exception is a move to this token's router on a newer Monarchy Lodestar, announced 7 days ahead. This can't be undone."
+                : "Without a lock the steward could hand the creator role away later. You can still lock it forever from the steward controls."}
+            </p>
             <h5>HyperCore listing savings</h5>
             <label className="check">
               <input type="checkbox" checked={listing} onChange={(e) => setListing(e.target.checked)} />
@@ -505,8 +514,8 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
                   enrolListing: listing,
                   // the cap is in the pool's quote asset, whatever its decimals
                   listingCap: listing ? parseUnits(cap || "0", quoteMeta?.decimals ?? 18) : 0n,
-                  // always locked for good: the largest unlock time the router accepts
-                  creatorLockUntil: 2n ** 64n - 1n,
+                  // locked for good: the largest unlock time the router accepts
+                  creatorLockUntil: lockForever ? 2n ** 64n - 1n : 0n,
                 },
               ],
             })}

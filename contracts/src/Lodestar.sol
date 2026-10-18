@@ -20,10 +20,10 @@ import {ILodestarFactory} from "./interfaces/ILodestarFactory.sol";
 ///   - project-token fees are burned, or, if the creator chose so, paid in full to Exile lockers;
 ///   - quote fees are split by the creator's chosen percentages between buyback and burn,
 ///     Exile holder rewards and the Team Treasury (a Sandfall stream).
-/// Split changes wait behind a 12 hour timelock. The creator role is locked here forever at activation,
-/// so the router can't be swapped out; the one way out is a move to this token's router on a newer
-/// Monarchy factory, proposed by the steward and announced 7 days ahead. No protocol fee. Deployed as one
-/// minimal clone per token by LodestarFactory.
+/// Split changes wait behind a 12 hour timelock. The creator role can be locked here forever, so the
+/// router can't be swapped out; even then it can move to this token's router on a newer Monarchy
+/// factory, proposed by the steward and announced 7 days ahead. No protocol fee. Deployed as one minimal
+/// clone per token by LodestarFactory.
 contract Lodestar is ILodestar, ReentrancyGuard {
     using SafeERC20 for IERC20;
 

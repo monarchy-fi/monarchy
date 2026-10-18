@@ -544,11 +544,6 @@ export const lodestarFactoryAbi = [
   },
   {
     "type": "error",
-    "name": "LockMustBeForever",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "NotPoolCreator",
     "inputs": []
   },
