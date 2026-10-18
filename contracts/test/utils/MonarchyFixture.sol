@@ -90,6 +90,16 @@ abstract contract MonarchyFixture is Test {
         p.tiers = MonarchTiers.defaults();
         p.enrolListing = listing;
         p.listingCap = 5_000e6;
+        p.creatorLockUntil = type(uint64).max;
+    }
+
+    /// @dev Every router is locked forever at activation, so the hand-off rules the router still enforces
+    /// are tested on one whose lock is cleared in storage (`creatorLockedUntil`: slot 14, bytes 8 to 15).
+    function _clearLock(Lodestar l) internal {
+        bytes32 slot = bytes32(uint256(14));
+        uint256 word = uint256(vm.load(address(l), slot));
+        vm.store(address(l), slot, bytes32(word & ~(uint256(type(uint64).max) << 64)));
+        assertEq(l.creatorLockedUntil(), 0, "storage layout moved; update _clearLock");
     }
 
     /// @dev The two-step activation a dev does after launching on Ascend's site.

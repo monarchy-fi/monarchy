@@ -17,7 +17,7 @@ import {AscendPoolKey} from "./libraries/AscendPoolKey.sol";
 ///   2. On Ascend: `transferCreator(poolId, router)`.
 ///   3. Here: `deploy(params)`. In one transaction this creates the router, its Exile holder-rewards
 ///      pool and its Sandfall Team Treasury stream, accepts the creator role, optionally enrols the
-///      listing set-aside and optionally locks the creator role.
+///      listing set-aside and locks the creator role to the router forever.
 /// The dev keeps the dev-buy tokens; only the creator fee stream moves to the router.
 contract LodestarFactory {
     struct DeployParams {
@@ -29,6 +29,8 @@ contract LodestarFactory {
         IExile.Tier[] tiers;
         bool enrolListing;
         uint256 listingCap;
+        /// @dev Must be type(uint64).max: every router's creator role is locked for good. Callers state it
+        /// so a script or form built for shorter locks fails loudly instead of locking longer than it meant.
         uint64 creatorLockUntil;
     }
 
@@ -67,6 +69,7 @@ contract LodestarFactory {
     error WrongTokenOrder();
     error DefaultSwapperJustChanged();
     error AlreadyDeployed();
+    error LockMustBeForever();
 
     constructor(
         address implementation_,
@@ -104,6 +107,7 @@ contract LodestarFactory {
         if (launchpad.poolCreator(poolId) != msg.sender) revert NotPoolCreator();
         if (launchpad.pendingCreator(poolId) != lodestar) revert TransferCreatorFirst();
         if (p.treasuryRecipient == address(0)) revert ZeroAddress();
+        if (p.creatorLockUntil != type(uint64).max) revert LockMustBeForever();
         // the pool id sorts the pair, so check token and quote weren't passed the wrong way round
         if (launchpad.poolTokenIs0(poolId) != (p.token < p.quote)) revert WrongTokenOrder();
         // a second deploy would collide on CREATE2, which burns all the gas sent; fail cheaply instead.
@@ -140,7 +144,7 @@ contract LodestarFactory {
         );
         ILodestar(lodestar).acceptCreator();
         if (p.enrolListing) ILodestar(lodestar).enrollListing(p.listingCap);
-        if (p.creatorLockUntil > 0) ILodestar(lodestar).lockCreatorRole(p.creatorLockUntil);
+        ILodestar(lodestar).lockCreatorRole(type(uint64).max);
 
         lodestarOf[p.token] = lodestar;
         allLodestars.push(lodestar);
