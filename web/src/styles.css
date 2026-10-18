@@ -147,9 +147,8 @@ main { flex: 1; }
 .nav-links .nl-exile:hover .nl-icon, .nav-links .nl-exile:focus-visible .nl-icon { transform: translate(-50%, -50%); }
 .nl-exile:hover .nl-icon svg, .nl-exile:focus-visible .nl-icon svg { transform: translateY(0); }
 .nav-links .nl-exile:hover .nl-word, .nav-links .nl-exile:focus-visible .nl-word { opacity: 0.45; }
-/* on a page title the gate drops once, then rises and falls again every few seconds */
-.mark-live.nl-exile svg { animation: gate-drop 5s cubic-bezier(0.5, 0, 0.75, 1.4) infinite; }
-@keyframes gate-drop { 0% { transform: translateY(-110%); } 10%, 82% { transform: translateY(0); } 92%, 100% { transform: translateY(-110%); } }
+/* on a page title the gate drops once as the page opens, then stays shut */
+.mark-live.nl-exile svg { animation: gate-drop-once 0.6s cubic-bezier(0.5, 0, 0.75, 1.4) 0.25s both; }
 /* Sandfall: an hourglass rests with its sand settled, turns over, then drips the sand back down */
 .nl-sandfall .sand-glass { transform-origin: 7px 7px; }
 .nl-sandfall .sand-top, .nl-sandfall .sand-bottom { transform-box: fill-box; transform-origin: 50% 100%; }
@@ -221,7 +220,8 @@ main { flex: 1; }
 .page-mark.nl-exile { width: 46px; height: 30px; overflow: hidden; }
 .page-mark.nl-sandfall { width: 34px; height: 34px; }
 .page-mark.nl-sandfall svg { stroke-width: 0.9; }
-.page-head p { max-width: 820px; margin: 0; font-size: 15px; color: var(--muted); }
+/* the intro runs three quarters of the page across, so it reads in a few long lines instead of a tall narrow block */
+.page-head p { max-width: 75%; margin: 0; font-size: 15px; color: var(--muted); }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .gold { color: var(--white); }
@@ -442,9 +442,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .check-list .check input { margin-top: 3px; }
 /* key and value rows: one column in a narrow box, side by side columns once the box is wide enough */
 .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 8px 64px; align-content: start; margin: 18px 0; padding: 14px 16px; border: 1px dashed var(--line-2); background: #000; }
+/* a note under a summary box, tied to an asterisk inside it */
+.footnote { margin: -8px 0 18px; font-size: 12.5px; line-height: 1.6; color: var(--faint); }
+.footnote a { color: var(--muted); }
 .row { display: flex; justify-content: space-between; align-items: center; gap: 4px 12px; font-size: 14px; flex-wrap: wrap; min-height: 24px; }
 .row-k { color: var(--muted); }
-.row-v { text-align: right; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+/* values are data (amounts, dates, durations), so they share the monospace the addresses and badges use */
+.row-v { text-align: right; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; font: 400 12.5px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
 
 /* sliders: once grabbed, a handle follows the pointer anywhere until it is let go (Slider.tsx) */
 .slider { position: relative; height: 28px; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -553,6 +557,17 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .table th.n, .table tbody.n1 td:nth-child(2), .table tbody.n2 td:nth-child(3), .table tbody.n3 td:nth-child(4), .table tbody.n4 td:nth-child(5), .table tbody.n5 td:nth-child(6), .table tbody.n6 td:nth-child(7), .table tbody.n7 td:nth-child(8), .table tbody.n8 td:nth-child(9) { text-align: right; font-family: var(--mono); font-size: 12.5px; }
 .table-search { max-width: 420px; margin-bottom: 14px; }
 .table-more { margin-top: 14px; }
+/* the lists card: a tab per token along an underline, then the wallet filter with the count beside it */
+.token-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; margin: 0 0 16px; border-bottom: 1px solid var(--line); }
+.token-tabs::-webkit-scrollbar { display: none; }
+.token-tab { flex: none; display: inline-flex; align-items: baseline; gap: 8px; padding: 10px 14px; margin-bottom: -1px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font: 600 12.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; transition: color 0.15s, border-color 0.15s; }
+.token-tab:hover { color: var(--text); }
+.token-tab.active { color: var(--white); border-bottom-color: var(--white); }
+.token-tab-n { font-weight: 400; font-size: 11px; color: var(--faint); }
+.token-tab.active .token-tab-n { color: var(--muted); }
+.rolls-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.rolls-bar .table-search { flex: 1 1 260px; margin: 0; }
+.rolls { scroll-margin-top: 84px; }
 .token-name { display: inline-flex; align-items: baseline; gap: 8px; }
 .token-name b { font: 600 12.5px var(--mono); letter-spacing: 0.04em; }
 .chart-wrap.held { position: relative; }
@@ -644,6 +659,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .menu-ca { align-self: flex-start; margin-top: 14px; }
   .stats-3 { grid-template-columns: repeat(2, 1fr); }
   .stats-3 .stat-feature { grid-column: 1 / -1; }
+  .page-head p { max-width: none; }
 }
 @keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
 @media (max-width: 560px) {
@@ -670,6 +686,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .tabs { align-self: stretch; }
   .tab { flex: 1; }
   .summary .row { flex-wrap: nowrap; }
+  .summary .row-k { white-space: nowrap; }
+  .rolls .card-head .tabs { display: flex; width: 100%; }
+  .rolls .card-head .tab { flex: 1; padding: 9px 8px; }
   .summary .row-v { min-width: 0; }
   .choice, .choice-4 { grid-template-columns: 1fr 1fr; }
   /* too narrow for five labels: keep every tick but name only every other one */

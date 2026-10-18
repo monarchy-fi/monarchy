@@ -5,7 +5,7 @@ import { exileAbi, lodestarAbi, lodestarFactoryAbi, mockERC20Abi } from "../abi"
 import { tagline, TierBadge } from "../components/Tiers";
 import { TxButton, WithApproval } from "../components/Tx";
 import { ConnectPrompt, NoDeployment } from "../components/States";
-import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
+import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym, TokenAddr } from "../components/Ui";
 import { Slider } from "../components/Slider";
 import { PageMark } from "../components/NavGlyphs";
 import { useDeployment, ZERO } from "../lib/deployments";
@@ -519,7 +519,7 @@ function LockCard({ exile, id, tiers: mainTiers, rewardMeta: mainReward, stakeMe
         <span className="muted mono">#{id.toString()}</span>
       </div>
       <div className="lock-body">
-        <Row k="Asset" v={<Addr address={lock.asset} />} />
+        <Row k="Asset" v={lock.kind === 0 ? <TokenAddr address={lock.asset} /> : <Addr address={lock.asset} />} />
         {lock.kind !== 0 && <Row k="Token id" v={lock.tokenId.toString()} />}
         <Row k="Amount" v={lock.kind === 1 ? "1" : fmt(lock.amount, amountDec)} />
         <Row k={ended ? "Unlocked" : "Unlocks in"} v={ended ? date(unlockAt) : `${duration(unlockAt - now)} (${date(unlockAt)})`} />
