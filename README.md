@@ -17,7 +17,7 @@
 
 [Website](https://monarchy.fi) · [Docs](https://docs.monarchy.fi) · [X](https://x.com/monarchyfi) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO.md) · [Testnet contracts](#live-on-elysium-testnet)
 
-<img src="docs/img/site-home.png" alt="The Monarchy home page: four tabs and the CA chip along the top, the name MONARCHY above a large spinning crown drawn in text characters, and the line Steal the crown below it" width="840" />
+<img src="docs/img/site-home.png" alt="The Monarchy home page: four tabs around a crown along the top with the CA chip on the right, the name MONARCHY above a large spinning crown drawn in text characters, and Steal the Crown in gold with the line The kingdom shares everything. The Monarch doesn't tax. below it" width="840" />
 
 </div>
 
@@ -107,7 +107,7 @@ contracts/src        Lodestar, LodestarFactory, AscendSwapper, Exile, Sandfall, 
 contracts/test       Foundry tests, including a full mock-Ascend integration test
 contracts/script     DeployMocks, DeployCore, LaunchOnAscend, ActivateLodestar, DemoFlow
 deployments/         <chainId>.json written by the scripts and read by the website
-web/                 Vite + React + wagmi site (dashboard, Lodestar, Exile, Sandfall)
+web/                 Vite + React + wagmi site (landing page, Kingdom overview, Lodestar, Exile, Sandfall)
 docs/                Architecture notes and the demo script
 tools/               demo-local.sh, export-abis.mjs, offline solc shim
 ```
