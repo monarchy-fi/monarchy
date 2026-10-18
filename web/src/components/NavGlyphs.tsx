@@ -85,7 +85,40 @@ export function CastleGlyph() {
   );
 }
 
-const MARKS = { kingdom: CastleGlyph, lodestar: StarGlyph, exile: GateGlyph, sandfall: HourglassGlyph };
+/**
+ * Analytics, a garden: everything planted in Monarchy grows in the open. Three plants rise from the soil like
+ * bars on a chart, the tallest in bloom; on hover they grow up one after another, sway, and the flower turns.
+ */
+export function GardenGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" aria-hidden="true">
+      <path d="M0.8 22.6H23.2" strokeWidth="0.8" />
+      <path d="M3 23.6h1.4M10 23.6h2.2M17.6 23.6h1.6" strokeWidth="0.5" opacity="0.6" />
+      <g className="garden-plant">
+        <path d="M5 22.6V16.6" />
+        <path d="M5 18.8C3.2 18.8 2.2 17.6 2.2 16 4 16 5 17.1 5 18.8ZM5 17.4C6.8 17.4 7.8 16.2 7.8 14.6 6 14.6 5 15.7 5 17.4Z" fill="currentColor" fillOpacity="0.4" strokeWidth="0.7" />
+      </g>
+      <g className="garden-plant">
+        <path d="M12 22.6V11" />
+        <path d="M12 19.8C10 19.8 8.8 18.4 8.8 16.6 10.8 16.6 12 17.9 12 19.8ZM12 16.2C14 16.2 15.2 14.8 15.2 13 13.2 13 12 14.3 12 16.2Z" fill="currentColor" fillOpacity="0.4" strokeWidth="0.7" />
+        <path d="M10.1 7.4 11.05 8.7 12 7 12.95 8.7 13.9 7.4V9.3C13.9 10.4 13 11.1 12 11.1S10.1 10.4 10.1 9.3Z" fill="currentColor" stroke="none" />
+      </g>
+      <g className="garden-plant">
+        <path d="M19 22.6V6" />
+        <path d="M19 18.2C17 18.2 15.8 16.8 15.8 15 17.8 15 19 16.3 19 18.2ZM19 13.4C21 13.4 22.2 12 22.2 10.2 20.2 10.2 19 11.5 19 13.4Z" fill="currentColor" fillOpacity="0.4" strokeWidth="0.7" />
+        <g className="garden-bloom" fill="currentColor" stroke="none">
+          <circle cx="19" cy="2.15" r="1.3" />
+          <circle cx="20.85" cy="4" r="1.3" />
+          <circle cx="19" cy="5.85" r="1.3" />
+          <circle cx="17.15" cy="4" r="1.3" />
+          <circle cx="19" cy="4" r="0.85" fill="#000" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+const MARKS = { kingdom: CastleGlyph, lodestar: StarGlyph, exile: GateGlyph, sandfall: HourglassGlyph, analytics: GardenGlyph };
 
 /** A page's mark, drawn left of its title and always in motion. */
 export function PageMark({ page }: { page: keyof typeof MARKS }) {

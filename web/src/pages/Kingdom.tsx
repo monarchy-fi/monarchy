@@ -6,7 +6,8 @@ import { TokenFeeFlow } from "../components/FeeFlow";
 import { GateGlyph, HourglassGlyph, PageMark, StarGlyph } from "../components/NavGlyphs";
 import { NoDeployment } from "../components/States";
 import { tagline, TierBadge } from "../components/Tiers";
-import { Amt, Card, Skel, Stat, Sym } from "../components/Ui";
+import { Addr, Amt, Badge, Card, Skel, Stat } from "../components/Ui";
+import { MONARCHY_CA } from "../lib/constants";
 import { useDeployment } from "../lib/deployments";
 import { fmt, label, mult } from "../lib/format";
 import { POLL, usePageTitle } from "../lib/hooks";
@@ -37,13 +38,16 @@ export function KingdomPage() {
       { address: core.token, abi: mockERC20Abi, functionName: "balanceOf", args: [DEAD] },
       { address: core.token, abi: mockERC20Abi, functionName: "totalSupply" },
       { address: d?.exile, abi: exileAbi, functionName: "poolInfo", args: [core.exilePoolId ?? 0n] },
+      { ...l, functionName: "creatorLockedUntil" },
     ],
     query: { enabled: !!core.lodestar && !!core.token && core.exilePoolId !== undefined, ...POLL.query },
   });
-  const [feeBurned, buybackBurned, holders, treasury, buybackQuote, dead, supply, pool] = stats.data ?? [];
+  const [feeBurned, buybackBurned, holders, treasury, buybackQuote, dead, supply, pool, lockedUntil] = stats.data ?? [];
   const now = BigInt(Math.floor(Date.now() / 1000));
   const dripPerDay = pool ? (pool.periodFinish > now ? (pool.rewardRate * 86400n) / 10n ** 18n : 0n) : undefined;
   const drip = useDripDays();
+  // until MONARCHY is the token this deployment's Lodestar routes for, the sample token's numbers fill the card
+  const standIn = !!ts && !!core.token && core.token.toLowerCase() !== MONARCHY_CA?.toLowerCase();
   const burnShare = dead !== undefined && supply ? `${fmt((dead * 10_000n) / supply, 2, 2)}% of supply` : undefined;
 
   return (
@@ -85,17 +89,19 @@ export function KingdomPage() {
       {d && core.lodestar && (
         <Card
           className="kingdom"
-          title={
-            <>
-              The <Sym s={ts} /> kingdom
-            </>
-          }
+          title="The Monarchy"
           right={
             <span className="live">
               <i className="live-dot" /> Live from Lodestar
             </span>
           }
         >
+          <p className="kingdom-lead">
+            Most tokens ask holders to trust the team with the fees. <b>MONARCHY runs on its own tools instead</b>, the same
+            contracts it offers every Ascend token, with the same zero fees and the same timelocks. Nothing here is special to it,
+            and all of it can be checked on chain.
+            {standIn && <span className="faint"> Until MONARCHY launches, the sample token {ts} stands in.</span>}
+          </p>
           <div className="stats stats-3">
             <Stat className="stat-feature" label="Burned in total" value={<Amt value={dead} decimals={td} symbol={ts} compact />} hint={burnShare ?? <Skel w="7em" />} />
             <Stat label="Paid to holders" value={<Amt value={holders} decimals={qd} symbol={qs} />} hint={dripPerDay === undefined ? <Skel w="8em" /> : `${fmt(dripPerDay, qd)} ${qs ?? ""} a day dripping now`} />
@@ -104,6 +110,32 @@ export function KingdomPage() {
             <Stat label="Burned from token fees" value={<Amt value={feeBurned} decimals={td} symbol={ts} compact />} hint="Sent straight to the burn address" />
             <Stat label="Locked points" value={<Amt value={pool?.totalPoints} decimals={td} compact />} hint="Amount times tier multiplier" />
           </div>
+          <ul className="dogfood" aria-label="How MONARCHY uses its own tools">
+            <li>
+              <span className="kicker">Its fees</span>
+              <b>Lodestar</b>
+              <span>
+                Holds the creator role: <Addr address={core.lodestar} />
+              </span>
+              {lockedUntil === undefined ? <Skel w="10em" /> : lockedUntil >= 2n ** 63n ? <Badge tone="gold">Locked to it forever</Badge> : <Badge tone="amber">Not locked yet</Badge>}
+            </li>
+            <li>
+              <span className="kicker">Its holders</span>
+              <b>Exile</b>
+              <span>Lock it to earn the holder share of every fee, by tier.</span>
+              <Link className="dogfood-go" to={core.token ? `/analytics?q=${core.token}` : "/analytics"}>
+                See every lock <span aria-hidden="true">→</span>
+              </Link>
+            </li>
+            <li>
+              <span className="kicker">Its team</span>
+              <b>Sandfall</b>
+              <span>The Team Treasury share streams out in the open, never in one lump.</span>
+              <Link className="dogfood-go" to="/sandfall">
+                Watch it vest <span aria-hidden="true">→</span>
+              </Link>
+            </li>
+          </ul>
         </Card>
       )}
 

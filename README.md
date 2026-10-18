@@ -29,6 +29,19 @@ Ascend has no token, and its NFT is capped at 500. People who want a piece of As
 
 On Ascend the creator role collects half of every 1% swap fee, in both the token and the quote asset. Without Monarchy that money sits in one wallet, holders earn nothing for holding, and promises about buybacks or vesting can't be checked on chain. Monarchy replaces those promises with contracts.
 
+## Monarchy runs on Monarchy
+
+The MONARCHY token gets no special treatment. It launches on Ascend like any other token and runs on the same contracts Monarchy offers everyone, with the same zero fees, the same 12 hour timelock and the same 7 day notice before a router can move. Most tokens ask holders to trust the team with the fees; MONARCHY's are handled by code anyone can read and check.
+
+| | How MONARCHY uses it |
+|---|---|
+| **Lodestar** | Its creator role goes to its own Lodestar, locked there forever. Token-side fees are burned or paid to lockers, and the quote side splits into buyback and burn, holder rewards and the Team Treasury. |
+| **Exile** | Holders lock MONARCHY to earn the holder share of every fee, by tier from Peasant to Monarch. |
+| **Sandfall** | The Team Treasury share streams to the team in the open, never in one lump. |
+| **Analytics** | Every lock, vesting stream and fee router, MONARCHY's included, is listed live from the contracts on [monarchy.fi/analytics](https://monarchy.fi/analytics). |
+
+On testnet, Sample Token (SMPL) stands in for MONARCHY with exactly this setup.
+
 ## How it works
 
 ```mermaid
@@ -72,7 +85,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [SECURI
 
 ## Live on Elysium testnet
 
-Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its creator role held by a Lodestar. Every feature has been exercised on chain through the real PancakeSwap Infinity pool: fee burns, an EMA-guarded buyback, holder rewards dripping to Exile locks at several tiers, the Team Treasury stream, lock extension, a config change waiting out its 12 hour timelock, and a creator role locked to the router forever that refuses to move except through the 7 day upgrade path. A second token, Sample Stock Token (SMPLS), is quoted in the mock NVDA stock token (mNVDAx) and sends its token-side fees to Exile lockers, so lockers earn and claim both SMPLS and mNVDAx, while the buyback, holder rewards and treasury run in mNVDAx. Contract sources are verified on the explorer.
+Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its creator role held by a Lodestar. Every feature has been exercised on chain through the real PancakeSwap Infinity pool: fee burns, an EMA-guarded buyback, holder rewards dripping to Exile locks at several tiers, the Team Treasury stream, lock extension, a config change waiting out its 12 hour timelock, and a creator role locked to the router forever that refuses to move except through the 7 day upgrade path. A second token, Sample Stock Token (SMPLS), is quoted in a mock stock token and sends its token-side fees to Exile lockers, so lockers earn and claim both SMPLS and the stock token, while the buyback, holder rewards and treasury run in the stock token. Contract sources are verified on the explorer.
 
 | Contract | Address |
 |---|---|
@@ -83,7 +96,7 @@ Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its cre
 | AscendSwapper | [`0x39Cc4Dd18d4D00e996AfE06c7180c173aa768aD0`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x39Cc4Dd18d4D00e996AfE06c7180c173aa768aD0) |
 | Sample Token (SMPL) | [`0x3abA3a1FC9ea0AfF716b4663b48e0fe5bf7992DA`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x3abA3a1FC9ea0AfF716b4663b48e0fe5bf7992DA) |
 | SMPL Lodestar | [`0x2859676A7ee0125a3c41557D3524e309B29bF84d`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x2859676A7ee0125a3c41557D3524e309B29bF84d) |
-| Sample Stock Token (SMPLS, quoted in mNVDAx) | [`0x828CDD440dc05a429c6153ff46c9491fdb2bedae`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x828CDD440dc05a429c6153ff46c9491fdb2bedae) |
+| Sample Stock Token (SMPLS, quoted in a mock stock token) | [`0x828CDD440dc05a429c6153ff46c9491fdb2bedae`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x828CDD440dc05a429c6153ff46c9491fdb2bedae) |
 | SMPLS Lodestar | [`0xb977Da1493be24762B349F3dB9257B4AAdF74F13`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xb977Da1493be24762B349F3dB9257B4AAdF74F13) |
 
 <details>
@@ -96,7 +109,7 @@ Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its cre
 | PancakeSwap Infinity CLPoolManager | `0x12E84206cB53aE0df055482ebc4658635096E1aA` |
 | Infinity Vault | `0x2B738A9A69b7a45C9dA6B519f6bE6efBfb912aec` |
 | Mock USDC (quote) | `0x84Cc00D13173f7016Bbab22A736dBf75A154cFE2` |
-| Mock NVDA stock token, mNVDAx (SMPLS quote) | `0xa7CDbE6342A2eF5f789BCdd3653c7f48c7F16A51` |
+| Mock stock token (SMPLS quote) | `0xa7CDbE6342A2eF5f789BCdd3653c7f48c7F16A51` |
 
 </details>
 
@@ -185,8 +198,8 @@ The keeper (`.github/workflows/distribute.yml`) calls `distribute()` every 3 hou
 
 | | |
 |---|---|
-| **Working** | Lodestar, Exile and Sandfall live on Elysium testnet with two demo tokens (USDC and stock quotes); burns, buybacks and token rewards to lockers proven on Ascend's pools; web app for all three at monarchy.fi; docs at docs.monarchy.fi; CI on every change |
-| **In progress** | An analytics page |
+| **Working** | Lodestar, Exile and Sandfall live on Elysium testnet with two demo tokens (USDC and stock quotes); burns, buybacks and token rewards to lockers proven on Ascend's pools; web app for all three at monarchy.fi, with an analytics page listing every lock, stream and router; docs at docs.monarchy.fi; CI on every change |
+| **In progress** | A testnet redeploy with the latest security review fixes |
 | **Before launch** | Third-party security audit, the upgrade multisig shared with the Ascend team, mainnet deploy, Monarchy token launch on Ascend |
 | **Next** | kHYPE treasury option, TWAP buybacks, Ascend NFT holder bonus in Exile, other launchpads, an indexer for history and APR charts |
 

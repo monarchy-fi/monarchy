@@ -3,11 +3,12 @@ import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useConnect, useConnection, useConnectors } from "wagmi";
 import { Connect } from "./components/Connect";
 import { CrownSolid } from "./components/Crown";
-import { CastleGlyph, GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
+import { CastleGlyph, GardenGlyph, GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
 import { NetworkNotice, TestnetStrip } from "./components/States";
 import { MONARCHY_CA } from "./lib/constants";
 import { short } from "./lib/format";
 import { useMock } from "./lib/wagmi";
+import { AnalyticsPage } from "./pages/Analytics";
 import { ExilePage } from "./pages/Exile";
 import { Home } from "./pages/Home";
 import { KingdomPage } from "./pages/Kingdom";
@@ -109,8 +110,11 @@ export function App() {
               <CrownSolid />
             </NavLink>
           </div>
-          {/* the four tabs, with the crown for home in the middle */}
+          {/* the garden for analytics, an icon on its own at the far left, then the four tabs with the crown for home in the middle */}
           <div className="nav-links">
+            <NavLink to="/analytics" className="nl nl-analytics nav-garden" aria-label="Analytics" data-tip="Analytics">
+              <GardenGlyph />
+            </NavLink>
             {LINKS.map((l, i) => (
               <Fragment key={l.to}>
                 {i === 2 && (
@@ -145,6 +149,12 @@ export function App() {
         </nav>
         {menuOpen && (
           <div className="menu" id="mobile-menu">
+            <NavLink to="/analytics" className="menu-link nl nl-analytics">
+              <span className="nl">
+                <span className="nl-word">Analytics</span>
+              </span>
+              <span className="menu-hint">Every lock and vest, in the open</span>
+            </NavLink>
             {LINKS.map((l) => (
               <NavLink key={l.to} to={l.to} className={`menu-link nl nl-${l.key}`}>
                 <span className="nl">
@@ -165,6 +175,7 @@ export function App() {
           <Route path="/lodestar" element={<LodestarPage />} />
           <Route path="/exile" element={<ExilePage />} />
           <Route path="/sandfall" element={<SandfallPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
