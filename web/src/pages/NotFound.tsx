@@ -9,6 +9,7 @@ export function NotFound() {
       <Card>
         <Empty
           title="No such hall in this castle"
+          heading
           action={
             <Link className="btn" to="/">
               Back to the throne room

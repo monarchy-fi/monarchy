@@ -68,7 +68,7 @@ export function KingdomPage() {
         </li>
         <li className="seal">
           <span className="seal-text">
-            <b>No upgrades, no sweep.</b> Funds can only go where the contracts say.
+            <b>No sweep.</b> Funds only go where the contracts say, and a router moves only after 7 days' notice.
           </span>
         </li>
         <li className="seal">

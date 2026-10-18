@@ -1,4 +1,4 @@
-import { formatUnits } from "viem";
+import { formatUnits, hexToString } from "viem";
 
 export function fmt(value: bigint | undefined, decimals = 18, digits = 2): string {
   if (value === undefined) return "…";
@@ -45,7 +45,6 @@ export function date(ts: number | bigint): string {
 export function label(b: string): string {
   // bytes32 tier labels are right-padded with zeros
   const hex = b.replace(/^0x/, "").replace(/(00)+$/, "");
-  let s = "";
-  for (let i = 0; i < hex.length; i += 2) s += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
-  return s;
+  // written with viem's stringToHex, which is UTF-8, so read it back the same way ("Königin" stays whole)
+  return hexToString(`0x${hex}`);
 }

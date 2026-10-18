@@ -14,6 +14,9 @@ import { NoDeployment } from "../components/States";
 import { Slider } from "../components/Slider";
 import { PageMark } from "../components/NavGlyphs";
 
+/** Lodestar.EXECUTION_WINDOW: how long a ready proposal can still be executed. */
+const EXECUTION_WINDOW = 7 * 86400;
+
 export function LodestarPage() {
   usePageTitle("Lodestar");
   const d = useDeployment();
@@ -145,6 +148,7 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
       { ...l, functionName: "upgradeTarget" },
       { ...l, functionName: "upgradeEta" },
       { address: d.factory, abi: lodestarFactoryAbi, functionName: "successor" },
+      { ...l, functionName: "upgradeFactory" },
     ],
     query: POLL.query,
   });
@@ -152,11 +156,17 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
   const upTarget = up.data?.[0]?.result;
   const upEta = up.data?.[1]?.result ?? 0n;
   const successor = up.data?.[2]?.result;
+  const upFactory = up.data?.[3]?.result;
   const [cfg, [pending, eta], preview, tokenBurned, buyQ, buyBurned, holdQ, treasQ, reserve, lockedUntil, isCreator, lastAt, tokenToHolders] = r.data;
   const [election, owed] = listing.data ?? [0n, 0n];
   const qd = core.quoteMeta?.decimals ?? 6;
   const qs = core.quoteMeta?.symbol;
   const ts = core.tokenMeta?.symbol;
+  // a ready proposal has to be carried out within 7 days (Lodestar.EXECUTION_WINDOW), or it reverts ProposalExpired
+  const cfgExpired = eta > 0n && now > Number(eta) + EXECUTION_WINDOW;
+  const upExpired = upEta > 0n && now > Number(upEta) + EXECUTION_WINDOW;
+  // the move only goes through to the successor it was proposed for
+  const successorMoved = !!upFactory && successor !== undefined && successor.toLowerCase() !== upFactory.toLowerCase();
   const listingLive = election !== 0n && (election & ((1n << 160n) - 1n)) === BigInt(lodestar);
   const isSteward = !!address && address.toLowerCase() === core.steward?.toLowerCase();
   const lockForever = lockedUntil >= 2n ** 63n;
@@ -228,9 +238,9 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         <Card title="Pending split change" right={<Badge tone="amber">12 hour timelock</Badge>}>
           <SplitBar burn={pending.burnBps} holders={pending.holdersBps} treasury={pending.treasuryBps} />
           <Row k="Token-side fees" v={pending.tokenToHolders ? "All paid to Exile lockers" : "All burned"} />
-          <Row k="Executable" v={Number(eta) > now ? `in ${duration(Number(eta) - now)} (${date(eta)})` : "now"} />
+          <Row k="Executable" v={Number(eta) > now ? `in ${duration(Number(eta) - now)} (${date(eta)})` : cfgExpired ? `expired ${date(Number(eta) + EXECUTION_WINDOW)}` : `now, until ${date(Number(eta) + EXECUTION_WINDOW)}`} />
           <div className="lock-actions">
-            <TxButton disabledReason={Number(eta) > now ? "Timelock still running" : undefined} request={() => ({ ...l, functionName: "executeConfig" })}>
+            <TxButton disabledReason={Number(eta) > now ? "Timelock still running" : cfgExpired ? "Expired, the steward can propose it again" : undefined} request={() => ({ ...l, functionName: "executeConfig" })}>
               Execute
             </TxButton>
             {isSteward && (
@@ -249,9 +259,14 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
             notice ends. Locked tokens and vesting streams stay where they are.
           </p>
           <Row k="New router" v={<Addr address={upTarget} />} />
-          <Row k="Executable" v={Number(upEta) > now ? `in ${duration(Number(upEta) - now)} (${date(upEta)})` : "now"} />
+          <Row k="Executable" v={Number(upEta) > now ? `in ${duration(Number(upEta) - now)} (${date(upEta)})` : upExpired ? `expired ${date(Number(upEta) + EXECUTION_WINDOW)}` : `now, until ${date(Number(upEta) + EXECUTION_WINDOW)}`} />
           <div className="lock-actions">
-            <TxButton disabledReason={Number(upEta) > now ? "The 7 day notice is still running" : undefined} request={() => ({ ...l, functionName: "executeUpgrade" })}>
+            <TxButton
+              disabledReason={
+                Number(upEta) > now ? "The 7 day notice is still running" : upExpired ? "Expired, the steward can propose it again" : successorMoved ? "Monarchy named a different newer factory since" : undefined
+              }
+              request={() => ({ ...l, functionName: "executeUpgrade" })}
+            >
               Execute upgrade
             </TxButton>
             {isSteward && (
@@ -326,7 +341,7 @@ function Steward({
         <p className="muted small">Locked for good. The fee stream can only leave this router by an upgrade to a newer Lodestar, below.</p>
       ) : (
         <>
-          <p className="muted small">Promise holders the router can't be swapped out, ever. Current lock: {lockedUntil > 0n ? `until ${date(lockedUntil)}` : "none"}.</p>
+          <p className="muted small">Promise holders the fee stream stays with this router, apart from an upgrade announced 7 days ahead. Current lock: {lockedUntil > 0n ? `until ${date(lockedUntil)}` : "none"}.</p>
           <label className="check">
             <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
             Lock it for good. I understand I can't unlock it later.
@@ -411,6 +426,10 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
   // or presses "Use my wallet", and the button stays off until the field holds a valid address.
   const recipient = isAddress(treasury) ? treasury : undefined;
   const badTreasury = treasury !== "" && !isAddress(treasury);
+  // the same rules Exile and Sandfall check on deploy, so the button never sends a deploy that has to revert
+  const tierProblem = tierRules(tiers);
+  const windowBad = !(windowDays >= 1 && windowDays <= 365);
+  const capOk = /^\d+(\.\d+)?$/.test(cap) && Number(cap) > 0;
 
   return (
     <Card title="Activate Lodestar" right={<Badge tone="grey">2 transactions</Badge>}>
@@ -447,14 +466,15 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
             <div className="tier-edit">
               {tiers.map((t, i) => (
                 <div key={i} className="tier-edit-row">
-                  <input className="input input-sm" value={t.name} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-                  <input className="input input-sm" type="number" value={t.days} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, days: Number(e.target.value) } : x)))} />
+                  <input className="input input-sm" aria-label={`Tier ${i + 1} name`} value={t.name} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                  <input className="input input-sm" type="number" aria-label={`Tier ${i + 1} length in days`} value={t.days} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, days: Number(e.target.value) } : x)))} />
                   <span className="muted small">days</span>
-                  <input className="input input-sm" type="number" step="0.1" value={t.mult} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, mult: Number(e.target.value) } : x)))} />
+                  <input className="input input-sm" type="number" step="0.1" aria-label={`Tier ${i + 1} multiplier`} value={t.mult} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, mult: Number(e.target.value) } : x)))} />
                   <span className="muted small">x {tagline(t.name) ? `· ${tagline(t.name)}` : ""}</span>
                 </div>
               ))}
             </div>
+            {tierProblem && <p className="warn small">{tierProblem}</p>}
             <div className="form">
               <label>
                 Team Treasury recipient
@@ -506,7 +526,25 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
           </div>
           <TxButton
             disabledReason={
-              !you ? "Only the current creator can activate" : !handedOver ? "Do step 1 first" : sum !== 100 ? `Splits add up to ${sum}%` : !recipient ? "Enter the Team Treasury recipient" : listing && !quoteMeta ? "Reading the quote asset" : listing && !(Number(cap) > 0) ? "Enter a savings goal" : deskOk.data && deskOk.data !== d.desk ? "Listing desk mismatch" : undefined
+              !you
+                ? "Only the current creator can activate"
+                : !handedOver
+                  ? "Do step 1 first"
+                  : sum !== 100
+                    ? `Splits add up to ${sum}%`
+                    : tierProblem
+                      ? "Fix the reward tiers"
+                      : !recipient
+                        ? "Enter the Team Treasury recipient"
+                        : windowBad
+                          ? "The stream window is 1 to 365 days"
+                          : listing && !quoteMeta
+                            ? "Reading the quote asset"
+                            : listing && !capOk
+                              ? "Enter a savings goal"
+                              : deskOk.data && deskOk.data !== d.desk
+                                ? "Listing desk mismatch"
+                                : undefined
             }
             request={() => recipient && ({
               address: d.factory,
@@ -520,7 +558,7 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
                   // the buyback route is the AscendSwapper this deployment recorded, never the factory's default of the day
                   cfg: { burnBps: split.burn * 100, holdersBps: split.holders * 100, treasuryBps: split.treasury * 100, swapper: d.swapper, maxSlippageBps: 1000, tokenToHolders: toHolders },
                   treasuryRecipient: recipient,
-                  treasuryWindow: windowDays * 86400,
+                  treasuryWindow: Math.round(windowDays * 86400),
                   tiers: tiers.map((t) => ({ minDuration: Math.round(t.days * 86400), multiplierBps: Math.round(t.mult * 10_000), label: stringToHex(t.name, { size: 32 }) })),
                   enrolListing: listing,
                   // the cap is in the pool's quote asset, whatever its decimals
@@ -540,6 +578,24 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
 }
 
 // ==================================================================== shared
+
+/** What Exile's _validateTiers would refuse, in words, or undefined when the tiers are fine. Checked on the
+ * values the deploy sends: seconds and basis points, rounded the same way. */
+function tierRules(tiers: { name: string; days: number; mult: number }[]): string | undefined {
+  if (tiers.length === 0 || tiers.length > 8) return "Use 1 to 8 tiers.";
+  const sec = (t: { days: number }) => Math.round(t.days * 86400);
+  const bps = (t: { mult: number }) => Math.round(t.mult * 10_000);
+  for (let i = 0; i < tiers.length; i++) {
+    const t = tiers[i];
+    if (!t.name.trim()) return `Tier ${i + 1} needs a name.`;
+    if (new TextEncoder().encode(t.name).length > 32) return `"${t.name}" is too long: names fit 32 bytes.`;
+    if (!(sec(t) >= 3600)) return `${t.name} must be at least 1 hour long.`;
+    if (!(bps(t) >= 1 && bps(t) <= 50_000)) return `${t.name}'s multiplier must be above 0x and at most 5x.`;
+    if (i > 0 && !(sec(t) > sec(tiers[i - 1]))) return `${t.name} must be longer than ${tiers[i - 1].name}.`;
+    if (i > 0 && bps(t) < bps(tiers[i - 1])) return `${t.name}'s multiplier can't be lower than ${tiers[i - 1].name}'s.`;
+  }
+  return undefined;
+}
 
 function LoadingCard() {
   return (

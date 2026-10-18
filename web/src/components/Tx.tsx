@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { useChainId, useConnection, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Abi, Address } from "viem";
@@ -56,9 +56,10 @@ export function TxButton({ request, children, disabledReason, onDone, className 
   async function send() {
     setError(undefined);
     setHash(undefined);
-    const req = request();
-    if (!req) return;
     try {
+      // inside the try: a request built from a bad input (a fraction where whole seconds go) throws here
+      const req = request();
+      if (!req) return;
       // Pinned to the chain the page reads from: if the wallet moved in the meantime, wagmi refuses to send
       // instead of sending the transaction somewhere else.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -156,12 +157,22 @@ export function WithApproval({
     args: address && spender ? [address, spender] : undefined,
     query: { enabled: !!token && !!address && !!spender, refetchInterval: 2000 },
   });
-  if (!token || !spender) return <>{children}</>;
-  if (allowance.data !== undefined && allowance.data >= amount) return <>{children}</>;
+  const enough = allowance.data !== undefined && allowance.data >= amount;
+  // The action spends the exact allowance, so the next poll can read 0 before its receipt is in. Remember
+  // that this amount was approved, so the action button stays up to show its own result.
+  const [approvedFor, setApprovedFor] = useState<bigint>();
+  useEffect(() => {
+    if (enough && amount > 0n) setApprovedFor(amount);
+    else if (approvedFor !== undefined && approvedFor !== amount) setApprovedFor(undefined);
+  }, [enough, amount, approvedFor]);
+  // With nothing to approve yet, the action button shows why it is off ("Enter an amount", "Enter a recipient").
+  // The keys keep the Approve button and the action button apart: without them React reuses one for the
+  // other, and the action button opens already "Confirmed" with the approval's hash (and fires its onDone).
+  if (!token || !spender || amount === 0n || enough || approvedFor === amount) return <Fragment key="action">{children}</Fragment>;
   return (
     <TxButton
+      key="approve"
       request={() => ({ address: token, abi: mockERC20Abi, functionName: "approve", args: [spender, amount] })}
-      disabledReason={amount === 0n ? "Enter an amount" : undefined}
     >
       Approve
     </TxButton>

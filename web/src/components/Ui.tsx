@@ -93,11 +93,12 @@ export function Row({ k, v }: { k: ReactNode; v: ReactNode }) {
 const EMPTY_GLYPH = ["  .   .   .  ", " /|\\ /|\\ /|\\ ", "+-----------+"].join("\n");
 
 /** A friendly empty state: a faint crown in ASCII, a line of text and an optional action. */
-export function Empty({ title, children, action }: { title?: ReactNode; children?: ReactNode; action?: ReactNode }) {
+/** `heading` makes the title the page's h1, for a page that is nothing but this card (the 404). */
+export function Empty({ title, children, action, heading }: { title?: ReactNode; children?: ReactNode; action?: ReactNode; heading?: boolean }) {
   return (
     <div className="empty">
       <span className="empty-glyph" aria-hidden="true">{EMPTY_GLYPH}</span>
-      {title && <div className="empty-title">{title}</div>}
+      {title && (heading ? <h1 className="empty-title">{title}</h1> : <div className="empty-title">{title}</div>)}
       {children && <p className="empty-body">{children}</p>}
       {action && <div className="empty-action">{action}</div>}
     </div>
