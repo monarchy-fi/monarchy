@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useConnect, useConnection, useConnectors } from "wagmi";
 import { Connect } from "./components/Connect";
-import { Crown } from "./components/Crown";
+import { Crown3D } from "./components/Crown";
 import { CastleGlyph, GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
 import { NetworkNotice, TestnetStrip } from "./components/States";
 import { MONARCHY_CA } from "./lib/constants";
@@ -17,8 +17,8 @@ import { SandfallPage } from "./pages/Sandfall";
 
 const LINKS = [
   { to: "/kingdom", label: "Kingdom", hint: "How it works and live stats", key: "kingdom", glyph: <CastleGlyph /> },
-  { to: "/lodestar", label: "Lodestar", hint: "Fee router", key: "lodestar", glyph: <StarGlyph /> },
   { to: "/exile", label: "Exile", hint: "Locks and rewards", key: "exile", glyph: <GateGlyph /> },
+  { to: "/lodestar", label: "Lodestar", hint: "Fee router", key: "lodestar", glyph: <StarGlyph /> },
   { to: "/sandfall", label: "Sandfall", hint: "Vesting", key: "sandfall", glyph: <HourglassGlyph /> },
 ];
 
@@ -106,7 +106,7 @@ export function App() {
         <nav className="nav" aria-label="Main">
           <div className="nav-left">
             <NavLink to="/" end className="nav-crown nav-crown-m" aria-label="Monarchy home">
-              <Crown size={22} />
+              <Crown3D />
             </NavLink>
           </div>
           {/* the four tabs, with the crown for home in the middle */}
@@ -115,7 +115,7 @@ export function App() {
               <Fragment key={l.to}>
                 {i === 2 && (
                   <NavLink to="/" end className="nav-crown" aria-label="Monarchy home">
-                    <Crown size={24} />
+                    <Crown3D />
                   </NavLink>
                 )}
                 <NavLink to={l.to} className={`nl nl-${l.key}`}>

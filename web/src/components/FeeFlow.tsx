@@ -20,9 +20,13 @@ type Dest = { key: string; mark: string; title: string; tag: string; body: strin
 /** Ascend pool fees, through Lodestar, out to the four places they can go: token-side fees on one route, quote-side fees split three ways. */
 export function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { drip: number; burn?: number; holders?: number; treasury?: number; tokenToHolders?: boolean }) {
   const share = (bps?: number) => (bps === undefined ? "Quote share" : `${pct(bps)} of quote fees`);
-  const tokenSide: Dest = tokenToHolders
-    ? { key: "fire", mark: "[+]", title: "Exile lockers", tag: "All token-side fees", body: `Paid to locked holders in the token itself, over ${drip} days.` }
-    : { key: "fire", mark: "[x]", title: "Burned", tag: "All token-side fees", body: "Sent straight to the burn address, or, if the creator chooses, paid to Exile lockers." };
+  const tokenSide: Dest = {
+    key: "fire",
+    mark: "[x|+]",
+    title: "Burned / sent to lockers",
+    tag: tokenToHolders === undefined ? "All token-side fees" : `All token-side fees, ${tokenToHolders ? "sent to lockers" : "burned"} right now`,
+    body: `Burned by default. The creator can send all of it to Exile lockers instead, paid in the token itself over ${drip} days.`,
+  };
   const quoteSide: Dest[] = [
     { key: "burn", mark: "[∞]", title: "Buyback and burn", tag: share(burn), body: "Buys the token on Ascend, then burns it." },
     { key: "hold", mark: "[+]", title: "Exile holders", tag: share(holders), body: `Paid to locked holders by tier, over ${drip} days.` },
