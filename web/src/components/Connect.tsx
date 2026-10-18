@@ -2,6 +2,7 @@ import { useConnect, useConnection, useConnectors, useDisconnect, useSwitchChain
 import { chainName } from "../lib/chains";
 import { short } from "../lib/format";
 import { useNetwork } from "../lib/network";
+import { shortError } from "./Tx";
 import { Spinner } from "./Ui";
 
 export function Connect({ className }: { className?: string }) {
@@ -13,12 +14,22 @@ export function Connect({ className }: { className?: string }) {
 
   if (!isConnected) {
     const c = connectors[0];
+    // without a browser wallet the injected connector throws ProviderNotFoundError; say so on the button
+    const noWallet = (connect.error as Error | null)?.name === "ProviderNotFoundError";
     return (
-      <button className={`btn ${className ?? ""}`} disabled={!c || connect.isPending} onClick={() => c && connect.mutate({ connector: c })}>
+      <button
+        className={`btn ${className ?? ""}`}
+        disabled={!c || connect.isPending}
+        onClick={() => c && connect.mutate({ connector: c })}
+        title={noWallet ? "Install a browser wallet such as MetaMask or Rabby, then try again" : connect.error ? shortError(connect.error) : undefined}
+        aria-live="polite"
+      >
         {connect.isPending ? (
           <>
             <Spinner /> Connecting
           </>
+        ) : noWallet ? (
+          "No wallet found"
         ) : (
           "Connect wallet"
         )}
@@ -26,7 +37,7 @@ export function Connect({ className }: { className?: string }) {
     );
   }
   return (
-    <button className={`btn btn-ghost wallet ${className ?? ""}`} onClick={() => disconnect()} title="Disconnect">
+    <button className={`btn btn-ghost wallet ${className ?? ""}`} onClick={() => disconnect()} title="Disconnect" aria-label={`Disconnect ${address}`}>
       <i className={`wallet-dot ${wrongNetwork ? "wallet-dot-warn" : ""}`} />
       <span className="mono">{short(address)}</span>
     </button>

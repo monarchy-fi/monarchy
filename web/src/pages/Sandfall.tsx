@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { useConnection, useReadContracts } from "wagmi";
+import { useBalance, useConnection, useReadContract, useReadContracts } from "wagmi";
 import { formatUnits, isAddress, type Address } from "viem";
 import { mockERC20Abi, sandfallAbi } from "../abi";
 import { TxButton, WithApproval } from "../components/Tx";
@@ -15,7 +15,11 @@ import { UnlockChart, unlockedAt } from "../components/UnlockChart";
 import { Slider } from "../components/Slider";
 import { PageMark } from "../components/NavGlyphs";
 
-const KINDS = ["Linear", "Monthly steps", "Rolling"];
+const KINDS = ["Linear", "Steps", "Rolling"];
+/** A step stream's badge, named by its step when it is one the form offers. */
+function stepTitle(stepSeconds: number): string {
+  return stepSeconds === 86400 ? "Daily steps" : stepSeconds === 7 * 86400 ? "Weekly steps" : stepSeconds === 30 * 86400 ? "Monthly steps" : "Steps";
+}
 
 export function SandfallPage() {
   usePageTitle("Sandfall");
@@ -197,13 +201,17 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
     ],
     query: { enabled: !!asset && !isNative, staleTime: Infinity },
   });
+  const { address } = useConnection();
+  const bal = useReadContract({ address: asset, abi: mockERC20Abi, functionName: "balanceOf", args: [address ?? ZERO], query: { enabled: !!asset && !isNative && !!address, ...POLL.query } });
+  const native = useBalance({ address, query: { enabled: isNative && !!address, ...POLL.query } });
+  const balance = isNative ? native.data?.value : bal.data;
   const decimals = isNative ? 18 : Number(meta.data?.[0] ?? 18);
   const sym = isNative ? "HYPE" : (meta.data?.[1] ?? (assetChoice === "quote" ? quoteSymbol : assetChoice === "token" ? tokenSymbol : "")) ?? "";
   const value = safeParse(amount, decimals);
 
   // streams start a minute out so the transaction lands before the stream begins
   const startFor = (t: number) => t + 60;
-  const lengthS = lengthPick === "custom" ? length * UNITS[lengthUnit] : lengthPick;
+  const lengthS = lengthPick === "custom" ? Math.round(length * UNITS[lengthUnit]) : lengthPick;
   // the cliff can only be picked from lengths shorter than the stream, so it always ends before the stream does
   const cliffOpts = CLIFFS.filter((c) => c < lengthS);
   const cliffIdx = Math.max(0, cliffOpts.filter((c) => c <= cliffWant).length - 1);
@@ -216,19 +224,22 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
   const start = startFor(now);
   const schedule = { start, cliff: start + cliffS, end: start + lengthS, step };
 
+  const overBalance = balance !== undefined && value > balance;
   const reason = !asset
     ? "Pick a token"
     : !isAddress(recipient)
       ? "Enter a recipient"
       : value === 0n
         ? "Enter an amount"
-        : lengthS === 0
-          ? "Set how long it vests"
-          : cliffS >= lengthS
-            ? "The cliff must end before the stream does"
-            : step > lengthS
-              ? "Each unlock step must fit inside the stream"
-              : undefined;
+        : overBalance
+          ? "More than your balance"
+          : lengthS === 0
+            ? "Set how long it vests"
+            : cliffS >= lengthS
+              ? "The cliff must end before the stream does"
+              : step > lengthS
+                ? "Each unlock step must fit inside the stream"
+                : undefined;
 
   const total = Number(formatUnits(value, decimals));
   const periods = step ? Math.ceil(lengthS / step) : 0;
@@ -270,7 +281,7 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
                 { v: "other", title: "Other", sub: "Any ERC-20" },
               ]}
             />
-            {assetChoice === "other" && <input className="input" placeholder="Token address, 0x…" value={other} onChange={(e) => setOther(e.target.value.trim())} />}
+            {assetChoice === "other" && <input className="input" aria-label="Token address" placeholder="Token address, 0x…" value={other} onChange={(e) => setOther(e.target.value.trim())} />}
           </Step>
 
           <Step n={2} title="Recipient and amount">
@@ -292,7 +303,7 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
               cols={4}
               options={[...LENGTHS.map((l) => ({ v: l.v as number | "custom", title: l.title })), { v: "custom", title: "Custom" }]}
             />
-            {lengthPick === "custom" && <SpanInput value={length} unit={lengthUnit} onValue={setLength} onUnit={setLengthUnit} min={1} />}
+            {lengthPick === "custom" && <SpanInput label="Custom length" value={length} unit={lengthUnit} onValue={setLength} onUnit={setLengthUnit} min={1} />}
             <CliffSlider options={cliffOpts} index={cliffIdx} length={lengthS} onPick={setCliffWant} />
             <span className="field-label">Unlocks</span>
             <Choice
@@ -337,7 +348,7 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
             <Row k="Fully vested" v={date(schedule.end)} />
             <Row k="Cancellable" v={cancellable === "yes" ? <Badge tone="amber">By me</Badge> : <Badge tone="green">No</Badge>} />
           </div>
-          {isNative ? send : <WithApproval token={asset} spender={sandfall} amount={value}>{send}</WithApproval>}
+          {isNative ? send : <WithApproval token={asset} spender={sandfall} amount={reason ? 0n : value}>{send}</WithApproval>}
         </aside>
       </div>
     </Card>
@@ -409,7 +420,7 @@ function StreamCard({ sandfall, id, rollingTitle }: { sandfall: Address; id: big
     <div className="lock">
       <div className="lock-top">
         <div className="lock-badges">
-          <Badge tone="silver">{rollingTitle && rolling ? `Rolling ${Number(s.window) / 86400} day stream` : KINDS[s.kind]}</Badge>
+          <Badge tone="silver">{rollingTitle && rolling ? `Rolling ${Number(s.window) / 86400} day stream` : s.kind === 1 ? stepTitle(Number(s.stepSeconds)) : KINDS[s.kind]}</Badge>
           {s.cancelled ? <Badge tone="red">Cancelled</Badge> : s.cancellable ? <Badge tone="amber">Cancellable</Badge> : <Badge tone="green">Not cancellable</Badge>}
         </div>
         <span className="muted mono">#{id.toString()}</span>
@@ -433,6 +444,9 @@ function StreamCard({ sandfall, id, rollingTitle }: { sandfall: Address; id: big
         {!rolling && Number(s.cliff) > Number(s.start) && <Row k="Cliff" v={date(Number(s.cliff))} />}
         {rolling ? (
           <Row k="Window" v={`${Number(s.window) / 86400} days, refilled by each top-up`} />
+        ) : s.cancelled ? (
+          // cancel stops vesting: what had vested stays claimable, the rest went back to the creator
+          <Row k="Vesting" v="Stopped when it was cancelled" />
         ) : (
           <Row k="Fully vested" v={finish > now ? `in ${duration(finish - now)}` : date(finish)} />
         )}

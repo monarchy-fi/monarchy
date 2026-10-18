@@ -12,7 +12,7 @@ import { useDeployment, ZERO } from "../lib/deployments";
 import { date, duration, fmt, label, mult } from "../lib/format";
 import { POLL, useNow, usePageTitle, useTicking } from "../lib/hooks";
 import { DISTRIBUTE_NOTE } from "../lib/constants";
-import { dayLabel, useDripDays, useLodestarCore, type TokenMeta } from "../lib/monarchy";
+import { dayLabel, useDripDays, useLodestarCore, useTokenMeta, type TokenMeta } from "../lib/monarchy";
 import { days } from "./Home";
 
 type Tier = { minDuration: number; multiplierBps: number; label: `0x${string}` };
@@ -131,7 +131,9 @@ function LockForm({
   const [amount, setAmount] = useState("");
   const [seconds, setSeconds] = useState(30 * 86400);
   const drip = useDripDays();
-  const rewards = !!poolId && tiers.length > 0;
+  // While the pool is loading (or its read failed) the lock still belongs in it: wait rather than fall back
+  // to poolId 0, which would make a permanent lock that never earns.
+  const rewards = !!poolId || tiersLoading;
   const meta = useReadContracts({
     allowFailure: false,
     contracts: [
@@ -144,7 +146,10 @@ function LockForm({
   const [decimals, symbol, balance] = meta.data ?? [tokenMeta?.decimals ?? 18, tokenMeta?.symbol ?? "", undefined];
   const value = safeParse(amount, Number(decimals));
   const tier = rewards ? pickTier(tiers, seconds) : undefined;
-  const unlockAt = Math.floor(Date.now() / 1000) + seconds + BUFFER;
+  // Exile rounds every unlock time up to the next hour, so the preview does too
+  const unlockAt = ceilHour(Math.floor(Date.now() / 1000) + seconds + BUFFER);
+  const overBalance = balance !== undefined && value > (balance as bigint);
+  const reason = !token ? "Enter the token or LP address" : tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : overBalance ? "More than your balance" : undefined;
 
   return (
     <>
@@ -208,9 +213,10 @@ function LockForm({
             {rewards && value > 0n && tier && <Row k="Points" v={fmt((value * BigInt(tier.multiplierBps)) / 10_000n, Number(decimals))} />}
             <Row k="Cancellable" v={<Badge tone="green">Not cancellable</Badge>} />
           </div>
-          <WithApproval token={token} spender={exile} amount={value}>
+          {/* Approve is only offered once the lock itself could go through */}
+          <WithApproval token={token} spender={exile} amount={reason ? 0n : value}>
             <TxButton
-              disabledReason={!token ? "Enter the token or LP address" : rewards && tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : undefined}
+              disabledReason={reason}
               request={() =>
                 token && {
                   address: exile,
@@ -281,7 +287,7 @@ function SomethingElse({ exile, factory }: { exile: Address; factory: Address })
           </p>
           {token && !checking && (
             <div style={{ marginTop: 16 }}>
-              <LockForm key={token} exile={exile} token={token} poolId={router ? pid.data : 0n} tiers={router ? tiers : []} tiersLoading={false} />
+              <LockForm key={token} exile={exile} token={token} poolId={router ? pid.data : 0n} tiers={router ? tiers : []} tiersLoading={!!router && (!pid.data || !pool.data)} />
             </div>
           )}
         </>
@@ -379,6 +385,7 @@ function LockNfts({ exile }: { exile: Address }) {
   });
   const unlockAt = BigInt(Math.floor(Date.now() / 1000) + seconds + BUFFER);
   const tokenId = /^\d+$/.test(id) ? BigInt(id) : undefined;
+  const count = /^\d+$/.test(amount) ? BigInt(amount) : 0n;
   return (
     <>
       <p className="muted small">ERC-721 or ERC-1155. NFT locks hold the item until the unlock date and don't earn rewards.</p>
@@ -407,16 +414,18 @@ function LockNfts({ exile }: { exile: Address }) {
       </div>
       <DurationSlider seconds={seconds} onChange={setSeconds} tiers={[]} />
       {ok && approved.data === false ? (
-        <TxButton request={() => ({ address: collection as Address, abi: erc721Abi, functionName: "setApprovalForAll", args: [exile, true] })}>
+        // keyed apart from the lock button, so it doesn't inherit the approval's "Confirmed"
+        <TxButton key="approve" request={() => ({ address: collection as Address, abi: erc721Abi, functionName: "setApprovalForAll", args: [exile, true] })}>
           Approve collection
         </TxButton>
       ) : (
         <TxButton
-          disabledReason={!ok ? "Enter a collection" : tokenId === undefined ? "Enter a token id" : undefined}
+          key="lock"
+          disabledReason={!ok ? "Enter a collection" : tokenId === undefined ? "Enter a token id" : kind === "1155" && count === 0n ? "Enter a whole amount" : undefined}
           request={() =>
             kind === "721"
               ? { address: exile, abi: exileAbi, functionName: "lockERC721", args: [collection as Address, tokenId!, unlockAt] }
-              : { address: exile, abi: exileAbi, functionName: "lockERC1155", args: [collection as Address, tokenId!, BigInt(amount || "0"), unlockAt] }
+              : { address: exile, abi: exileAbi, functionName: "lockERC1155", args: [collection as Address, tokenId!, count, unlockAt] }
           }
         >
           Lock NFT
@@ -454,7 +463,7 @@ function MyLocks({ exile, tiers, rewardMeta, stakeMeta }: { exile: Address; tier
   );
 }
 
-function LockCard({ exile, id, tiers, rewardMeta, stakeMeta }: { exile: Address; id: bigint; tiers: readonly Tier[]; rewardMeta?: TokenMeta; stakeMeta?: TokenMeta }) {
+function LockCard({ exile, id, tiers: mainTiers, rewardMeta: mainReward, stakeMeta: mainStake }: { exile: Address; id: bigint; tiers: readonly Tier[]; rewardMeta?: TokenMeta; stakeMeta?: TokenMeta }) {
   const base = { address: exile, abi: exileAbi } as const;
   const r = useReadContracts({
     allowFailure: false,
@@ -478,13 +487,20 @@ function LockCard({ exile, id, tiers, rewardMeta, stakeMeta }: { exile: Address;
     functionName: "decimals",
     query: { enabled: !!lock && lock.kind === 0, staleTime: Infinity },
   });
+  // a lock made under "Something else" sits in that token's pool, with its own tiers and reward tokens
+  const own = useReadContract({ ...base, functionName: "poolInfo", args: [lock?.poolId ?? 0n], query: { enabled: !!lock && lock.poolId !== 0n, ...POLL.query } });
+  const [ownReward, ownStake] = useTokenMeta([own.data?.rewardToken, own.data?.stakeToken]);
   if (!lock) return <div className="lock skeleton" />;
+  const tiers = (own.data?.tiers ?? mainTiers) as readonly Tier[];
+  const rewardMeta = own.data ? ownReward : mainReward;
+  const stakeMeta = own.data ? ownStake : mainStake;
 
   const unlockAt = Number(lock.unlockAt);
   const ended = now >= unlockAt;
   const kind = ["Token", "ERC-721", "ERC-1155"][lock.kind];
   const tier = tiers.find((t) => t.multiplierBps === lock.multiplierBps);
-  const name = lock.poolId === 0n ? "" : tier ? label(tier.label) : "";
+  // after a tier change no tier may match the multiplier a lock was made with; show the multiplier then
+  const name = lock.poolId === 0n || !lock.multiplierBps ? "" : tier ? label(tier.label) : mult(lock.multiplierBps);
   const newUnlock = Math.max(unlockAt, now) + extendDays * 86400;
   const newTier = pickTier(tiers, newUnlock - now);
   const rd = rewardMeta?.decimals ?? 6;
@@ -543,9 +559,9 @@ function LockCard({ exile, id, tiers, rewardMeta, stakeMeta }: { exile: Address;
         )}
         {!lock.withdrawn && (
           <div className="extend">
-            <input className="input input-sm" type="number" min={1} value={extendDays} onChange={(e) => setExtendDays(Number(e.target.value))} />
+            <input className="input input-sm" type="number" min={1} step={1} aria-label="Extend by this many days" value={extendDays} onChange={(e) => setExtendDays(Number(e.target.value))} />
             <span className="muted small">days</span>
-            <TxButton className="btn btn-sm btn-ghost" request={() => ({ ...base, functionName: "extend", args: [id, BigInt(newUnlock + BUFFER)] })}>
+            <TxButton className="btn btn-sm btn-ghost" disabledReason={!(Number.isInteger(extendDays) && extendDays >= 1) ? "Whole days, at least 1" : undefined} request={() => ({ ...base, functionName: "extend", args: [id, BigInt(newUnlock + BUFFER)] })}>
               Extend
               {lock.poolId !== 0n && (newTier?.multiplierBps ?? 0) !== lock.multiplierBps
                 ? newTier
@@ -563,6 +579,10 @@ function LockCard({ exile, id, tiers, rewardMeta, stakeMeta }: { exile: Address;
       </div>
     </div>
   );
+}
+
+function ceilHour(t: number): number {
+  return Math.ceil(t / 3600) * 3600;
 }
 
 function pickTier(tiers: readonly Tier[], seconds: number): Tier | undefined {
