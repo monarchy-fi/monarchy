@@ -12,6 +12,8 @@ import { useLodestarCore } from "../lib/monarchy";
 import { NoDeployment } from "../components/States";
 import { safeParse } from "./Exile";
 import { UnlockChart, unlockedAt } from "../components/UnlockChart";
+import { Slider } from "../components/Slider";
+import { PageMark } from "../components/NavGlyphs";
 
 const KINDS = ["Linear", "Monthly steps", "Rolling"];
 
@@ -37,7 +39,10 @@ export function SandfallPage() {
   return (
     <div className="page">
       <header className="page-head">
-        <h1>Sandfall</h1>
+        <h1>
+          <PageMark page="sandfall" />
+          Sandfall
+        </h1>
         <p className="muted">
           Vesting streams in any token or native HYPE. The creator decides at creation whether a stream can be
           cancelled, and every stream shows it. Streams can't be transferred.
@@ -173,8 +178,6 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
   const [other, setOther] = useState("");
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  const [startMode, setStartMode] = useState<"now" | "later">("now");
-  const [startAt, setStartAt] = useState("");
   const [lengthPick, setLengthPick] = useState<number | "custom">(12 * MONTH);
   const [length, setLength] = useState(12);
   const [lengthUnit, setLengthUnit] = useState<Unit>("months");
@@ -198,9 +201,8 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
   const sym = isNative ? "HYPE" : (meta.data?.[1] ?? (assetChoice === "quote" ? quoteSymbol : assetChoice === "token" ? tokenSymbol : "")) ?? "";
   const value = safeParse(amount, decimals);
 
-  const later = startMode === "later" && startAt ? Math.floor(new Date(startAt).getTime() / 1000) : undefined;
-  // "now" starts a minute out so the transaction lands before the stream begins
-  const startFor = (t: number) => (startMode === "later" ? (later ?? 0) : t + 60);
+  // streams start a minute out so the transaction lands before the stream begins
+  const startFor = (t: number) => t + 60;
   const lengthS = lengthPick === "custom" ? length * UNITS[lengthUnit] : lengthPick;
   // the cliff can only be picked from lengths shorter than the stream, so it always ends before the stream does
   const cliffOpts = CLIFFS.filter((c) => c < lengthS);
@@ -220,15 +222,13 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
       ? "Enter a recipient"
       : value === 0n
         ? "Enter an amount"
-        : startMode === "later" && (!later || later <= now)
-          ? "Pick a start time in the future"
-          : lengthS === 0
-            ? "Set how long it vests"
-            : cliffS >= lengthS
-              ? "The cliff must end before the stream does"
-              : step > lengthS
-                ? "Each unlock step must fit inside the stream"
-                : undefined;
+        : lengthS === 0
+          ? "Set how long it vests"
+          : cliffS >= lengthS
+            ? "The cliff must end before the stream does"
+            : step > lengthS
+              ? "Each unlock step must fit inside the stream"
+              : undefined;
 
   const total = Number(formatUnits(value, decimals));
   const periods = step ? Math.ceil(lengthS / step) : 0;
@@ -285,16 +285,6 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
           </Step>
 
           <Step n={3} title="Schedule">
-            <Choice
-              value={startMode}
-              onChange={setStartMode}
-              cols={2}
-              options={[
-                { v: "now", title: "Start now", sub: "In about a minute" },
-                { v: "later", title: "Start later", sub: "Pick a date" },
-              ]}
-            />
-            {startMode === "later" && <input className="input" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />}
             <span className="field-label">Vests over</span>
             <Choice
               value={lengthPick}
@@ -341,7 +331,7 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
           <UnlockChart schedule={schedule} total={total || 100} />
           <div className="lock-body">
             <Row k="Recipient gets" v={value ? `${fmt(value, decimals)} ${sym}` : "…"} />
-            <Row k="Starts" v={startMode === "later" && !later ? "…" : date(start)} />
+            <Row k="Starts" v={date(start)} />
             {cliffS > 0 && <Row k="At the cliff" v={`${Math.round(atCliff * 100)}% on ${date(schedule.cliff)}`} />}
             <Row k="Then" v={step ? `${total ? (total / periods).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "1/" + periods} ${total ? sym : "of it"} ${FREQ_LABEL[freq]}` : `a little ${FREQ_LABEL[freq]}`} />
             <Row k="Fully vested" v={date(schedule.end)} />
@@ -354,6 +344,9 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
   );
 }
 
+/** A share of the stream as a whole percent, with "under 1%" for the shortest cliffs on long streams. */
+const share = (f: number) => (f > 0 && f < 0.01 ? "Under 1%" : `${Math.round(f * 100)}%`);
+
 /** The cliff as a slider over lengths shorter than the stream, with a few of them marked underneath. */
 function CliffSlider({ options, index, length, onPick }: { options: number[]; index: number; length: number; onPick: (sec: number) => void }) {
   const last = options.length - 1;
@@ -364,12 +357,12 @@ function CliffSlider({ options, index, length, onPick }: { options: number[]; in
     <div className="dur cliff">
       <div className="dur-top">
         <span className="field-label">Cliff</span>
-        <span>
+        <span className="dur-read">
           <span className="dur-value">{value ? spanLabel(value) : "None"}</span>
-          <span className="muted small"> {value ? `${Math.round((value / length) * 100)}% of the stream, then it starts unlocking` : "starts unlocking right away"}</span>
+          <span className="dur-note">{value ? `${share(value / length)} of the stream, then it starts unlocking` : "Starts unlocking right away"}</span>
         </span>
       </div>
-      <input type="range" min={0} max={Math.max(1, last)} step={1} value={index} disabled={last === 0} onChange={(e) => onPick(options[Number(e.target.value)] ?? 0)} aria-label="Cliff length" aria-valuetext={value ? spanLabel(value) : "No cliff"} />
+      <Slider max={Math.max(1, last)} values={[index]} disabled={last === 0} onChange={(_, i) => onPick(options[i] ?? 0)} labels={["Cliff length"]} valueTexts={[value ? spanLabel(value) : "No cliff"]} />
       <div className="dur-marks">
         {[...new Set(marks)].map((i) => (
           <button key={i} type="button" className={`dur-mark ${i === index ? "on" : ""}`} style={{ left: `${last ? (i / last) * 100 : 0}%` }} onClick={() => onPick(options[i])}>

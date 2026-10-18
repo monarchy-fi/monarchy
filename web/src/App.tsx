@@ -35,6 +35,32 @@ function LinkLabel({ l }: { l: (typeof LINKS)[number] }) {
 }
 
 /** The MONARCHY token's contract address, shortened, and a click copies it. Until launch it reads "CA: soon". */
+/** Copies text, falling back to a hidden textarea where the async clipboard is blocked (an http page, an iframe). */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  }
+}
+
+function CopyMark({ done }: { done: boolean }) {
+  return (
+    <svg className="ca-ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.1" aria-hidden="true">
+      {done ? <path d="M2 6.4 4.6 9 10 3.2" /> : <path d="M4 4h6v6.5H4ZM2 8V1.5h6" />}
+    </svg>
+  );
+}
+
 function ContractChip({ className }: { className?: string }) {
   const [copied, setCopied] = useState(false);
   const token = MONARCHY_CA;
@@ -47,18 +73,16 @@ function ContractChip({ className }: { className?: string }) {
     );
   }
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(token);
+    if (await copyText(token)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
-    } catch {
-      // clipboard blocked: the full address is still in the tooltip
     }
   };
   return (
-    <button type="button" className={`ca ${className ?? ""}`} onClick={copy} title={`${token}, click to copy`}>
+    <button type="button" className={`ca ${copied ? "ca-copied" : ""} ${className ?? ""}`} onClick={copy} title={`${token}, click to copy`} aria-label={`Contract address ${token}, click to copy`}>
       <span className="ca-k">CA</span>
       <span className="ca-v">{copied ? "Copied" : short(token)}</span>
+      <CopyMark done={copied} />
     </button>
   );
 }

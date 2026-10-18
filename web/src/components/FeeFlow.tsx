@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { useReadContract } from "wagmi";
 import { lodestarAbi } from "../abi";
 import { DISTRIBUTE_EVERY_HOURS } from "../lib/constants";
@@ -14,17 +15,24 @@ export function TokenFeeFlow() {
   return <FeeFlow drip={drip} burn={c?.burnBps} holders={c?.holdersBps} treasury={c?.treasuryBps} tokenToHolders={c?.tokenToHolders} />;
 }
 
-/** Ascend pool fees, through Lodestar, out to the four places they can go. */
+type Dest = { key: string; mark: string; title: string; tag: string; body: string };
+
+/** Ascend pool fees, through Lodestar, out to the four places they can go: token-side fees on one route, quote-side fees split three ways. */
 export function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { drip: number; burn?: number; holders?: number; treasury?: number; tokenToHolders?: boolean }) {
   const share = (bps?: number) => (bps === undefined ? "Quote share" : `${pct(bps)} of quote fees`);
-  const dests = [
-    tokenToHolders
-      ? { key: "fire", mark: "[+]", title: "Exile lockers", tag: "All token-side fees", body: `Paid to locked holders in the token itself, over ${drip} days.` }
-      : { key: "fire", mark: "[x]", title: "Burned", tag: "All token-side fees", body: "Sent straight to the burn address, or, if the creator chooses, paid to Exile lockers." },
-    { key: "burn", mark: "[x]", title: "Buyback and burn", tag: share(burn), body: "Buys the token on Ascend, then burns it." },
+  const tokenSide: Dest = tokenToHolders
+    ? { key: "fire", mark: "[+]", title: "Exile lockers", tag: "All token-side fees", body: `Paid to locked holders in the token itself, over ${drip} days.` }
+    : { key: "fire", mark: "[x]", title: "Burned", tag: "All token-side fees", body: "Sent straight to the burn address, or, if the creator chooses, paid to Exile lockers." };
+  const quoteSide: Dest[] = [
+    { key: "burn", mark: "[∞]", title: "Buyback and burn", tag: share(burn), body: "Buys the token on Ascend, then burns it." },
     { key: "hold", mark: "[+]", title: "Exile holders", tag: share(holders), body: `Paid to locked holders by tier, over ${drip} days.` },
     { key: "treas", mark: "[~]", title: "Sandfall treasury", tag: share(treasury), body: "Streamed to the Team Treasury in the open." },
   ];
+  const { branch, list, h, ys } = useBranchTargets();
+  const mid = h / 2;
+  const fork = 30;
+  const quoteYs = ys.slice(1);
+  const quoteMid = quoteYs.length ? (quoteYs[0] + quoteYs[quoteYs.length - 1]) / 2 : mid;
   return (
     <section className="flow" aria-labelledby="flow-title">
       <div className="flow-head">
@@ -43,27 +51,81 @@ export function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { dri
           <div className="flow-title">Lodestar</div>
           <p>Called every {DISTRIBUTE_EVERY_HOURS} hours by the team. Anyone can call it. It takes 0%.</p>
         </div>
-        <svg className="flow-branch" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          {[12.5, 37.5, 62.5, 87.5].map((y, i) => (
-            <path key={y} className={`branch branch-${dests[i].key}`} d={`M0 50 C 55 50, 45 ${y}, 100 ${y}`} vectorEffect="non-scaling-stroke" />
-          ))}
-        </svg>
+        <div ref={branch} className="flow-branch" aria-hidden="true">
+          <svg viewBox={`0 0 64 ${h}`} preserveAspectRatio="none">
+            {ys.length === 4 && (
+              <>
+                <path className="branch branch-fire" d={`M0 ${mid} C 40 ${mid}, 24 ${ys[0]}, 64 ${ys[0]}`} />
+                <path className="branch branch-quote" d={`M0 ${mid} C 18 ${mid}, 12 ${quoteMid}, ${fork} ${quoteMid}`} />
+                {quoteYs.map((y, i) => (
+                  <path key={i} className={`branch branch-${quoteSide[i].key}`} d={`M${fork} ${quoteMid} C ${fork + 20} ${quoteMid}, ${fork + 14} ${y}, 64 ${y}`} />
+                ))}
+              </>
+            )}
+          </svg>
+        </div>
         <FlowArrow className="flow-arrow-split" />
-        <ul className="flow-dests">
-          {dests.map((x) => (
-            <li key={x.key} className={`flow-dest dest-${x.key}`}>
-              <span className="dest-mark" aria-hidden="true">{x.mark}</span>
-              <div>
-                <div className="flow-title">{x.title}</div>
-                <div className="dest-tag">{x.tag}</div>
-                <p>{x.body}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div ref={list} className="flow-dests">
+          <div className="flow-group">
+            <div className="flow-group-k">Token side</div>
+            <ul>
+              <DestItem d={tokenSide} />
+            </ul>
+          </div>
+          <div className="flow-group">
+            <div className="flow-group-k">Quote side, split by the creator</div>
+            <ul>
+              {quoteSide.map((d) => (
+                <DestItem key={d.key} d={d} />
+              ))}
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
   );
+}
+
+function DestItem({ d }: { d: Dest }) {
+  return (
+    <li className={`flow-dest dest-${d.key}`}>
+      <span className="dest-mark" aria-hidden="true">
+        {d.mark}
+      </span>
+      <div>
+        <div className="flow-title">{d.title}</div>
+        <div className="dest-tag">{d.tag}</div>
+        <p>{d.body}</p>
+      </div>
+    </li>
+  );
+}
+
+/** Where each destination's middle sits, measured against the branch drawing, so the lines land on the boxes. */
+function useBranchTargets() {
+  const branch = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const [m, setM] = useState<{ h: number; ys: number[] }>({ h: 300, ys: [] });
+  useLayoutEffect(() => {
+    const s = branch.current;
+    const l = list.current;
+    if (!s || !l) return;
+    const measure = () => {
+      const top = s.getBoundingClientRect().top;
+      const h = Math.max(1, s.getBoundingClientRect().height);
+      const ys = [...l.querySelectorAll<HTMLElement>(".flow-dest")].map((el) => {
+        const r = el.getBoundingClientRect();
+        return Math.round((r.top + r.height / 2 - top) * 10) / 10;
+      });
+      setM((o) => (o.h === h && o.ys.join() === ys.join() ? o : { h, ys }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(l);
+    ro.observe(s);
+    return () => ro.disconnect();
+  }, []);
+  return { branch, list, ...m };
 }
 
 function FlowArrow({ className }: { className?: string }) {
@@ -73,4 +135,3 @@ function FlowArrow({ className }: { className?: string }) {
     </div>
   );
 }
-
