@@ -186,6 +186,25 @@ main { flex: 1; }
 @keyframes castle-flag { from { transform: skewY(-10deg) scaleX(0.85); } to { transform: skewY(8deg) scaleX(1); } }
 @keyframes castle-spark { 0%, 100% { transform: scale(0) rotate(0); } 16% { transform: scale(1.3) rotate(45deg); } 32% { transform: scale(0) rotate(90deg); } }
 
+/* The Garden, the analytics page: an icon on its own at the far left of the bar, its name in a label under it on hover.
+   The plants grow up from the soil one after another and sway, and the flower turns. */
+.nav-garden { position: relative; display: inline-flex; padding: 6px 9px; color: var(--muted); border: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+.nav-garden:hover, .nav-garden:focus-visible { color: var(--text); }
+.nav-garden.active { color: var(--text); border-color: var(--line-2); }
+.nav-garden svg { width: 24px; height: 24px; overflow: visible; }
+.nav-garden::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: -1px; transform: translateY(-4px); padding: 4px 8px; background: #000; border: 1px solid var(--line-2); color: var(--text); font: 500 10.5px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.15s, transform 0.2s var(--ease); }
+.nav-garden:hover::after, .nav-garden:focus-visible::after { opacity: 1; transform: translateY(0); }
+.nl-garden .garden-plant, .nl-garden .garden-bloom { transform-box: fill-box; }
+.nl-garden .garden-plant { transform-origin: 50% 100%; }
+.nl-garden .garden-bloom { transform-origin: center; }
+.nl-garden:hover .garden-plant, .nl-garden:focus-visible .garden-plant, .mark-live.nl-garden .garden-plant { animation: garden-grow 0.7s var(--ease) both, garden-sway 2.6s ease-in-out 0.7s infinite; }
+.nl-garden .garden-plant:nth-of-type(2) { animation-delay: 0.12s, 0.95s; }
+.nl-garden .garden-plant:nth-of-type(3) { animation-delay: 0.24s, 1.2s; }
+.nl-garden:hover .garden-bloom, .nl-garden:focus-visible .garden-bloom, .mark-live.nl-garden .garden-bloom { animation: garden-bloom 5s linear 0.6s infinite; }
+@keyframes garden-grow { from { transform: scaleY(0.12); } }
+@keyframes garden-sway { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-3.5deg); } 70% { transform: rotate(3deg); } }
+@keyframes garden-bloom { to { transform: rotate(360deg); } }
+
 /* ------------------------------------------------------------------ notices */
 .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; max-width: 1616px; margin: 16px auto 0; padding: 12px 16px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--card); color: var(--muted); font-size: 14px; width: calc(100% - 32px); }
 .notice b { color: var(--text); }
@@ -283,7 +302,7 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .feature { display: flex; flex-direction: column; gap: 12px; color: var(--text); text-decoration: none; transition: border-color 0.2s, background 0.2s; }
 .feature:hover { border-color: var(--line-2); background: #0e0e0e; }
 .feature h3 { font: 700 20px var(--display); text-transform: uppercase; letter-spacing: 0.08em; }
-.feature p { color: var(--muted); line-height: 1.6; margin: 0; flex: 1; font-size: 14.5px; }
+.feature p { color: var(--muted); line-height: 1.7; margin: 0; flex: 1; font-size: 14.5px; }
 .feature-top { display: flex; align-items: center; gap: 10px; }
 .feature-icon { width: 46px; height: 46px; display: inline-flex; align-items: center; justify-content: center; color: var(--text); border: 1px solid var(--line-2); overflow: hidden; transition: border-color 0.2s; }
 .feature:hover .feature-icon { border-color: var(--white); }
@@ -294,7 +313,19 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 /* on a card the marks move when the card is hovered: the star pulses and twinkles, the hourglass turns, the gate drops */
 .feature.nl-exile:hover .feature-icon svg { animation: gate-drop-once 0.5s cubic-bezier(0.5, 0, 0.75, 1.4); }
 @keyframes gate-drop-once { from { transform: translateY(-115%); } to { transform: translateY(0); } }
-.feature-go { font: 600 12.5px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; display: inline-flex; gap: 8px; }
+.feature { position: relative; }
+/* the three cards share rows, so their MONARCHY parts and Open links line up whatever each one says */
+.grid3 > .feature { display: grid; grid-template-rows: subgrid; grid-row: span 5; row-gap: 18px; align-content: start; padding: 30px 28px; }
+.grid3 > .feature > .feature-go { align-self: end; margin-top: 6px; }
+.feature-go { font: 600 12.5px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; display: inline-flex; gap: 8px; color: var(--text); text-decoration: none; }
+.feature-go::after { content: ""; position: absolute; inset: 0; }
+.feature-ours { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding-top: 20px; border-top: 1px dashed var(--line-2); color: var(--muted); font-size: 14px; line-height: 1.7; }
+.feature-ours-k { font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.14em; color: var(--text); }
+.feature-ours-k::before { content: "// "; color: var(--faint); }
+.feature-ours a, .feature-ours .badge { position: relative; z-index: 1; }
+.feature-ours .mono { white-space: nowrap; }
+.feature-ours-go { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; text-decoration: none; display: inline-flex; gap: 6px; }
+.feature-ours-go:hover { text-decoration: underline; }
 .feature-go span { transition: transform 0.2s var(--ease); }
 .feature:hover .feature-go span { transform: translateX(4px); }
 .kicker { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.16em; color: var(--muted); }
@@ -512,6 +543,33 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .chart-now-label { fill: var(--text); font: 600 10px var(--mono); }
 .chart-wrap { width: 100%; min-width: 0; }
 
+/* ------------------------------------------------------------------ garden (analytics) */
+.table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--line); -webkit-overflow-scrolling: touch; }
+.table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.table th { text-align: left; padding: 10px 14px; font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; white-space: nowrap; border-bottom: 1px solid var(--line); background: #000; }
+.table td { padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover td { background: var(--card-2); }
+.table th.n, .table tbody.n1 td:nth-child(2), .table tbody.n2 td:nth-child(3), .table tbody.n3 td:nth-child(4), .table tbody.n4 td:nth-child(5), .table tbody.n5 td:nth-child(6), .table tbody.n6 td:nth-child(7), .table tbody.n7 td:nth-child(8), .table tbody.n8 td:nth-child(9) { text-align: right; font-family: var(--mono); font-size: 12.5px; }
+.table-search { max-width: 420px; margin-bottom: 14px; }
+.table-more { margin-top: 14px; }
+.token-name { display: inline-flex; align-items: baseline; gap: 8px; }
+.token-name b { font: 600 12.5px var(--mono); letter-spacing: 0.04em; }
+.chart-wrap.held { position: relative; }
+.held-locked { fill: var(--white); opacity: 0.16; }
+.held-locked-line { fill: none; stroke: var(--white); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; }
+.held-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 12px; font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.held-legend span { display: inline-flex; align-items: center; gap: 8px; }
+.held-key { display: inline-block; width: 12px; height: 12px; flex: none; border: 1px solid var(--white); }
+.held-key-locked { background: rgba(255, 255, 255, 0.28); }
+.held-key-vesting { background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.55) 0 1px, transparent 1px 4px); }
+.chart-tip { position: absolute; top: 6px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; background: #000; border: 1px solid var(--line-2); font: 12px var(--mono); color: var(--text); white-space: nowrap; pointer-events: none; }
+.chart-tip b { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+.chart-tip span { display: inline-flex; align-items: center; gap: 8px; }
+.chart-tip .held-key { width: 10px; height: 10px; }
+.kingdom-lead { margin: 0 0 18px; max-width: 880px; color: var(--muted); font-size: 14.5px; line-height: 1.6; }
+.kingdom-lead b { color: var(--text); font-weight: 600; }
+
 /* ------------------------------------------------------------------ streamflow-style create form */
 .create { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 0; border: 1px solid var(--line); }
 .create-form { padding: 22px; display: flex; flex-direction: column; gap: 20px; }
@@ -574,7 +632,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 }
 @media (max-width: 820px) {
   .nav { grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 10px 16px; min-height: 58px; }
-  .nav-links, .nav-right > .ca { display: none; }
+  .nav-links, .nav-garden, .nav-right > .ca { display: none; }
   .nav-crown-m { display: inline-flex; width: auto; margin: 0 0 0 -2px; }
   .menu-btn { display: inline-flex; }
   .nav-right { gap: 8px; }
@@ -594,7 +652,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .page-mark { width: 32px; height: 32px; }
   .page-mark.nl-exile { width: 38px; height: 24px; }
   .page-mark.nl-sandfall { width: 28px; height: 28px; }
+  .table-search { max-width: none; }
   .card { padding: 18px; }
+  .grid3 > .feature { padding: 22px 20px; }
   .flow { padding: 20px 16px; }
   .flow-group ul { grid-template-columns: 1fr; }
   .landing-sub { font-size: 15.5px; }
