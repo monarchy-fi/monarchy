@@ -47,6 +47,10 @@ contract LodestarFactory {
     /// later, so it can't be swapped in between a dev's `transferCreator` and `deploy`.
     uint64 public defaultSwapperSetAt;
     uint64 public constant DEFAULT_SWAPPER_DELAY = 12 hours;
+    /// @notice A newer Monarchy factory that routers made here may move their creator role to, once each,
+    /// with 7 days' notice. The owner names it, and each router's steward still has to propose the move.
+    /// 0 = none.
+    address public successor;
     mapping(address token => address) public lodestarOf;
     address[] public allLodestars;
 
@@ -59,6 +63,7 @@ contract LodestarFactory {
         uint256 treasuryStreamId
     );
     event DefaultSwapperSet(address swapper);
+    event SuccessorSet(address successor);
     event OwnerTransferred(address indexed previous, address indexed next);
 
     error DeskMismatch();
@@ -163,6 +168,16 @@ contract LodestarFactory {
         defaultSwapper = swapper;
         defaultSwapperSetAt = uint64(block.timestamp);
         emit DefaultSwapperSet(swapper);
+    }
+
+    /// @notice Name the newer factory that routers made here may upgrade to (0 clears it). Naming one moves
+    /// nothing: a router's steward has to propose the move, and it waits 7 days. Changing or clearing the
+    /// successor stops every pending move to the old one.
+    function setSuccessor(address next) external {
+        if (msg.sender != owner) revert OnlyOwner();
+        if (next == address(this)) revert ZeroAddress();
+        successor = next;
+        emit SuccessorSet(next);
     }
 
     function transferOwner(address next) external {

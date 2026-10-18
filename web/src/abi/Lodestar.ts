@@ -137,6 +137,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "UPGRADE_DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "acceptCreator",
     "inputs": [],
     "outputs": [],
@@ -212,6 +225,13 @@ export const lodestarAbi = [
   {
     "type": "function",
     "name": "cancelTiers",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancelUpgrade",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -317,6 +337,13 @@ export const lodestarAbi = [
   {
     "type": "function",
     "name": "executeConfig",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "executeUpgrade",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -788,6 +815,13 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "proposeUpgrade",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "quote",
     "inputs": [],
     "outputs": [
@@ -1001,6 +1035,45 @@ export const lodestarAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "upgradeEta",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "upgradeFactory",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "upgradeTarget",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -1379,6 +1452,50 @@ export const lodestarAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "UpgradeCancelled",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "UpgradeExecuted",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "UpgradeProposed",
+    "inputs": [
+      {
+        "name": "factory",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "target",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "eta",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "AlreadyInitialized",
     "inputs": []
@@ -1411,6 +1528,16 @@ export const lodestarAbi = [
   {
     "type": "error",
     "name": "NoPendingConfig",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoPendingUpgrade",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoSuccessor",
     "inputs": []
   },
   {
@@ -1452,6 +1579,11 @@ export const lodestarAbi = [
   {
     "type": "error",
     "name": "SelfTransfer",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SuccessorChanged",
     "inputs": []
   },
   {
