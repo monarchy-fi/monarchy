@@ -941,6 +941,48 @@ contract LodestarTest is MonarchyFixture {
         assertEq(l.totalTokenToHolders(), 500e18, "now paid to lockers");
     }
 
+    /// @dev After a long outage with a dust lock expiring every hour, Exile's pool is more than one catch-up
+    /// behind. distribute moves it forward by one bounded poke and parks both holder payouts instead of
+    /// walking every hour inside them; the treasury is still paid and the call stays well inside a block.
+    /// Each later distribute moves the pool on, and the parked payouts go out once it is current.
+    function test_farBehindExileParksHolderPayoutsAndCatchesUp() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        p.cfg.tokenToHolders = true;
+        Lodestar l = _activate(p);
+        uint256 pid = l.exilePoolId();
+        address holder = makeAddr("holder");
+        uint256 id = _lockToken(l, holder, 1_000e18, 365 days);
+        address mallory = makeAddr("mallory");
+        token.mint(mallory, 1e18);
+        vm.startPrank(mallory);
+        token.approve(address(exile), type(uint256).max);
+        for (uint256 k; k < 720; ++k) {
+            exile.lockERC20(address(token), 2, uint64(block.timestamp + 1 days + k * 1 hours), pid);
+        }
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 31 days); // nobody distributes or pokes for a month
+        launchpad.injectFees(poolId, 1000e18, 1000e6);
+        uint256 g = gasleft();
+        l.distribute();
+        assertLt(g - gasleft(), 20_000_000, "one bounded catch-up, not the whole month");
+        assertEq(l.holdersReserve(), 200e6, "quote holder share parked");
+        assertEq(token.balanceOf(address(l)), 500e18, "token-side payout parked");
+        assertEq(l.totalTreasuryQuote(), 100e6, "treasury still paid");
+
+        // every distribute moves the pool on; once it is current the parked payouts go out
+        for (uint256 i; i < 3 && l.holdersReserve() > 0; ++i) {
+            l.distribute();
+        }
+        assertEq(l.holdersReserve(), 0);
+        assertEq(token.balanceOf(address(l)), 0);
+        assertEq(l.totalHoldersQuote(), 200e6);
+        assertEq(l.totalTokenToHolders(), 500e18);
+        vm.warp(block.timestamp + 3 days);
+        assertApproxEqRel(exile.pendingRewards(id), 200e6, 0.001e18);
+        assertApproxEqRel(exile.pendingStakeRewards(id), 500e18, 0.001e18);
+    }
+
     // ---------------------------------------------------------------- 15. upgrade to a newer Lodestar
 
     /// @dev Activated with the creator role locked for good, the box ticked by default on the site.

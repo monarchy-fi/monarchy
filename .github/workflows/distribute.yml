@@ -15,10 +15,10 @@ name: Distribute
 #   wrong or hostile RPC must stop the job, not get a signed transaction.
 # - The send lets cast estimate the gas (no fixed limit) and checks the receipt, so a reverted
 #   transaction makes the run red. (`cast send` alone exits 0 on a revert.)
-# - Recovery after an outage: Exile walks every idle hour of its reward pool inside notifyReward, so
-#   a pool that fell weeks behind can make distribute() need more gas than a block allows. When the
-#   pool is more than a few hours behind, tools/keeper-distribute.sh calls Exile.poke in chunks until
-#   it reports caught up (at most 40 times) before distributing, and again before one retry if
+# - Recovery after an outage: distribute() catches Exile's reward pool up by at most 720 hours per call
+#   and parks the holder payouts while the pool is further behind. So when the pool is more than a few
+#   hours behind, tools/keeper-distribute.sh calls Exile.poke in chunks until it reports caught up (at
+#   most 40 times) before distributing, so this run pays holders, and again before one retry if
 #   distribute() fails or parks a holder payout. If that still fails, the job fails: red is the point.
 
 on:

@@ -7,7 +7,7 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 157 passing](https://img.shields.io/badge/Foundry-157%20tests%20passing-111111.svg)](contracts/test)
+[![Tests: 168 passing](https://img.shields.io/badge/Foundry-168%20tests%20passing-111111.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
 [![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-111111.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-111111.svg)](#how-it-works)

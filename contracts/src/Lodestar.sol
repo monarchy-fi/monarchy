@@ -48,6 +48,11 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     uint64 public constant BUYBACK_INTERVAL = 30 minutes;
     /// @notice How long a proposed move to a newer Lodestar waits before anyone can execute it.
     uint64 public constant UPGRADE_DELAY = 7 days;
+    /// @dev How many hours of Exile's reward pool one distribute catches up before paying holders (Exile's
+    /// own per-call cap, with at most 300 hours in which locks expire). A pool further behind, after a long
+    /// outage or with dust locks expiring hour after hour, parks the holder payouts for that call instead of
+    /// running distribute out of gas; each call still moves the pool forward by this much.
+    uint256 public constant EXILE_CATCH_UP = 720;
     /// @dev Burn sink. Ascend's launch tokens reject transfers to address(0) and to 0x…dEaD, so burns go
     /// to this widely used dead address instead. Nobody holds its key.
     address public constant DEAD = 0xdEAD000000000000000042069420694206942069;
@@ -210,6 +215,8 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         if (!ok) emit ClaimFailed();
 
         Config memory c = _cfg;
+        // catch Exile's pool up in one bounded call first, so the payouts below have no hours left to walk
+        bool exileCurrent = _catchUpExile();
 
         // project-token side: all of it is burned, or all of it goes to Exile lockers. Balance based, so a
         // payout that failed last time is simply part of the next one (under whatever the config says then).
@@ -218,14 +225,16 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         uint256 tHolders;
         if (t > 0) {
             if (c.tokenToHolders) {
-                token.forceApprove(address(exile), t);
-                try exile.notifyStakeReward(exilePoolId, t) {
-                    tHolders = t;
-                    totalTokenToHolders += t;
-                } catch {
-                    token.forceApprove(address(exile), 0);
-                    emit TokenHoldersPayoutFailed(t);
+                if (exileCurrent) {
+                    token.forceApprove(address(exile), t);
+                    try exile.notifyStakeReward(exilePoolId, t) {
+                        tHolders = t;
+                        totalTokenToHolders += t;
+                    } catch {
+                        token.forceApprove(address(exile), 0);
+                    }
                 }
+                if (tHolders == 0) emit TokenHoldersPayoutFailed(t);
             } else if (_tryTransfer(token, DEAD, t)) {
                 tBurned = t;
                 totalTokenBurned += t;
@@ -251,12 +260,19 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         (uint256 spent, uint256 bought) = _buyback(c, burnQ + buybackReserve);
 
         if (holdQ > 0) {
-            quote.forceApprove(address(exile), holdQ);
-            try exile.notifyReward(exilePoolId, holdQ) {
+            bool paid;
+            if (exileCurrent) {
+                quote.forceApprove(address(exile), holdQ);
+                try exile.notifyReward(exilePoolId, holdQ) {
+                    paid = true;
+                } catch {
+                    quote.forceApprove(address(exile), 0);
+                }
+            }
+            if (paid) {
                 totalHoldersQuote += holdQ;
                 holdersReserve = 0;
-            } catch {
-                quote.forceApprove(address(exile), 0);
+            } else {
                 holdersReserve = holdQ;
                 emit HoldersPayoutFailed(holdQ);
                 holdQ = 0;
@@ -560,6 +576,15 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         upgradeFactory = address(0);
         upgradeTarget = address(0);
         upgradeEta = 0;
+    }
+
+    /// @dev True when Exile's pool reached the present within `EXILE_CATCH_UP` hours. Exile's payouts catch up
+    /// without a cap, so without this a pool weeks behind could make distribute need more gas than a block
+    /// holds and revert, treasury and buyback included. A failed poke counts as not caught up.
+    function _catchUpExile() internal returns (bool current) {
+        try exile.poke(exilePoolId, EXILE_CATCH_UP) returns (bool caughtUp) {
+            current = caughtUp;
+        } catch {}
     }
 
     function _tryTransfer(IERC20 asset, address to, uint256 amount) internal returns (bool) {

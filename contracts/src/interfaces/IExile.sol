@@ -24,6 +24,9 @@ interface IExile {
     /// next to the reward-token stream. Anyone may call.
     function notifyStakeReward(uint256 poolId, uint256 amount) external;
 
+    /// @notice Catch a pool up by at most `maxBuckets` hours. Returns true once it has reached the present.
+    function poke(uint256 poolId, uint256 maxBuckets) external returns (bool caughtUp);
+
     /// @notice Queue a new tier table (admin only); anyone can execute it after the timelock.
     function proposeTiers(uint256 poolId, Tier[] calldata tiers) external;
 
