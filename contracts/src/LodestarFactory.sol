@@ -17,7 +17,7 @@ import {AscendPoolKey} from "./libraries/AscendPoolKey.sol";
 ///   2. On Ascend: `transferCreator(poolId, router)`.
 ///   3. Here: `deploy(params)`. In one transaction this creates the router, its Exile holder-rewards
 ///      pool and its Sandfall Team Treasury stream, accepts the creator role, optionally enrols the
-///      listing set-aside and optionally locks the creator role.
+///      listing set-aside and, if the dev chose so, locks the creator role to the router forever.
 /// The dev keeps the dev-buy tokens; only the creator fee stream moves to the router.
 contract LodestarFactory {
     struct DeployParams {
@@ -29,6 +29,7 @@ contract LodestarFactory {
         IExile.Tier[] tiers;
         bool enrolListing;
         uint256 listingCap;
+        /// @dev When the creator role unlocks: 0 = no lock, type(uint64).max = locked for good.
         uint64 creatorLockUntil;
     }
 
@@ -45,6 +46,10 @@ contract LodestarFactory {
     /// later, so it can't be swapped in between a dev's `transferCreator` and `deploy`.
     uint64 public defaultSwapperSetAt;
     uint64 public constant DEFAULT_SWAPPER_DELAY = 12 hours;
+    /// @notice A newer Monarchy factory that routers made here may move their creator role to, once each,
+    /// with 7 days' notice. The owner names it, and each router's steward still has to propose the move.
+    /// 0 = none.
+    address public successor;
     mapping(address token => address) public lodestarOf;
     address[] public allLodestars;
 
@@ -57,6 +62,7 @@ contract LodestarFactory {
         uint256 treasuryStreamId
     );
     event DefaultSwapperSet(address swapper);
+    event SuccessorSet(address successor);
     event OwnerTransferred(address indexed previous, address indexed next);
 
     error DeskMismatch();
@@ -159,6 +165,16 @@ contract LodestarFactory {
         defaultSwapper = swapper;
         defaultSwapperSetAt = uint64(block.timestamp);
         emit DefaultSwapperSet(swapper);
+    }
+
+    /// @notice Name the newer factory that routers made here may upgrade to (0 clears it). Naming one moves
+    /// nothing: a router's steward has to propose the move, and it waits 7 days. Changing or clearing the
+    /// successor stops every pending move to the old one.
+    function setSuccessor(address next) external {
+        if (msg.sender != owner) revert OnlyOwner();
+        if (next == address(this)) revert ZeroAddress();
+        successor = next;
+        emit SuccessorSet(next);
     }
 
     function transferOwner(address next) external {

@@ -11,9 +11,9 @@ import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 
 /// @notice Hand the token's Ascend creator role to its Lodestar and activate it with MONARCH's defaults:
 /// 40% buyback and burn / 40% holders / 20% Team Treasury, Peasant-Knight-Duke-Monarch tiers,
-/// a 7-day rolling treasury stream, listing set-aside on (5,000 USDC cap), creator role locked for 10 years.
+/// a 7-day rolling treasury stream, listing set-aside on (5,000 USDC cap), creator role locked forever.
 /// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER, MAX_SLIPPAGE_BPS, ENROL_LISTING,
-/// LISTING_CAP (in the quote's units; required unless the quote has 6 decimals), LOCK_DAYS (0 = no lock). The buyback route is the AscendSwapper recorded in
+/// LISTING_CAP (in the quote's units; required unless the quote has 6 decimals), LOCK_FOREVER (false = no lock). The buyback route is the AscendSwapper recorded in
 /// deployments/<chainId>.json unless SWAPPER names another one. It is never left to the factory's default
 /// silently: the factory owner can change that default (12 hours after setDefaultSwapper), and a re-run of
 /// this script would otherwise pick the new one up without warning. To keep buybacks in reserve instead,
@@ -57,8 +57,8 @@ contract ActivateLodestar is BaseScript {
         bool usdcLike = IERC20Metadata(d.quote).decimals() == 6;
         require(!p.enrolListing || usdcLike || vm.envExists("LISTING_CAP"), "set LISTING_CAP in the quote's units");
         p.listingCap = vm.envOr("LISTING_CAP", uint256(5_000e6));
-        uint256 lockDays = vm.envOr("LOCK_DAYS", uint256(3650));
-        p.creatorLockUntil = lockDays == 0 ? 0 : uint64(block.timestamp + lockDays * 1 days);
+        // locked to the router for good unless LOCK_FOREVER=false, like the checkbox on the site
+        p.creatorLockUntil = vm.envOr("LOCK_FOREVER", true) ? type(uint64).max : 0;
 
         vm.startBroadcast(pk);
         if (IAscendLaunchpad(d.launchpad).pendingCreator(poolId) != predicted) {

@@ -381,6 +381,32 @@ export const lodestarFactoryAbi = [
   },
   {
     "type": "function",
+    "name": "setSuccessor",
+    "inputs": [
+      {
+        "name": "next",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "successor",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "transferOwner",
     "inputs": [
       {
@@ -462,6 +488,19 @@ export const lodestarFactoryAbi = [
         "name": "next",
         "type": "address",
         "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SuccessorSet",
+    "inputs": [
+      {
+        "name": "successor",
+        "type": "address",
+        "indexed": false,
         "internalType": "address"
       }
     ],

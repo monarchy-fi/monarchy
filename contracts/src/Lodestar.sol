@@ -12,6 +12,7 @@ import {IBuybackSwapper} from "./interfaces/IBuybackSwapper.sol";
 import {IExile} from "./interfaces/IExile.sol";
 import {ISandfall} from "./interfaces/ISandfall.sol";
 import {ILodestar} from "./interfaces/ILodestar.sol";
+import {ILodestarFactory} from "./interfaces/ILodestarFactory.sol";
 
 /// @title Lodestar
 /// @notice Fee router for one Ascend token. Once it holds the token's creator role on Ascend, every
@@ -19,8 +20,10 @@ import {ILodestar} from "./interfaces/ILodestar.sol";
 ///   - project-token fees are burned, or, if the creator chose so, paid in full to Exile lockers;
 ///   - quote fees are split by the creator's chosen percentages between buyback and burn,
 ///     Exile holder rewards and the Team Treasury (a Sandfall stream).
-/// Split changes wait behind a 12 hour timelock. The creator role can be locked here so the router
-/// can't be swapped out. No protocol fee. Deployed as one minimal clone per token by LodestarFactory.
+/// Split changes wait behind a 12 hour timelock. The creator role can be locked here forever, so the
+/// router can't be swapped out; even then it can move to this token's router on a newer Monarchy
+/// factory, proposed by the steward and announced 7 days ahead. No protocol fee. Deployed as one minimal
+/// clone per token by LodestarFactory.
 contract Lodestar is ILodestar, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -43,6 +46,8 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// sell, and collect about 1% per piece for one 2% round trip in fees. The keeper runs every 3 hours,
     /// so the gap costs nothing in the normal flow.
     uint64 public constant BUYBACK_INTERVAL = 30 minutes;
+    /// @notice How long a proposed move to a newer Lodestar waits before anyone can execute it.
+    uint64 public constant UPGRADE_DELAY = 7 days;
     /// @dev Burn sink. Ascend's launch tokens reject transfers to address(0) and to 0x…dEaD, so burns go
     /// to this widely used dead address instead. Nobody holds its key.
     address public constant DEAD = 0xdEAD000000000000000042069420694206942069;
@@ -86,6 +91,10 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// @notice Holder rewards or treasury top-ups that couldn't be paid out yet; retried on the next distribute.
     uint256 public holdersReserve;
     uint256 public treasuryReserve;
+    /// @notice A proposed move of the creator role to this token's router on the factory's successor.
+    address public upgradeFactory;
+    address public upgradeTarget;
+    uint64 public upgradeEta;
 
     event Initialized(bytes32 indexed poolId, address indexed token, address quote, address steward, Config config);
     event Distributed(
@@ -113,6 +122,9 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     event ListingEnrolled(uint256 cap);
     event ListingClosed();
     event StewardTransferred(address indexed previous, address indexed next);
+    event UpgradeProposed(address indexed factory, address indexed target, uint64 eta);
+    event UpgradeCancelled();
+    event UpgradeExecuted(address indexed target);
 
     error AlreadyInitialized();
     error OnlySteward();
@@ -128,6 +140,9 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     error BuybackShort();
     error CreatorTransferPending();
     error SelfTransfer();
+    error NoSuccessor();
+    error NoPendingUpgrade();
+    error SuccessorChanged();
 
     constructor() {
         _initialized = true; // the implementation itself can never be initialized
@@ -439,6 +454,42 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         emit CreatorTransferOutStarted(next);
     }
 
+    /// @notice The one way out of the creator lock: propose moving the role to this token's router on the
+    /// newer factory that this router's factory names as its successor. Anyone can execute the move 7 days
+    /// later, within the 7 days after that, so holders see it coming. It needs both the factory owner (who
+    /// names the successor) and the steward (who proposes), and a different successor named meanwhile stops
+    /// it. Proposing again replaces a pending move and restarts the wait.
+    function proposeUpgrade() external onlySteward {
+        address next = ILodestarFactory(factory).successor();
+        if (next == address(0)) revert NoSuccessor();
+        (address target,) = ILodestarFactory(next).predict(address(token), address(quote));
+        if (target == address(0) || target == address(this)) revert NoSuccessor();
+        upgradeFactory = next;
+        upgradeTarget = target;
+        upgradeEta = uint64(block.timestamp) + UPGRADE_DELAY;
+        emit UpgradeProposed(next, target, upgradeEta);
+    }
+
+    function cancelUpgrade() external onlySteward {
+        if (upgradeEta == 0) revert NoPendingUpgrade();
+        _clearUpgrade();
+        emit UpgradeCancelled();
+    }
+
+    /// @notice Start Ascend's hand-off of the creator role to the proposed router, lock or no lock. The new
+    /// router completes it on its side. Until it does, the steward can still cancel with
+    /// `transferCreatorOut(0)`, and the role stays here.
+    function executeUpgrade() external {
+        if (upgradeEta == 0) revert NoPendingUpgrade();
+        if (block.timestamp < upgradeEta) revert TimelockActive();
+        if (block.timestamp > upgradeEta + EXECUTION_WINDOW) revert ProposalExpired();
+        if (ILodestarFactory(factory).successor() != upgradeFactory) revert SuccessorChanged();
+        address target = upgradeTarget;
+        _clearUpgrade();
+        launchpad.transferCreator(poolId, target);
+        emit UpgradeExecuted(target);
+    }
+
     /// @notice Enrol in Ascend's listing set-aside: 20% of the creator's quote fees are held toward a
     /// HyperCore listing until `cap` is reached.
     function enrollListing(uint256 cap) external onlyStewardOrFactory {
@@ -503,6 +554,12 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     function _validate(Config memory c) internal pure {
         if (uint256(c.burnBps) + c.holdersBps + c.treasuryBps != BPS) revert InvalidConfig();
         if (c.maxSlippageBps < MIN_SLIPPAGE_BPS || c.maxSlippageBps > MAX_SLIPPAGE_BPS) revert InvalidConfig();
+    }
+
+    function _clearUpgrade() internal {
+        upgradeFactory = address(0);
+        upgradeTarget = address(0);
+        upgradeEta = 0;
     }
 
     function _tryTransfer(IERC20 asset, address to, uint256 amount) internal returns (bool) {

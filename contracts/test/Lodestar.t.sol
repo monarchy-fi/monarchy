@@ -14,6 +14,19 @@ import {IAscendLaunchpad} from "../src/interfaces/IAscendLaunchpad.sol";
 import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+/// @dev A stand-in for a newer Monarchy factory: a router only asks it where this token's router lives.
+contract MockSuccessorFactory {
+    address public router;
+
+    constructor(address router_) {
+        router = router_;
+    }
+
+    function predict(address, address) external view returns (address, bytes32) {
+        return (router, bytes32(0));
+    }
+}
+
 contract LodestarTest is MonarchyFixture {
     MockERC20 internal token;
     bytes32 internal poolId;
@@ -926,5 +939,141 @@ contract LodestarTest is MonarchyFixture {
         l.distribute();
         assertEq(l.totalTokenBurned(), 500e18);
         assertEq(l.totalTokenToHolders(), 500e18, "now paid to lockers");
+    }
+
+    // ---------------------------------------------------------------- 15. upgrade to a newer Lodestar
+
+    /// @dev Activated with the creator role locked for good, the box ticked by default on the site.
+    function _activateForever() internal returns (Lodestar l) {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        p.creatorLockUntil = type(uint64).max;
+        l = _activate(p);
+        assertEq(l.creatorLockedUntil(), type(uint64).max);
+    }
+
+    function _successor() internal returns (address next, address router) {
+        router = makeAddr("v2 router");
+        next = address(new MockSuccessorFactory(router));
+        factory.setSuccessor(next); // this test contract deployed the factory, so it is the owner
+    }
+
+    function test_upgradeNeedsASuccessor() public {
+        Lodestar l = _activateForever();
+        vm.prank(dev);
+        vm.expectRevert(Lodestar.NoSuccessor.selector);
+        l.proposeUpgrade();
+        // a successor that has nowhere for this token is no successor either
+        factory.setSuccessor(address(new MockSuccessorFactory(address(0))));
+        vm.prank(dev);
+        vm.expectRevert(Lodestar.NoSuccessor.selector);
+        l.proposeUpgrade();
+    }
+
+    function test_onlyOwnerNamesSuccessorAndOnlyStewardProposes() public {
+        Lodestar l = _activateForever();
+        vm.startPrank(trader);
+        vm.expectRevert(LodestarFactory.OnlyOwner.selector);
+        factory.setSuccessor(trader);
+        vm.stopPrank();
+        vm.expectRevert(LodestarFactory.ZeroAddress.selector);
+        factory.setSuccessor(address(factory));
+
+        _successor();
+        vm.startPrank(trader);
+        vm.expectRevert(Lodestar.OnlySteward.selector);
+        l.proposeUpgrade();
+        vm.expectRevert(Lodestar.OnlySteward.selector);
+        l.cancelUpgrade();
+        vm.stopPrank();
+    }
+
+    /// @dev The forever lock still blocks every other hand-off; the proposed move waits 7 days, then anyone
+    /// can start it, and the new router finishes it on Ascend.
+    function test_upgradeWaitsSevenDaysThenMovesTheRole() public {
+        Lodestar l = _activateForever();
+        (address next, address router) = _successor();
+        vm.prank(dev);
+        vm.expectEmit(address(l));
+        emit Lodestar.UpgradeProposed(next, router, uint64(block.timestamp + 7 days));
+        l.proposeUpgrade();
+        assertEq(l.upgradeTarget(), router);
+
+        vm.prank(dev);
+        vm.expectRevert(Lodestar.CreatorRoleIsLocked.selector);
+        l.transferCreatorOut(trader);
+        vm.warp(block.timestamp + 7 days - 1);
+        vm.expectRevert(Lodestar.TimelockActive.selector);
+        l.executeUpgrade();
+
+        vm.warp(block.timestamp + 1);
+        vm.prank(trader);
+        l.executeUpgrade();
+        assertEq(launchpad.pendingCreator(poolId), router);
+        assertEq(l.upgradeEta(), 0, "one move, then the proposal is spent");
+        vm.expectRevert(Lodestar.NoPendingUpgrade.selector);
+        l.executeUpgrade();
+
+        vm.prank(router);
+        launchpad.acceptCreator(poolId);
+        assertEq(launchpad.poolCreator(poolId), router);
+        assertFalse(l.isCreator());
+    }
+
+    /// @dev Until the new router accepts, the steward can still call the move off and the role stays put.
+    function test_stewardCanStopAnExecutedUpgradeBeforeItIsAccepted() public {
+        Lodestar l = _activateForever();
+        (, address router) = _successor();
+        vm.prank(dev);
+        l.proposeUpgrade();
+        vm.warp(block.timestamp + 7 days);
+        l.executeUpgrade();
+        vm.prank(dev);
+        l.transferCreatorOut(address(0));
+        assertEq(launchpad.pendingCreator(poolId), address(0));
+        vm.prank(router);
+        vm.expectRevert();
+        launchpad.acceptCreator(poolId);
+        assertTrue(l.isCreator());
+    }
+
+    function test_upgradeStopsIfTheSuccessorChanges() public {
+        Lodestar l = _activateForever();
+        _successor();
+        vm.prank(dev);
+        l.proposeUpgrade();
+        factory.setSuccessor(address(new MockSuccessorFactory(makeAddr("other router"))));
+        vm.warp(block.timestamp + 7 days);
+        vm.expectRevert(Lodestar.SuccessorChanged.selector);
+        l.executeUpgrade();
+        factory.setSuccessor(address(0));
+        vm.expectRevert(Lodestar.SuccessorChanged.selector);
+        l.executeUpgrade();
+        assertTrue(l.isCreator());
+    }
+
+    function test_upgradeExpires() public {
+        Lodestar l = _activateForever();
+        _successor();
+        vm.prank(dev);
+        l.proposeUpgrade();
+        vm.warp(block.timestamp + 14 days + 1);
+        vm.expectRevert(Lodestar.ProposalExpired.selector);
+        l.executeUpgrade();
+    }
+
+    function test_cancelUpgrade() public {
+        Lodestar l = _activateForever();
+        _successor();
+        vm.startPrank(dev);
+        vm.expectRevert(Lodestar.NoPendingUpgrade.selector);
+        l.cancelUpgrade();
+        l.proposeUpgrade();
+        l.cancelUpgrade();
+        vm.stopPrank();
+        assertEq(l.upgradeTarget(), address(0));
+        vm.warp(block.timestamp + 7 days);
+        vm.expectRevert(Lodestar.NoPendingUpgrade.selector);
+        l.executeUpgrade();
+        assertTrue(l.isCreator());
     }
 }

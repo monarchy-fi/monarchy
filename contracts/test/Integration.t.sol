@@ -17,9 +17,9 @@ contract IntegrationTest is MonarchyFixture {
         _deployCore(address(0));
         (MockERC20 monarch, bytes32 poolId) = _launch("MONARCH");
 
-        // dev launched on Ascend and activates Lodestar: 40/40/20, listing on, role locked a year
+        // dev launched on Ascend and activates Lodestar: 40/40/20, listing on, role locked for good
         LodestarFactory.DeployParams memory p = _params(monarch, 4_000, 4_000, 2_000, address(0), true);
-        p.creatorLockUntil = uint64(block.timestamp + 365 days);
+        p.creatorLockUntil = type(uint64).max;
         Lodestar l = _activate(p);
         assertTrue(l.isCreator());
 

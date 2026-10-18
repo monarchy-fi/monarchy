@@ -139,7 +139,19 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
     ],
     query: { enabled: !!core.poolId, ...POLL.query },
   });
+  // routers and factories from before the upgrade path don't have these, so a failed read means none
+  const up = useReadContracts({
+    contracts: [
+      { ...l, functionName: "upgradeTarget" },
+      { ...l, functionName: "upgradeEta" },
+      { address: d.factory, abi: lodestarFactoryAbi, functionName: "successor" },
+    ],
+    query: POLL.query,
+  });
   if (!r.data) return <LoadingCard />;
+  const upTarget = up.data?.[0]?.result;
+  const upEta = up.data?.[1]?.result ?? 0n;
+  const successor = up.data?.[2]?.result;
   const [cfg, [pending, eta], preview, tokenBurned, buyQ, buyBurned, holdQ, treasQ, reserve, lockedUntil, isCreator, lastAt, tokenToHolders] = r.data;
   const [election, owed] = listing.data ?? [0n, 0n];
   const qd = core.quoteMeta?.decimals ?? 6;
@@ -161,6 +173,7 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
           <div className="lock-badges">
             {isCreator ? <Badge tone="green">Holds the creator role</Badge> : <Badge tone="red">Not the creator</Badge>}
             {Number(lockedUntil) > now ? <Badge tone="gold">Role locked {lockForever ? "forever" : `until ${date(lockedUntil)}`}</Badge> : <Badge tone="amber">Role not locked</Badge>}
+            {upEta > 0n && <Badge tone="amber">Upgrade proposed</Badge>}
             <Badge tone="grey">No fees</Badge>
           </div>
         }
@@ -218,7 +231,28 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         </Card>
       )}
 
-      {isSteward && <Steward lodestar={lodestar} cfg={cfg} lockedUntil={lockedUntil} listingLive={listingLive} />}
+      {upEta > 0n && upTarget && (
+        <Card title="Pending upgrade" right={<Badge tone="amber">7 day notice</Badge>}>
+          <p className="muted small">
+            The steward has proposed moving this token's creator role, and with it every future fee, to its router on a newer Monarchy factory. Anyone can carry it out once the
+            notice ends. Locked tokens and vesting streams stay where they are.
+          </p>
+          <Row k="New router" v={<Addr address={upTarget} />} />
+          <Row k="Executable" v={Number(upEta) > now ? `in ${duration(Number(upEta) - now)} (${date(upEta)})` : "now"} />
+          <div className="lock-actions">
+            <TxButton disabledReason={Number(upEta) > now ? "The 7 day notice is still running" : undefined} request={() => ({ ...l, functionName: "executeUpgrade" })}>
+              Execute upgrade
+            </TxButton>
+            {isSteward && (
+              <TxButton className="btn btn-ghost" request={() => ({ ...l, functionName: "cancelUpgrade" })}>
+                Cancel upgrade
+              </TxButton>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {isSteward && <Steward lodestar={lodestar} cfg={cfg} lockedUntil={lockedUntil} listingLive={listingLive} successor={successor} upgradePending={upEta > 0n} />}
     </>
   );
 }
@@ -241,7 +275,21 @@ function TokenRoute({ value, onChange, name }: { value: boolean; onChange: (v: b
   );
 }
 
-function Steward({ lodestar, cfg, lockedUntil, listingLive }: { lodestar: Address; cfg: Cfg; lockedUntil: bigint; listingLive: boolean }) {
+function Steward({
+  lodestar,
+  cfg,
+  lockedUntil,
+  listingLive,
+  successor,
+  upgradePending,
+}: {
+  lodestar: Address;
+  cfg: Cfg;
+  lockedUntil: bigint;
+  listingLive: boolean;
+  successor?: Address;
+  upgradePending: boolean;
+}) {
   const l = { address: lodestar, abi: lodestarAbi } as const;
   const [split, setSplit] = useState({ burn: cfg.burnBps / 100, holders: cfg.holdersBps / 100, treasury: cfg.treasuryBps / 100 });
   const [toHolders, setToHolders] = useState(cfg.tokenToHolders);
@@ -264,7 +312,7 @@ function Steward({ lodestar, cfg, lockedUntil, listingLive }: { lodestar: Addres
       </TxButton>
       <h4>Lock the creator role</h4>
       {lockedUntil >= 2n ** 63n ? (
-        <p className="muted small">Locked for good. The fee stream can never leave this router.</p>
+        <p className="muted small">Locked for good. The fee stream can only leave this router by an upgrade to a newer Lodestar, below.</p>
       ) : (
         <>
           <p className="muted small">Promise holders the router can't be swapped out, ever. Current lock: {lockedUntil > 0n ? `until ${date(lockedUntil)}` : "none"}.</p>
@@ -274,6 +322,20 @@ function Steward({ lodestar, cfg, lockedUntil, listingLive }: { lodestar: Addres
           </label>
           <TxButton className="btn btn-sm" disabledReason={!sure ? "Tick the box first" : undefined} request={() => ({ ...l, functionName: "lockCreatorRole", args: [2n ** 64n - 1n] })}>
             Lock forever
+          </TxButton>
+        </>
+      )}
+      <h4>Upgrade to a newer Lodestar</h4>
+      {!successor || successor === ZERO ? (
+        <p className="muted small">Monarchy hasn't published a newer Lodestar. If it does, you can propose moving the creator role to it here, with 7 days' notice to holders.</p>
+      ) : (
+        <>
+          <p className="muted small">
+            Monarchy has published a newer Lodestar. Proposing moves the creator role to this token's router there after 7 days' notice, shown to everyone on this page. You can
+            cancel until it is carried out.
+          </p>
+          <TxButton className="btn btn-sm" request={() => ({ ...l, functionName: "proposeUpgrade" })}>
+            {upgradePending ? "Propose again (restarts the 7 days)" : "Propose upgrade"}
           </TxButton>
         </>
       )}
@@ -407,12 +469,12 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
             <h5>Creator role</h5>
             <label className="check">
               <input type="checkbox" checked={lockForever} onChange={(e) => setLockForever(e.target.checked)} />
-              Lock the creator role to this router for good
+              Lock the creator role to this router forever
             </label>
             <p className="muted small">
               {lockForever
-                ? "Holders can see that the fee stream can never be moved away from this router. This can't be undone."
-                : "Without a lock the steward could hand the creator role away later. You can still lock it for good from the steward controls."}
+                ? "Holders can see the fee stream can't be moved away from this router. The only exception is a move to this token's router on a newer Monarchy Lodestar, announced 7 days ahead. This can't be undone."
+                : "Without a lock the steward could hand the creator role away later. You can still lock it forever from the steward controls."}
             </p>
             <h5>HyperCore listing savings</h5>
             <label className="check">
