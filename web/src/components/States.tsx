@@ -1,7 +1,7 @@
 import { useBlockNumber, useConnection } from "wagmi";
 import { chainName } from "../lib/chains";
 import { useNetwork } from "../lib/network";
-import { Connect, SwitchButton } from "./Connect";
+import { SwitchButton } from "./Connect";
 import { Card, Empty } from "./Ui";
 
 /** A slim strip above the nav: which network this is, and that tokens here are test tokens. */
@@ -58,7 +58,7 @@ export function NoDeployment({ inline }: { inline?: boolean }) {
       <Card>
         <Empty
           title="Monarchy isn't on this network"
-          action={isConnected ? <SwitchButton /> : <Connect />}
+          action={isConnected ? <SwitchButton /> : <ConnectHint />}
         >
           Switch your wallet to {chainName(target.id)} to use Lodestar, Exile and Sandfall.
         </Empty>
@@ -67,11 +67,20 @@ export function NoDeployment({ inline }: { inline?: boolean }) {
   return inline ? card : <div className="page">{card}</div>;
 }
 
-/** Empty state for wallet-specific lists. */
+/** Empty state for wallet-specific lists. The only connect button is the one at the top right. */
 export function ConnectPrompt({ children }: { children: string }) {
   return (
-    <Empty title="No wallet connected" action={<Connect />}>
+    <Empty title="No wallet connected" action={<ConnectHint />}>
       {children}
     </Empty>
+  );
+}
+
+/** Points at the connect button in the top right corner. */
+export function ConnectHint() {
+  return (
+    <span className="connect-hint">
+      Connect wallet at the top right <span aria-hidden="true">↗</span>
+    </span>
   );
 }

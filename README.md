@@ -17,7 +17,7 @@
 
 [Website](https://monarchy.fi) · [Docs](https://docs.monarchy.fi) · [X](https://x.com/monarchyfi) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO.md) · [Testnet contracts](#live-on-elysium-testnet)
 
-<img src="docs/img/site-home.png" alt="The Monarchy home page: the word MONARCHY in white on black above a crown drawn in text characters" width="840" />
+<img src="docs/img/site-home.png" alt="The Monarchy home page: the name MONARCHY and the line Seize the crown, beside a tilted crown drawn in text characters" width="840" />
 
 </div>
 

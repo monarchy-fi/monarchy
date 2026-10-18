@@ -11,6 +11,7 @@ import { date, duration, fmt, pct } from "../lib/format";
 import { POLL, useNow, usePageTitle } from "../lib/hooks";
 import { useLodestarCore, useTokenMeta } from "../lib/monarchy";
 import { NoDeployment } from "../components/States";
+import { TokenFeeFlow } from "../components/FeeFlow";
 
 export function LodestarPage() {
   usePageTitle("Lodestar");
@@ -37,6 +38,7 @@ export function LodestarPage() {
           No fees.
         </p>
       </header>
+      <TokenFeeFlow />
       <Card title="Token">
         <label className="field">
           <span className="field-label">Ascend token address</span>

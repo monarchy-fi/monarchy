@@ -166,58 +166,64 @@ function LockForm({
           })}
         </div>
       )}
-      <DurationSlider seconds={seconds} onChange={setSeconds} tiers={rewards ? tiers : []} tierName={tier ? label(tier.label) : undefined} />
-      <label className="field" style={{ marginTop: 14 }}>
-        <span className="field-label">Amount {symbol && <span className="faint">({symbol})</span>}</span>
-        <div className="input-row">
-          <input className="input" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          {balance !== undefined && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setAmount(fmtPlain(balance as bigint, Number(decimals)))}>
-              Max {fmt(balance as bigint, Number(decimals))}
-            </button>
-          )}
+      <div className="lock-split">
+        <div className="lock-main">
+          <DurationSlider seconds={seconds} onChange={setSeconds} tiers={rewards ? tiers : []} tierName={tier ? label(tier.label) : undefined} />
+          <label className="field" style={{ marginTop: 14 }}>
+            <span className="field-label">Amount {symbol && <span className="faint">({symbol})</span>}</span>
+            <div className="input-row">
+              <input className="input" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              {balance !== undefined && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setAmount(fmtPlain(balance as bigint, Number(decimals)))}>
+                  Max {fmt(balance as bigint, Number(decimals))}
+                </button>
+              )}
+            </div>
+          </label>
         </div>
-      </label>
-      <div className="summary">
-        <Row k="Unlocks" v={date(unlockAt)} />
-        <Row
-          k="Tier"
-          v={
-            !rewards ? (
-              <Badge tone="grey">No rewards for this token</Badge>
-            ) : tiersLoading ? (
-              <Skel w="8em" />
-            ) : tier ? (
-              <>
-                <TierBadge name={label(tier.label)} /> {mult(tier.multiplierBps)}
-              </>
-            ) : (
-              <Badge tone="red">Shorter than the first tier, so no rewards</Badge>
-            )
-          }
-        />
-        {rewards && value > 0n && tier && <Row k="Points" v={fmt((value * BigInt(tier.multiplierBps)) / 10_000n, Number(decimals))} />}
-        <Row k="Cancellable" v={<Badge tone="green">Not cancellable</Badge>} />
+        <div className="lock-side">
+          <div className="summary">
+            <Row k="Unlocks" v={date(unlockAt)} />
+            <Row
+              k="Tier"
+              v={
+                !rewards ? (
+                  <Badge tone="grey">No rewards for this token</Badge>
+                ) : tiersLoading ? (
+                  <Skel w="8em" />
+                ) : tier ? (
+                  <>
+                    <TierBadge name={label(tier.label)} /> {mult(tier.multiplierBps)}
+                  </>
+                ) : (
+                  <Badge tone="red">Shorter than the first tier, so no rewards</Badge>
+                )
+              }
+            />
+            {rewards && value > 0n && tier && <Row k="Points" v={fmt((value * BigInt(tier.multiplierBps)) / 10_000n, Number(decimals))} />}
+            <Row k="Cancellable" v={<Badge tone="green">Not cancellable</Badge>} />
+          </div>
+          <WithApproval token={token} spender={exile} amount={value}>
+            <TxButton
+              disabledReason={!token ? "Enter the token or LP address" : rewards && tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : undefined}
+              request={() =>
+                token && {
+                  address: exile,
+                  abi: exileAbi,
+                  functionName: "lockERC20",
+                  args: [token, value, BigInt(unlockAt), rewards ? (poolId ?? 0n) : 0n],
+                }
+              }
+              onDone={() => setAmount("")}
+            >
+              {symbol ? `Lock ${symbol}` : "Lock"}
+            </TxButton>
+          </WithApproval>
+          <p className="muted small">
+            Unlock times round up to the next hour.{rewards ? ` Rewards drip in over ${drip} days and stop the second a lock ends.` : ""}
+          </p>
+        </div>
       </div>
-      <WithApproval token={token} spender={exile} amount={value}>
-        <TxButton
-          disabledReason={!token ? "Enter the token or LP address" : rewards && tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : undefined}
-          request={() =>
-            token && {
-              address: exile,
-              abi: exileAbi,
-              functionName: "lockERC20",
-              args: [token, value, BigInt(unlockAt), rewards ? (poolId ?? 0n) : 0n],
-            }
-          }
-          onDone={() => setAmount("")}
-        >
-          {symbol ? `Lock ${symbol}` : "Lock"}
-        </TxButton>
-      </WithApproval>
-      <p className="muted small">
-        Unlock times round up to the next hour.{rewards ? ` Rewards drip in over ${drip} days and stop the second a lock ends.` : ""}
-      </p>
     </>
   );
 }
@@ -421,7 +427,7 @@ function MyLocks({ exile, tiers, rewardMeta, stakeMeta }: { exile: Address; tier
   const list = useMemo(() => [...(ids.data ?? [])].reverse(), [ids.data]);
   return (
     <Card title="My locks" right={address && ids.data ? <span className="muted small">{list.length} {list.length === 1 ? "lock" : "locks"}</span> : undefined}>
-      {!address && <ConnectPrompt>Connect a wallet to see your locks and claim rewards.</ConnectPrompt>}
+      {!address && <ConnectPrompt>Your locks and rewards show up here once a wallet is connected.</ConnectPrompt>}
       {address && !ids.data && (
         <div className="locks">
           <div className="lock skeleton" />

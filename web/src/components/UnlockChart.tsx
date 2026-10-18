@@ -39,7 +39,10 @@ export function UnlockChart({ schedule, total, now, height: H = 190 }: { schedul
     return () => ro.disconnect();
   }, []);
 
-  const { start, cliff, end } = schedule;
+  const { start, end } = schedule;
+  // a cliff past the end (or before the start) would draw off the chart; the contract never vests outside them
+  const cliff = Math.min(Math.max(schedule.cliff, start), end);
+  const sch = { ...schedule, cliff };
   const span = Math.max(1, end - start);
   const x0 = start;
   const x1 = end + span * 0.06;
@@ -50,15 +53,15 @@ export function UnlockChart({ schedule, total, now, height: H = 190 }: { schedul
 
   // corner points of the unlock curve
   const pts: [number, number][] = [[start, 0]];
-  if (!schedule.step) {
-    pts.push([cliff, 0], [cliff, unlockedAt(schedule, cliff)], [end, 1]);
+  if (!sch.step) {
+    pts.push([cliff, 0], [cliff, unlockedAt(sch, cliff)], [end, 1]);
   } else {
-    const periods = Math.ceil(span / schedule.step);
+    const periods = Math.ceil(span / sch.step);
     const every = Math.max(1, Math.ceil(periods / MAX_STEPS));
     let prev = 0;
     for (let k = 1; k <= periods; k += every) {
-      const t = Math.max(cliff, Math.min(end, start + k * schedule.step));
-      const f = unlockedAt(schedule, t);
+      const t = Math.max(cliff, Math.min(end, start + k * sch.step));
+      const f = unlockedAt(sch, t);
       if (f !== prev) {
         pts.push([t, prev], [t, f]);
         prev = f;
@@ -77,7 +80,7 @@ export function UnlockChart({ schedule, total, now, height: H = 190 }: { schedul
   };
   const ticks = [start, ...(cliff > start && X(cliff) - X(start) > 120 && X(end) - X(cliff) > 110 ? [cliff] : []), end];
   const showNow = now !== undefined && now > start && now < x1;
-  const nowF = showNow ? unlockedAt(schedule, now) : 0;
+  const nowF = showNow ? unlockedAt(sch, now) : 0;
 
   return (
     <div ref={wrap} className="chart-wrap">

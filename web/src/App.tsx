@@ -5,8 +5,8 @@ import { Connect } from "./components/Connect";
 import { Crown } from "./components/Crown";
 import { GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
 import { NetworkNotice, TestnetStrip } from "./components/States";
-import { chainName } from "./lib/chains";
-import { useNetwork } from "./lib/network";
+import { isSet, useDeployment } from "./lib/deployments";
+import { short } from "./lib/format";
 import { useMock } from "./lib/wagmi";
 import { ExilePage } from "./pages/Exile";
 import { Home } from "./pages/Home";
@@ -20,19 +20,45 @@ const LINKS = [
   { to: "/sandfall", label: "Sandfall", hint: "Vesting", key: "sandfall", glyph: <HourglassGlyph /> },
 ];
 
+// the word, with the tool's mark hidden in front of it until hover
 function LinkLabel({ l }: { l: (typeof LINKS)[number] }) {
   return (
     <>
-      <span className="nl-icon">{l.glyph}</span>
       <span className="nl-word">{l.label}</span>
+      <span className="nl-icon" aria-hidden="true">
+        {l.glyph}
+      </span>
     </>
+  );
+}
+
+/** The token's contract address, shortened; a click copies the full address. */
+function ContractChip({ className }: { className?: string }) {
+  const d = useDeployment();
+  const [copied, setCopied] = useState(false);
+  const token = d && isSet(d.token) ? d.token : undefined;
+  if (!token) return null;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // clipboard blocked: the full address is still in the tooltip
+    }
+  };
+  return (
+    <button type="button" className={`ca ${className ?? ""}`} onClick={copy} title={`${token}, click to copy`}>
+      <span className="ca-k">Contract</span>
+      <span className="ca-v">{copied ? "Copied" : short(token)}</span>
+    </button>
   );
 }
 
 export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
-  const { walletChainId, isConnected, target } = useNetwork();
+  const home = pathname === "/";
   useMockAutoConnect();
 
   // close the phone menu and go to the top on every navigation
@@ -42,7 +68,7 @@ export function App() {
   }, [pathname]);
 
   return (
-    <div className="app">
+    <div className={`app ${home ? "app-home" : ""}`}>
       <TestnetStrip />
       <header className="nav-wrap">
         <nav className="nav" aria-label="Main">
@@ -58,10 +84,7 @@ export function App() {
             ))}
           </div>
           <div className="nav-right">
-            <span className="net" title="Network">
-              <i className="net-dot" />
-              {chainName(isConnected && walletChainId ? walletChainId : target.id)}
-            </span>
+            <ContractChip />
             <Connect className="nav-connect" />
             <button
               className="menu-btn"
@@ -88,9 +111,7 @@ export function App() {
                 <span className="menu-hint">{l.hint}</span>
               </NavLink>
             ))}
-            <div className="menu-net">
-              <i className="net-dot" /> {chainName(isConnected && walletChainId ? walletChainId : target.id)}
-            </div>
+            <ContractChip className="menu-ca" />
           </div>
         )}
       </header>
@@ -104,24 +125,26 @@ export function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
-      <footer className="foot">
-        <div className="foot-brand">
-          <span>MONARCHY</span>
-          <span className="foot-sep" aria-hidden="true" />
-          <span>Built on Ascend. No fees.</span>
-        </div>
-        <div className="foot-links">
-          <a href="https://docs.monarchy.fi" target="_blank" rel="noreferrer">
-            Docs
-          </a>
-          <a href="https://github.com/monarchy-fi/monarchy" target="_blank" rel="noreferrer">
-            GitHub
-          </a>
-          <a href="https://x.com/monarchyfi" target="_blank" rel="noreferrer">
-            X
-          </a>
-        </div>
-      </footer>
+      {!home && (
+        <footer className="foot">
+          <div className="foot-brand">
+            <span>MONARCHY</span>
+            <span className="foot-sep" aria-hidden="true" />
+            <span>Built on Ascend. No fees.</span>
+          </div>
+          <div className="foot-links">
+            <a href="https://docs.monarchy.fi" target="_blank" rel="noreferrer">
+              Docs
+            </a>
+            <a href="https://github.com/monarchy-fi/monarchy" target="_blank" rel="noreferrer">
+              GitHub
+            </a>
+            <a href="https://x.com/monarchyfi" target="_blank" rel="noreferrer">
+              X
+            </a>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

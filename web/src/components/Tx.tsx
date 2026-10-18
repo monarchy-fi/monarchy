@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { useChainId, useConnect, useConnection, useConnectors, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { useChainId, useConnection, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Abi, Address } from "viem";
 import { useReadContract } from "wagmi";
@@ -31,6 +31,7 @@ export function TxButton({ request, children, disabledReason, onDone, className 
   const [hash, setHash] = useState<`0x${string}`>();
   const receipt = useWaitForTransactionReceipt({ hash });
   const [error, setError] = useState<string>();
+  const tipId = useId();
 
   useEffect(() => {
     if (receipt.isSuccess) {
@@ -42,7 +43,15 @@ export function TxButton({ request, children, disabledReason, onDone, className 
 
   const busy = write.isPending || (!!hash && receipt.isLoading);
   // Nothing is sent while the wallet sits on another chain; the notice under the nav offers the switch.
-  const reason = !isConnected ? "Connect a wallet" : wrongNetwork ? `Switch your wallet to ${chainName(target.id)} first` : disabledReason;
+  const reason = !isConnected ? "Connect first" : wrongNetwork ? `Switch your wallet to ${chainName(target.id)} first` : disabledReason;
+  // why the button is grey shows as a popup over it, on hover or on a tap
+  const [tapped, setTapped] = useState(false);
+  useEffect(() => {
+    if (!tapped) return;
+    const t = setTimeout(() => setTapped(false), 2200);
+    return () => clearTimeout(t);
+  }, [tapped]);
+  const tip = reason && !busy ? reason : undefined;
 
   async function send() {
     setError(undefined);
@@ -75,26 +84,35 @@ export function TxButton({ request, children, disabledReason, onDone, className 
   const done = !!hash && receipt.isSuccess;
   return (
     <div className="tx">
-      <button
-        className={`${className ?? "btn"} ${busy ? "is-busy" : ""} ${done && !busy ? "is-done" : ""}`}
-        disabled={!!reason || busy}
-        onClick={send}
-        title={reason}
-        aria-busy={busy}
-      >
-        {write.isPending ? (
-          <>
-            <Spinner /> Confirm in wallet
-          </>
-        ) : busy ? (
-          <>
-            <Spinner /> Confirming
-          </>
-        ) : (
-          children
+      <span className={`tx-btn ${tip ? "has-tip" : ""} ${tapped ? "show-tip" : ""}`} onPointerDown={() => tip && setTapped(true)}>
+        <button
+          className={`${className ?? "btn"} ${busy ? "is-busy" : ""} ${done && !busy ? "is-done" : ""}`}
+          disabled={!!reason || busy}
+          onClick={send}
+          aria-busy={busy}
+          aria-describedby={tip ? tipId : undefined}
+        >
+          {write.isPending ? (
+            <>
+              <Spinner /> Confirm in wallet
+            </>
+          ) : busy ? (
+            <>
+              <Spinner /> Confirming
+            </>
+          ) : (
+            children
+          )}
+        </button>
+        {tip && (
+          <span className="tip" role="tooltip" id={tipId} key={tip} style={{ "--n": tip.length + (isConnected ? 0 : 2) } as CSSProperties}>
+            <span className="tip-text">
+              {tip}
+              {!isConnected && <span aria-hidden="true"> ↗</span>}
+            </span>
+          </span>
         )}
-      </button>
-      {!isConnected ? <ConnectFirst /> : reason && !busy && <span className="tx-note">{reason}</span>}
+      </span>
       {busy && !write.isPending && hash && <span className="tx-pending">Waiting for the block. {txRef}</span>}
       {done && (
         <span className="tx-ok" role="status">
@@ -112,19 +130,6 @@ export function TxButton({ request, children, disabledReason, onDone, className 
         </span>
       )}
     </div>
-  );
-}
-
-/** Beside a button that can't work yet because no wallet is connected: types itself out, and connects on click. */
-function ConnectFirst() {
-  const connectors = useConnectors();
-  const connect = useConnect();
-  const c = connectors[0];
-  return (
-    <button type="button" className="connect-first" disabled={!c || connect.isPending} onClick={() => c && connect.mutate({ connector: c })}>
-      <span className="cf-arrow" aria-hidden="true">◂</span>
-      <span className="cf-text">{connect.isPending ? "Connecting" : "Connect first"}</span>
-    </button>
   );
 }
 
