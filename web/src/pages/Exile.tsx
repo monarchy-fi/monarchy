@@ -6,6 +6,8 @@ import { tagline, TierBadge } from "../components/Tiers";
 import { TxButton, WithApproval } from "../components/Tx";
 import { ConnectPrompt, NoDeployment } from "../components/States";
 import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
+import { Slider } from "../components/Slider";
+import { PageMark } from "../components/NavGlyphs";
 import { useDeployment, ZERO } from "../lib/deployments";
 import { date, duration, fmt, label, mult } from "../lib/format";
 import { POLL, useNow, usePageTitle, useTicking } from "../lib/hooks";
@@ -49,7 +51,10 @@ export function ExilePage() {
   return (
     <div className="page">
       <header className="page-head">
-        <h1>Exile</h1>
+        <h1>
+          <PageMark page="exile" />
+          Exile
+        </h1>
         <p className="muted">
           Lock tokens, LP or NFTs. A lock can be extended but never shortened, cancelled or transferred. Longer
           locks earn a bigger share of holder rewards.
@@ -196,7 +201,7 @@ function LockForm({
                     <TierBadge name={label(tier.label)} /> {mult(tier.multiplierBps)}
                   </>
                 ) : (
-                  <Badge tone="red">Shorter than the first tier, so no rewards</Badge>
+                  <Badge tone="red">No rewards</Badge>
                 )
               }
             />
@@ -309,6 +314,12 @@ function fromPos(pos: number): number {
   // whole hours below two days, whole days above
   return raw < 2 * 86400 ? Math.round(raw / 3600) * 3600 : Math.round(raw / 86400) * 86400;
 }
+/** One key press on the duration slider: an hour (a day with Page keys) below two days, a day (a week) above. */
+function nudge(sec: number, dir: -1 | 1, big: boolean): number {
+  const unit = sec + dir * 3600 < 2 * 86400 ? 3600 : 86400;
+  const next = sec + dir * unit * (big ? (unit === 3600 ? 24 : 7) : 1);
+  return Math.min(MAX_S, Math.max(MIN_S, next < 2 * 86400 ? Math.round(next / 3600) * 3600 : Math.round(next / 86400) * 86400));
+}
 function lockLength(sec: number): string {
   if (sec < 86400) return `${Math.round(sec / 3600)} hour${sec === 3600 ? "" : "s"}`;
   const dd = Math.round(sec / 86400);
@@ -333,7 +344,7 @@ function DurationSlider({ seconds, onChange, tiers, tierName }: { seconds: numbe
           {tierName && <span className="amt-sym"> · {tierName}</span>}
         </span>
       </div>
-      <input type="range" min={0} max={1000} value={toPos(seconds)} onChange={(e) => onChange(fromPos(Number(e.target.value)))} aria-label="Lock length" aria-valuetext={lockLength(seconds)} />
+      <Slider max={1000} values={[toPos(seconds)]} onChange={(_, p) => onChange(fromPos(p))} keyStep={(_, dir, big) => onChange(nudge(seconds, dir, big))} labels={["Lock length"]} valueTexts={[lockLength(seconds)]} />
       <div className="dur-marks">
         {tiers.length > 0
           ? tiers.map((t) => (
@@ -539,7 +550,7 @@ function LockCard({ exile, id, tiers, rewardMeta, stakeMeta }: { exile: Address;
               {lock.poolId !== 0n && (newTier?.multiplierBps ?? 0) !== lock.multiplierBps
                 ? newTier
                   ? ` (${newTier.multiplierBps > lock.multiplierBps ? "up" : "down"} to ${label(newTier.label)})`
-                  : " (below the first tier)"
+                  : " (no rewards)"
                 : ""}
             </TxButton>
           </div>

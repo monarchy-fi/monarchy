@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useConnect, useConnection, useConnectors } from "wagmi";
 import { Connect } from "./components/Connect";
-import { Crown } from "./components/Crown";
+import { CrownSolid } from "./components/Crown";
 import { CastleGlyph, GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
 import { NetworkNotice, TestnetStrip } from "./components/States";
 import { MONARCHY_CA } from "./lib/constants";
@@ -17,8 +17,8 @@ import { SandfallPage } from "./pages/Sandfall";
 
 const LINKS = [
   { to: "/kingdom", label: "Kingdom", hint: "How it works and live stats", key: "kingdom", glyph: <CastleGlyph /> },
-  { to: "/lodestar", label: "Lodestar", hint: "Fee router", key: "lodestar", glyph: <StarGlyph /> },
   { to: "/exile", label: "Exile", hint: "Locks and rewards", key: "exile", glyph: <GateGlyph /> },
+  { to: "/lodestar", label: "Lodestar", hint: "Fee router", key: "lodestar", glyph: <StarGlyph /> },
   { to: "/sandfall", label: "Sandfall", hint: "Vesting", key: "sandfall", glyph: <HourglassGlyph /> },
 ];
 
@@ -35,6 +35,32 @@ function LinkLabel({ l }: { l: (typeof LINKS)[number] }) {
 }
 
 /** The MONARCHY token's contract address, shortened, and a click copies it. Until launch it reads "CA: soon". */
+/** Copies text, falling back to a hidden textarea where the async clipboard is blocked (an http page, an iframe). */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  }
+}
+
+function CopyMark({ done }: { done: boolean }) {
+  return (
+    <svg className="ca-ico" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.1" aria-hidden="true">
+      {done ? <path d="M2 6.4 4.6 9 10 3.2" /> : <path d="M4 4h6v6.5H4ZM2 8V1.5h6" />}
+    </svg>
+  );
+}
+
 function ContractChip({ className }: { className?: string }) {
   const [copied, setCopied] = useState(false);
   const token = MONARCHY_CA;
@@ -47,18 +73,16 @@ function ContractChip({ className }: { className?: string }) {
     );
   }
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(token);
+    if (await copyText(token)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
-    } catch {
-      // clipboard blocked: the full address is still in the tooltip
     }
   };
   return (
-    <button type="button" className={`ca ${className ?? ""}`} onClick={copy} title={`${token}, click to copy`}>
+    <button type="button" className={`ca ${copied ? "ca-copied" : ""} ${className ?? ""}`} onClick={copy} title={`${token}, click to copy`} aria-label={`Contract address ${token}, click to copy`}>
       <span className="ca-k">CA</span>
       <span className="ca-v">{copied ? "Copied" : short(token)}</span>
+      <CopyMark done={copied} />
     </button>
   );
 }
@@ -82,7 +106,7 @@ export function App() {
         <nav className="nav" aria-label="Main">
           <div className="nav-left">
             <NavLink to="/" end className="nav-crown nav-crown-m" aria-label="Monarchy home">
-              <Crown size={22} />
+              <CrownSolid />
             </NavLink>
           </div>
           {/* the four tabs, with the crown for home in the middle */}
@@ -91,7 +115,7 @@ export function App() {
               <Fragment key={l.to}>
                 {i === 2 && (
                   <NavLink to="/" end className="nav-crown" aria-label="Monarchy home">
-                    <Crown size={24} />
+                    <CrownSolid />
                   </NavLink>
                 )}
                 <NavLink to={l.to} className={`nl nl-${l.key}`}>

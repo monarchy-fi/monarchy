@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useReadContracts } from "wagmi";
 import { exileAbi, lodestarAbi, mockERC20Abi } from "../abi";
 import { TokenFeeFlow } from "../components/FeeFlow";
-import { GateGlyph, HourglassGlyph, StarGlyph } from "../components/NavGlyphs";
+import { GateGlyph, HourglassGlyph, PageMark, StarGlyph } from "../components/NavGlyphs";
 import { NoDeployment } from "../components/States";
 import { tagline, TierBadge } from "../components/Tiers";
 import { Amt, Card, Skel, Stat, Sym } from "../components/Ui";
@@ -49,7 +49,10 @@ export function KingdomPage() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Kingdom</h1>
+        <h1>
+          <PageMark page="kingdom" />
+          Kingdom
+        </h1>
         <p>
           Every token launched on Ascend can run its own kingdom. Creator fees are burned, bought back, paid to locked holders or
           streamed to the team, all in the open, and Monarchy keeps none of it.

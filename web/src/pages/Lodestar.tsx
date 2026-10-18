@@ -11,7 +11,8 @@ import { date, duration, fmt, pct } from "../lib/format";
 import { POLL, useNow, usePageTitle } from "../lib/hooks";
 import { useLodestarCore, useTokenMeta } from "../lib/monarchy";
 import { NoDeployment } from "../components/States";
-import { TokenFeeFlow } from "../components/FeeFlow";
+import { Slider } from "../components/Slider";
+import { PageMark } from "../components/NavGlyphs";
 
 export function LodestarPage() {
   usePageTitle("Lodestar");
@@ -30,7 +31,10 @@ export function LodestarPage() {
   return (
     <div className="page">
       <header className="page-head">
-        <h1>Lodestar</h1>
+        <h1>
+          <PageMark page="lodestar" />
+          Lodestar
+        </h1>
         <p className="muted">
           A fee router for one Ascend token. It holds the token's creator role, so every creator fee lands here. Anyone
           can route it. Token-side fees are burned, or, if the creator chooses, all paid to Exile lockers. Quote-side
@@ -38,7 +42,6 @@ export function LodestarPage() {
           No fees.
         </p>
       </header>
-      <TokenFeeFlow />
       <Card title="Token">
         <label className="field">
           <span className="field-label">Ascend token address</span>
@@ -505,15 +508,20 @@ function SplitInputs({ split, setSplit }: { split: Split; setSplit: (s: Split) =
   const set = (na: number, nb: number) => setSplit({ burn: na, holders: nb - na, treasury: 100 - nb });
   return (
     <div className="slider3">
-      <div className="slider3-track">
+      <Slider
+        className="slider3-track"
+        max={100}
+        values={[a, b]}
+        onChange={(i, v) => (i === 0 ? set(v, Math.max(b, v)) : set(Math.min(a, v), v))}
+        labels={["Buyback and burn share", "Buyback and holder rewards share, the rest goes to the Team Treasury"]}
+        valueTexts={[`${a}%`, `${b}%`]}
+      >
         <div className="slider3-bar" aria-hidden="true">
           <div className="seg seg-burn" style={{ width: `${a}%` }} />
           <div className="seg seg-holders" style={{ width: `${b - a}%` }} />
           <div className="seg seg-treasury" style={{ width: `${100 - b}%` }} />
         </div>
-        <input type="range" min={0} max={100} value={a} aria-label="Buyback and burn share" onChange={(e) => { const v = Number(e.target.value); set(v, Math.max(b, v)); }} />
-        <input type="range" min={0} max={100} value={b} aria-label="Buyback and holder rewards share, the rest goes to the Team Treasury" onChange={(e) => { const v = Number(e.target.value); set(Math.min(a, v), v); }} />
-      </div>
+      </Slider>
       <div className="slider3-legend">
         <div>
           <span className="lg-k"><i className="dot seg-burn" />Buyback and burn</span>
