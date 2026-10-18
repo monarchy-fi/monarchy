@@ -29,6 +29,10 @@
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* JetBrains Mono joins ==, +++ and -- into ligatures, which smear the ASCII art. Every rule that uses
+   the font shorthand resets ligatures, so this has to win over all of them. */
+*, *::before, *::after { font-variant-ligatures: none !important; }
+
 body {
   margin: 0;
   min-height: 100vh;
