@@ -47,6 +47,7 @@ export function KingdomPage() {
   const dripPerDay = pool ? (pool.periodFinish > now ? (pool.rewardRate * 86400n) / 10n ** 18n : 0n) : undefined;
   const drip = useDripDays();
   // until MONARCHY is the token this deployment's Lodestar routes for, the sample token's numbers fill the card
+  const live = !!d && !!core.lodestar;
   const standIn = !!ts && !!core.token && core.token.toLowerCase() !== MONARCHY_CA?.toLowerCase();
   const burnShare = dead !== undefined && supply ? `${fmt((dead * 10_000n) / supply, 2, 2)}% of supply` : undefined;
 
@@ -99,7 +100,7 @@ export function KingdomPage() {
           <p className="kingdom-lead">
             Most tokens ask holders to trust the team with the fees. <b>MONARCHY runs on its own tools instead</b>, the same
             contracts it offers every Ascend token, with the same zero fees and the same timelocks. Nothing here is special to it,
-            and all of it can be checked on chain.
+            and each tool below shows how MONARCHY uses it.
             {standIn && <span className="faint"> Until MONARCHY launches, the sample token {ts} stands in.</span>}
           </p>
           <div className="stats stats-3">
@@ -110,45 +111,64 @@ export function KingdomPage() {
             <Stat label="Burned from token fees" value={<Amt value={feeBurned} decimals={td} symbol={ts} compact />} hint="Sent straight to the burn address" />
             <Stat label="Locked points" value={<Amt value={pool?.totalPoints} decimals={td} compact />} hint="Amount times tier multiplier" />
           </div>
-          <ul className="dogfood" aria-label="How MONARCHY uses its own tools">
-            <li>
-              <span className="kicker">Its fees</span>
-              <b>Lodestar</b>
-              <span>
-                Holds the creator role: <Addr address={core.lodestar} />
-              </span>
-              {lockedUntil === undefined ? <Skel w="10em" /> : lockedUntil >= 2n ** 63n ? <Badge tone="gold">Locked to it forever</Badge> : <Badge tone="amber">Not locked yet</Badge>}
-            </li>
-            <li>
-              <span className="kicker">Its holders</span>
-              <b>Exile</b>
-              <span>Lock it to earn the holder share of every fee, by tier.</span>
-              <Link className="dogfood-go" to={core.token ? `/analytics?q=${core.token}` : "/analytics"}>
-                See every lock <span aria-hidden="true">→</span>
-              </Link>
-            </li>
-            <li>
-              <span className="kicker">Its team</span>
-              <b>Sandfall</b>
-              <span>The Team Treasury share streams out in the open, never in one lump.</span>
-              <Link className="dogfood-go" to="/sandfall">
-                Watch it vest <span aria-hidden="true">→</span>
-              </Link>
-            </li>
-          </ul>
         </Card>
       )}
 
       <div className="grid3">
-        <Feature to="/lodestar" title="Lodestar" kicker="Fee router" icon={<StarGlyph />} cls="nl-lodestar">
+        <Feature
+          to="/lodestar"
+          title="Lodestar"
+          kicker="Fee router"
+          icon={<StarGlyph />}
+          cls="nl-lodestar"
+          ours={
+            live && (
+              <>
+                <span>
+                  Holds MONARCHY's creator role at <Addr address={core.lodestar} />.
+                </span>
+                {lockedUntil === undefined ? <Skel w="10em" /> : lockedUntil >= 2n ** 63n ? <Badge tone="gold">Locked to it forever</Badge> : <Badge tone="amber">Not locked yet</Badge>}
+              </>
+            )
+          }
+        >
           Holds your token's Ascend creator role. You keep your dev buy. Fees split by your percentages into buyback and burn,
           holder rewards and a Team Treasury.
         </Feature>
-        <Feature to="/exile" title="Exile" kicker="Locks and rewards" icon={<GateGlyph />} cls="nl-exile">
+        <Feature
+          to="/exile"
+          title="Exile"
+          kicker="Locks and rewards"
+          icon={<GateGlyph />}
+          cls="nl-exile"
+          ours={
+            live && (
+              <>
+                <span>Holders lock MONARCHY here to earn the holder share of every fee, by tier.</span>
+                <Link className="feature-ours-go" to={core.token ? `/analytics?q=${core.token}` : "/analytics"}>
+                  See every lock <span aria-hidden="true">↗</span>
+                </Link>
+              </>
+            )
+          }
+        >
           Lock tokens, v2 LP and NFTs. Locks can be extended, never shortened or cancelled. Longer locks earn a bigger share,
           paid as a {dayLabel(drip)} drip.
         </Feature>
-        <Feature to="/sandfall" title="Sandfall" kicker="Vesting" icon={<HourglassGlyph />} cls="nl-sandfall">
+        <Feature
+          to="/sandfall"
+          title="Sandfall"
+          kicker="Vesting"
+          icon={<HourglassGlyph />}
+          cls="nl-sandfall"
+          ours={
+            live && (
+              <span>
+                Its Team Treasury share streams out here in the open, never in one lump: <Amt value={treasury} decimals={qd} symbol={qs} /> so far.
+              </span>
+            )
+          }
+        >
           Linear, cliff or monthly vesting in any token or HYPE. Every stream shows whether its creator can cancel it.
         </Feature>
       </div>
@@ -182,9 +202,11 @@ function tierBars(bps: number): string {
   return "▮".repeat(n) + "▯".repeat(6 - n);
 }
 
-function Feature({ to, title, kicker, icon, cls, children }: { to: string; title: string; kicker: string; icon: ReactNode; cls: string; children: ReactNode }) {
+/** One tool, and under it how MONARCHY itself uses it. The "Open" link stretches over the whole card, and the links
+ * inside the MONARCHY part sit above it. */
+function Feature({ to, title, kicker, icon, cls, ours, children }: { to: string; title: string; kicker: string; icon: ReactNode; cls: string; ours?: ReactNode; children: ReactNode }) {
   return (
-    <Link to={to} className={`card feature ${cls}`}>
+    <div className={`card feature ${cls}`}>
       <div className="feature-top">
         <span className="feature-icon" aria-hidden="true">
           {icon}
@@ -193,10 +215,16 @@ function Feature({ to, title, kicker, icon, cls, children }: { to: string; title
       </div>
       <h3>{title}</h3>
       <p>{children}</p>
-      <span className="feature-go">
+      {ours && (
+        <div className="feature-ours">
+          <span className="feature-ours-k">How MONARCHY uses it</span>
+          {ours}
+        </div>
+      )}
+      <Link to={to} className="feature-go">
         Open {title} <span aria-hidden="true">→</span>
-      </span>
-    </Link>
+      </Link>
+    </div>
   );
 }
 

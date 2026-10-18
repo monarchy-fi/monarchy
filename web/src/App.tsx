@@ -109,12 +109,13 @@ export function App() {
             <NavLink to="/" end className="nav-crown nav-crown-m" aria-label="Monarchy home">
               <CrownSolid />
             </NavLink>
-          </div>
-          {/* the garden for analytics, an icon on its own at the far left, then the four tabs with the crown for home in the middle */}
-          <div className="nav-links">
+            {/* the garden for analytics: an icon on its own at the far left of the bar, apart from the tabs */}
             <NavLink to="/analytics" className="nl nl-analytics nav-garden" aria-label="Analytics" data-tip="Analytics">
               <GardenGlyph />
             </NavLink>
+          </div>
+          {/* the four tabs, with the crown for home in the middle */}
+          <div className="nav-links">
             {LINKS.map((l, i) => (
               <Fragment key={l.to}>
                 {i === 2 && (
