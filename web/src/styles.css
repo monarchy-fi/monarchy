@@ -186,7 +186,7 @@ main { flex: 1; }
 @keyframes castle-flag { from { transform: skewY(-10deg) scaleX(0.85); } to { transform: skewY(8deg) scaleX(1); } }
 @keyframes castle-spark { 0%, 100% { transform: scale(0) rotate(0); } 16% { transform: scale(1.3) rotate(45deg); } 32% { transform: scale(0) rotate(90deg); } }
 
-/* Analytics, a garden: an icon on its own at the far left of the bar, its name in a label under it on hover.
+/* The Garden, the analytics page: an icon on its own at the far left of the bar, its name in a label under it on hover.
    The plants grow up from the soil one after another and sway, and the flower turns. */
 .nav-garden { position: relative; display: inline-flex; padding: 6px 9px; color: var(--muted); border: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
 .nav-garden:hover, .nav-garden:focus-visible { color: var(--text); }
@@ -194,13 +194,13 @@ main { flex: 1; }
 .nav-garden svg { width: 24px; height: 24px; overflow: visible; }
 .nav-garden::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: -1px; transform: translateY(-4px); padding: 4px 8px; background: #000; border: 1px solid var(--line-2); color: var(--text); font: 500 10.5px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.15s, transform 0.2s var(--ease); }
 .nav-garden:hover::after, .nav-garden:focus-visible::after { opacity: 1; transform: translateY(0); }
-.nl-analytics .garden-plant, .nl-analytics .garden-bloom { transform-box: fill-box; }
-.nl-analytics .garden-plant { transform-origin: 50% 100%; }
-.nl-analytics .garden-bloom { transform-origin: center; }
-.nl-analytics:hover .garden-plant, .nl-analytics:focus-visible .garden-plant, .mark-live.nl-analytics .garden-plant { animation: garden-grow 0.7s var(--ease) both, garden-sway 2.6s ease-in-out 0.7s infinite; }
-.nl-analytics .garden-plant:nth-of-type(2) { animation-delay: 0.12s, 0.95s; }
-.nl-analytics .garden-plant:nth-of-type(3) { animation-delay: 0.24s, 1.2s; }
-.nl-analytics:hover .garden-bloom, .nl-analytics:focus-visible .garden-bloom, .mark-live.nl-analytics .garden-bloom { animation: garden-bloom 5s linear 0.6s infinite; }
+.nl-garden .garden-plant, .nl-garden .garden-bloom { transform-box: fill-box; }
+.nl-garden .garden-plant { transform-origin: 50% 100%; }
+.nl-garden .garden-bloom { transform-origin: center; }
+.nl-garden:hover .garden-plant, .nl-garden:focus-visible .garden-plant, .mark-live.nl-garden .garden-plant { animation: garden-grow 0.7s var(--ease) both, garden-sway 2.6s ease-in-out 0.7s infinite; }
+.nl-garden .garden-plant:nth-of-type(2) { animation-delay: 0.12s, 0.95s; }
+.nl-garden .garden-plant:nth-of-type(3) { animation-delay: 0.24s, 1.2s; }
+.nl-garden:hover .garden-bloom, .nl-garden:focus-visible .garden-bloom, .mark-live.nl-garden .garden-bloom { animation: garden-bloom 5s linear 0.6s infinite; }
 @keyframes garden-grow { from { transform: scaleY(0.12); } }
 @keyframes garden-sway { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-3.5deg); } 70% { transform: rotate(3deg); } }
 @keyframes garden-bloom { to { transform: rotate(360deg); } }
@@ -302,7 +302,7 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .feature { display: flex; flex-direction: column; gap: 12px; color: var(--text); text-decoration: none; transition: border-color 0.2s, background 0.2s; }
 .feature:hover { border-color: var(--line-2); background: #0e0e0e; }
 .feature h3 { font: 700 20px var(--display); text-transform: uppercase; letter-spacing: 0.08em; }
-.feature p { color: var(--muted); line-height: 1.6; margin: 0; flex: 1; font-size: 14.5px; }
+.feature p { color: var(--muted); line-height: 1.7; margin: 0; flex: 1; font-size: 14.5px; }
 .feature-top { display: flex; align-items: center; gap: 10px; }
 .feature-icon { width: 46px; height: 46px; display: inline-flex; align-items: center; justify-content: center; color: var(--text); border: 1px solid var(--line-2); overflow: hidden; transition: border-color 0.2s; }
 .feature:hover .feature-icon { border-color: var(--white); }
@@ -315,14 +315,15 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 @keyframes gate-drop-once { from { transform: translateY(-115%); } to { transform: translateY(0); } }
 .feature { position: relative; }
 /* the three cards share rows, so their MONARCHY parts and Open links line up whatever each one says */
-.grid3 > .feature { display: grid; grid-template-rows: subgrid; grid-row: span 5; row-gap: 12px; align-content: start; }
-.grid3 > .feature > .feature-go { align-self: end; }
+.grid3 > .feature { display: grid; grid-template-rows: subgrid; grid-row: span 5; row-gap: 18px; align-content: start; padding: 30px 28px; }
+.grid3 > .feature > .feature-go { align-self: end; margin-top: 6px; }
 .feature-go { font: 600 12.5px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; display: inline-flex; gap: 8px; color: var(--text); text-decoration: none; }
 .feature-go::after { content: ""; position: absolute; inset: 0; }
-.feature-ours { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-top: 14px; border-top: 1px dashed var(--line-2); color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.feature-ours { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding-top: 20px; border-top: 1px dashed var(--line-2); color: var(--muted); font-size: 14px; line-height: 1.7; }
 .feature-ours-k { font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.14em; color: var(--text); }
 .feature-ours-k::before { content: "// "; color: var(--faint); }
 .feature-ours a, .feature-ours .badge { position: relative; z-index: 1; }
+.feature-ours .mono { white-space: nowrap; }
 .feature-ours-go { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; text-decoration: none; display: inline-flex; gap: 6px; }
 .feature-ours-go:hover { text-decoration: underline; }
 .feature-go span { transition: transform 0.2s var(--ease); }
@@ -542,7 +543,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .chart-now-label { fill: var(--text); font: 600 10px var(--mono); }
 .chart-wrap { width: 100%; min-width: 0; }
 
-/* ------------------------------------------------------------------ analytics */
+/* ------------------------------------------------------------------ garden (analytics) */
 .table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--line); -webkit-overflow-scrolling: touch; }
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .table th { text-align: left; padding: 10px 14px; font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; white-space: nowrap; border-bottom: 1px solid var(--line); background: #000; }
@@ -653,6 +654,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .page-mark.nl-sandfall { width: 28px; height: 28px; }
   .table-search { max-width: none; }
   .card { padding: 18px; }
+  .grid3 > .feature { padding: 22px 20px; }
   .flow { padding: 20px 16px; }
   .flow-group ul { grid-template-columns: 1fr; }
   .landing-sub { font-size: 15.5px; }

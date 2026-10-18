@@ -145,8 +145,8 @@ export function KingdomPage() {
             live && (
               <>
                 <span>Holders lock MONARCHY here to earn the holder share of every fee, by tier.</span>
-                <Link className="feature-ours-go" to={core.token ? `/analytics?q=${core.token}` : "/analytics"}>
-                  See every lock <span aria-hidden="true">↗</span>
+                <Link className="feature-ours-go" to={core.token ? `/garden?q=${core.token}` : "/garden"}>
+                  See its locks in the Garden <span aria-hidden="true">→</span>
                 </Link>
               </>
             )

@@ -86,7 +86,7 @@ export function CastleGlyph() {
 }
 
 /**
- * Analytics, a garden: everything planted in Monarchy grows in the open. Three plants rise from the soil like
+ * The Garden, Monarchy's analytics: everything planted in the kingdom grows in the open. Three plants rise from the soil like
  * bars on a chart, the tallest in bloom; on hover they grow up one after another, sway, and the flower turns.
  */
 export function GardenGlyph() {
@@ -118,7 +118,7 @@ export function GardenGlyph() {
   );
 }
 
-const MARKS = { kingdom: CastleGlyph, lodestar: StarGlyph, exile: GateGlyph, sandfall: HourglassGlyph, analytics: GardenGlyph };
+const MARKS = { kingdom: CastleGlyph, lodestar: StarGlyph, exile: GateGlyph, sandfall: HourglassGlyph, garden: GardenGlyph };
 
 /** A page's mark, drawn left of its title and always in motion. */
 export function PageMark({ page }: { page: keyof typeof MARKS }) {

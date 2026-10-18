@@ -8,8 +8,8 @@ import { NetworkNotice, TestnetStrip } from "./components/States";
 import { MONARCHY_CA } from "./lib/constants";
 import { short } from "./lib/format";
 import { useMock } from "./lib/wagmi";
-import { AnalyticsPage } from "./pages/Analytics";
 import { ExilePage } from "./pages/Exile";
+import { GardenPage } from "./pages/Garden";
 import { Home } from "./pages/Home";
 import { KingdomPage } from "./pages/Kingdom";
 import { LodestarPage } from "./pages/Lodestar";
@@ -109,8 +109,8 @@ export function App() {
             <NavLink to="/" end className="nav-crown nav-crown-m" aria-label="Monarchy home">
               <CrownSolid />
             </NavLink>
-            {/* the garden for analytics: an icon on its own at the far left of the bar, apart from the tabs */}
-            <NavLink to="/analytics" className="nl nl-analytics nav-garden" aria-label="Analytics" data-tip="Analytics">
+            {/* the Garden, where the analytics live: an icon on its own at the far left of the bar, apart from the tabs */}
+            <NavLink to="/garden" className="nl nl-garden nav-garden" aria-label="Garden" data-tip="Garden">
               <GardenGlyph />
             </NavLink>
           </div>
@@ -150,11 +150,11 @@ export function App() {
         </nav>
         {menuOpen && (
           <div className="menu" id="mobile-menu">
-            <NavLink to="/analytics" className="menu-link nl nl-analytics">
+            <NavLink to="/garden" className="menu-link nl nl-garden">
               <span className="nl">
-                <span className="nl-word">Analytics</span>
+                <span className="nl-word">Garden</span>
               </span>
-              <span className="menu-hint">Every lock and vest, in the open</span>
+              <span className="menu-hint">Every lock and vest, grown in the open</span>
             </NavLink>
             {LINKS.map((l) => (
               <NavLink key={l.to} to={l.to} className={`menu-link nl nl-${l.key}`}>
@@ -176,7 +176,7 @@ export function App() {
           <Route path="/lodestar" element={<LodestarPage />} />
           <Route path="/exile" element={<ExilePage />} />
           <Route path="/sandfall" element={<SandfallPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/garden" element={<GardenPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

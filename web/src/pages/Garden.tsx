@@ -41,9 +41,10 @@ const day = (ts: bigint | number) => {
   return new Date(n * 1000).toLocaleDateString(undefined, { dateStyle: "medium" });
 };
 
-/** Every lock, stream and fee router, read from the contracts, with totals and an unlock outlook per token. */
-export function AnalyticsPage() {
-  usePageTitle("Analytics");
+/** The Garden, Monarchy's analytics: every lock, stream and fee router, read from the contracts, with totals and an
+ * unlock outlook per token. */
+export function GardenPage() {
+  usePageTitle("Garden");
   const d = useDeployment();
   const core = useLodestarCore();
   const now = useNow(30_000);
@@ -173,12 +174,13 @@ export function AnalyticsPage() {
     <div className="page">
       <header className="page-head">
         <h1>
-          <PageMark page="analytics" />
-          Analytics
+          <PageMark page="garden" />
+          Garden
         </h1>
         <p>
-          Every lock, vesting stream and fee router, read straight from the contracts as you load the page. Nothing here is
-          stored or reported by Monarchy, and every address opens in the explorer so you can check it yourself.
+          Everything planted in the kingdom grows here in the open. The Garden is Monarchy's analytics: every lock, vesting
+          stream and fee router, read straight from the contracts each time the page loads. Monarchy stores and reports none
+          of it, and every address opens in the explorer, so anyone can check it for themselves.
         </p>
       </header>
 

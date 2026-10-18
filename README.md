@@ -38,7 +38,7 @@ The MONARCHY token gets no special treatment. It launches on Ascend like any oth
 | **Lodestar** | Its creator role goes to its own Lodestar, locked there forever. Token-side fees are burned or paid to lockers, and the quote side splits into buyback and burn, holder rewards and the Team Treasury. |
 | **Exile** | Holders lock MONARCHY to earn the holder share of every fee, by tier from Peasant to Monarch. |
 | **Sandfall** | The Team Treasury share streams to the team in the open, never in one lump. |
-| **Analytics** | Every lock, vesting stream and fee router, MONARCHY's included, is listed live from the contracts on [monarchy.fi/analytics](https://monarchy.fi/analytics). |
+| **Garden** | Monarchy's analytics page lists every lock, vesting stream and fee router, MONARCHY's included, live from the contracts at [monarchy.fi/garden](https://monarchy.fi/garden). |
 
 On testnet, Sample Token (SMPL) stands in for MONARCHY with exactly this setup.
 
@@ -198,7 +198,7 @@ The keeper (`.github/workflows/distribute.yml`) calls `distribute()` every 3 hou
 
 | | |
 |---|---|
-| **Working** | Lodestar, Exile and Sandfall live on Elysium testnet with two demo tokens (USDC and stock quotes); burns, buybacks and token rewards to lockers proven on Ascend's pools; web app for all three at monarchy.fi, with an analytics page listing every lock, stream and router; docs at docs.monarchy.fi; CI on every change |
+| **Working** | Lodestar, Exile and Sandfall live on Elysium testnet with two demo tokens (USDC and stock quotes); burns, buybacks and token rewards to lockers proven on Ascend's pools; web app for all three at monarchy.fi, with the Garden, an analytics page listing every lock, stream and router; docs at docs.monarchy.fi; CI on every change |
 | **In progress** | A testnet redeploy with the latest security review fixes |
 | **Before launch** | Third-party security audit, the upgrade multisig shared with the Ascend team, mainnet deploy, Monarchy token launch on Ascend |
 | **Next** | kHYPE treasury option, TWAP buybacks, Ascend NFT holder bonus in Exile, other launchpads, an indexer for history and APR charts |
