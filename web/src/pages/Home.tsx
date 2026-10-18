@@ -1,34 +1,20 @@
-import { Link } from "react-router-dom";
 import { AsciiCrown } from "../components/AsciiCrown";
 import { usePageTitle } from "../lib/hooks";
-import { useLodestarCore } from "../lib/monarchy";
 
 /**
- * The landing page: one screen, no scroll. The crown draws the eye; the details live on the tool pages. On wide
- * screens the words sit left of the crown; narrower ones stack them with the crown in the middle.
+ * The landing page: one screen, no scroll, everything on one centre line. The crown draws the eye; the details live
+ * on the Kingdom page and the tool pages.
  */
 export function Home() {
   usePageTitle();
-  const core = useLodestarCore();
-  const ts = core.tokenMeta?.symbol;
   return (
     <div className="landing">
-      <div className="landing-call">
-        <h1 className="wordmark">Monarchy</h1>
-        <p className="tagline">
-          <span className="tagline-prompt" aria-hidden="true">&gt;</span> Seize the crown<span className="tagline-caret" aria-hidden="true">_</span>
-        </p>
-        <p className="landing-sub">Fee routing, locks and vesting for every Ascend token. Monarchy takes nothing.</p>
-        <div className="hero-cta">
-          <Link className="btn btn-lg" to="/exile">
-            {ts ? `Lock ${ts}` : "Lock tokens"}
-          </Link>
-          <Link className="btn btn-ghost btn-lg" to="/lodestar">
-            Activate Lodestar
-          </Link>
-        </div>
-      </div>
+      <h1 className="wordmark">Monarchy</h1>
       <AsciiCrown className="landing-crown" />
+      <p className="tagline">
+        <span className="tagline-prompt" aria-hidden="true">&gt;</span> Steal the crown<span className="tagline-caret" aria-hidden="true">_</span>
+      </p>
+      <p className="landing-sub">The kingdom shares everything. The monarch needs no tribute.</p>
       <div className="landing-links">
         <span className="landing-note">Built on Ascend. No fees.</span>
         <span className="landing-out">

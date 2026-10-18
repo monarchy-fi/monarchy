@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 // The marks for each tool in the nav. They stay hidden until the link is hovered, then appear in front of the
 // word with their own motion, which lives in styles.css (.nl-*).
 const base = { viewBox: "0 0 14 14", fill: "none", stroke: "currentColor", strokeWidth: 1.2, strokeLinecap: "square", "aria-hidden": true } as const;
@@ -42,6 +44,29 @@ export function HourglassGlyph() {
         <path className="sand-stream" d="M7 6.4V12.4" strokeWidth="0.7" strokeDasharray="0.5 0.9" />
         <path className="sand-bottom" d="M4 12.6h6L7 9.5Z" fill="currentColor" stroke="none" />
       </g>
+    </svg>
+  );
+}
+
+/** Kingdom, a castle: it rises in front of the word, its flag waves and a glint of light sweeps across it. */
+export function CastleGlyph() {
+  const clip = `castle-${useId().replace(/:/g, "")}`;
+  const wall =
+    "M1 13V4.5H1.8V5.2H2.2V4.5H3V5.2H3.4V4.5H4.2V6.5H4.8V2.8H5.8V3.5H6.5V2.8H7.5V3.5H8.2V2.8H9.2V6.5H9.8V4.5H10.6V5.2H11V4.5H11.8V5.2H12.2V4.5H13V13H8V10.6A1 1 0 0 0 6 10.6V13Z";
+  return (
+    <svg {...base} strokeWidth={0.7} strokeLinejoin="miter">
+      <defs>
+        <clipPath id={clip}>
+          <path d={wall} />
+        </clipPath>
+      </defs>
+      <path d={wall} fill="currentColor" fillOpacity="0.1" />
+      <g clipPath={`url(#${clip})`}>
+        <path className="castle-glint" d="M-4 14 1.2 -1H4.6L-0.6 14Z" fill="currentColor" stroke="none" />
+      </g>
+      <path className="castle-flag" d="M7 2.8V0.3M7 0.4 9.6 1.05 7 1.7Z" fill="currentColor" />
+      <path d="M2.2 7.4h0.8v1.5h-0.8ZM11 7.4h0.8v1.5h-0.8Z" fill="currentColor" stroke="none" />
+      <path className="castle-spark" d="M12.4 0 12.75 1.05 13.8 1.4 12.75 1.75 12.4 2.8 12.05 1.75 11 1.4 12.05 1.05Z" fill="currentColor" stroke="none" />
     </svg>
   );
 }

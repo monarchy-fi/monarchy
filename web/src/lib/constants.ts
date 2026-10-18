@@ -12,3 +12,6 @@ export const DISTRIBUTE_EVERY_HOURS = 3;
 
 /** One line on who calls distribute, shown next to the drip stats and the Distribute button. */
 export const DISTRIBUTE_NOTE = `Distributed every ${DISTRIBUTE_EVERY_HOURS} hours by the team, and anyone can call it.`;
+
+/** The MONARCHY token's contract address once it launches. Until then the nav shows "CA: soon". */
+export const MONARCHY_CA: `0x${string}` | undefined = undefined;

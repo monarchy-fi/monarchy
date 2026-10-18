@@ -1,20 +1,22 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useConnect, useConnection, useConnectors } from "wagmi";
 import { Connect } from "./components/Connect";
 import { Crown } from "./components/Crown";
-import { GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
+import { CastleGlyph, GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
 import { NetworkNotice, TestnetStrip } from "./components/States";
-import { isSet, useDeployment } from "./lib/deployments";
+import { MONARCHY_CA } from "./lib/constants";
 import { short } from "./lib/format";
 import { useMock } from "./lib/wagmi";
 import { ExilePage } from "./pages/Exile";
 import { Home } from "./pages/Home";
+import { KingdomPage } from "./pages/Kingdom";
 import { LodestarPage } from "./pages/Lodestar";
 import { NotFound } from "./pages/NotFound";
 import { SandfallPage } from "./pages/Sandfall";
 
 const LINKS = [
+  { to: "/kingdom", label: "Kingdom", hint: "How it works and live stats", key: "kingdom", glyph: <CastleGlyph /> },
   { to: "/lodestar", label: "Lodestar", hint: "Fee router", key: "lodestar", glyph: <StarGlyph /> },
   { to: "/exile", label: "Exile", hint: "Locks and rewards", key: "exile", glyph: <GateGlyph /> },
   { to: "/sandfall", label: "Sandfall", hint: "Vesting", key: "sandfall", glyph: <HourglassGlyph /> },
@@ -32,12 +34,18 @@ function LinkLabel({ l }: { l: (typeof LINKS)[number] }) {
   );
 }
 
-/** The token's contract address, shortened; a click copies the full address. */
+/** The MONARCHY token's contract address, shortened, and a click copies it. Until launch it reads "CA: soon". */
 function ContractChip({ className }: { className?: string }) {
-  const d = useDeployment();
   const [copied, setCopied] = useState(false);
-  const token = d && isSet(d.token) ? d.token : undefined;
-  if (!token) return null;
+  const token = MONARCHY_CA;
+  if (!token) {
+    return (
+      <span className={`ca ca-soon ${className ?? ""}`}>
+        <span className="ca-k">CA</span>
+        <span className="ca-v">soon</span>
+      </span>
+    );
+  }
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(token);
@@ -49,7 +57,7 @@ function ContractChip({ className }: { className?: string }) {
   };
   return (
     <button type="button" className={`ca ${className ?? ""}`} onClick={copy} title={`${token}, click to copy`}>
-      <span className="ca-k">Contract</span>
+      <span className="ca-k">CA</span>
       <span className="ca-v">{copied ? "Copied" : short(token)}</span>
     </button>
   );
@@ -72,20 +80,30 @@ export function App() {
       <TestnetStrip />
       <header className="nav-wrap">
         <nav className="nav" aria-label="Main">
-          <NavLink to="/" className="brand" aria-label="Monarchy home">
-            <Crown size={20} className="brand-glyph" />
-            <span>MONARCHY</span>
-          </NavLink>
+          <div className="nav-left">
+            <NavLink to="/" end className="nav-crown nav-crown-m" aria-label="Monarchy home">
+              <Crown size={22} />
+            </NavLink>
+          </div>
+          {/* the four tabs, with the crown for home in the middle */}
           <div className="nav-links">
-            {LINKS.map((l) => (
-              <NavLink key={l.to} to={l.to} className={`nl nl-${l.key}`}>
-                <LinkLabel l={l} />
-              </NavLink>
+            {LINKS.map((l, i) => (
+              <Fragment key={l.to}>
+                {i === 2 && (
+                  <NavLink to="/" end className="nav-crown" aria-label="Monarchy home">
+                    <Crown size={24} />
+                  </NavLink>
+                )}
+                <NavLink to={l.to} className={`nl nl-${l.key}`}>
+                  <LinkLabel l={l} />
+                </NavLink>
+              </Fragment>
             ))}
           </div>
           <div className="nav-right">
             <ContractChip />
-            <Connect className="nav-connect" />
+            {/* the landing page is for looking; connecting happens on the tool pages */}
+            {!home && <Connect className="nav-connect" />}
             <button
               className="menu-btn"
               aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -119,6 +137,7 @@ export function App() {
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/kingdom" element={<KingdomPage />} />
           <Route path="/lodestar" element={<LodestarPage />} />
           <Route path="/exile" element={<ExilePage />} />
           <Route path="/sandfall" element={<SandfallPage />} />
