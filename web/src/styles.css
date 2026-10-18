@@ -236,7 +236,11 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .wordmark { font: 800 clamp(30px, min(6.2vw, 7.6vh), 92px)/1 var(--display); letter-spacing: 0.06em; margin: 0 0 0 0.06em; text-transform: uppercase; }
 .ascii-crown-box { width: 100%; height: 100%; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .ascii-crown { margin: 0; font-family: var(--mono); font-weight: 700; line-height: 1; letter-spacing: 0; color: var(--text); white-space: pre; user-select: none; text-align: left; }
-.tagline { margin: clamp(4px, 1vh, 12px) 0 0; padding: 0 0.12em; font: italic 500 clamp(19px, min(2.1vw, 3.3vh), 30px)/1.2 var(--serif); letter-spacing: 0.01em; color: var(--gold); background: linear-gradient(180deg, #f8e3a0 10%, var(--gold) 50%, #c8972f 95%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 14px rgba(233, 196, 106, 0.18)); }
+/* the line under the crown, in the wordmark's Roman capitals, spaced out between two thin gold rules */
+.tagline { margin: clamp(6px, 1.4vh, 16px) 0 0; display: flex; align-items: center; gap: clamp(12px, 1.4vw, 20px); font: 700 clamp(14px, min(1.55vw, 2.5vh), 23px)/1.2 var(--display); letter-spacing: 0.34em; text-transform: uppercase; color: var(--gold); }
+.tagline::before, .tagline::after { content: ""; flex: none; width: clamp(24px, 4vw, 56px); height: 1px; background: rgba(233, 196, 106, 0.5); }
+/* the letter spacing leaves a gap after the last letter, so the right rule moves in by the same amount */
+.tagline::after { margin-left: -0.34em; }
 .landing-sub { margin: clamp(4px, 1vh, 10px) 0 clamp(14px, 3vh, 32px); color: var(--muted); font: 400 clamp(16px, 1.25vw, 19px)/1.45 var(--serif); letter-spacing: 0.01em; text-wrap: balance; }
 .landing-links { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0 16px; border-top: 1px solid var(--line); font: 12px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .landing-out { display: inline-flex; gap: 10px; }
