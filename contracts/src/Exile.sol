@@ -389,6 +389,18 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         amount = _payStake(p, l, lockId, to);
     }
 
+    /// @notice Claim only the reward-token rewards, the mirror of `claimStakeRewardsTo`: for when the stake token
+    /// can't be paid out right now (paused), so it can't hold the reward token hostage. Returns the reward-token amount.
+    function claimRewardTokenTo(uint256 lockId, address to) external nonReentrant returns (uint256 amount) {
+        if (to == address(0)) revert ZeroAddress();
+        Lock storage l = _lock(lockId);
+        if (msg.sender != l.owner) revert NotOwner();
+        if (l.poolId == 0) return 0;
+        Pool storage p = _pools[l.poolId];
+        _settle(p, l);
+        amount = _payReward(p, l, lockId, to);
+    }
+
     function claimRewardsBatch(uint256[] calldata lockIds) external nonReentrant returns (uint256 total) {
         for (uint256 i; i < lockIds.length; ++i) {
             total += _claim(lockIds[i], msg.sender);
@@ -547,13 +559,17 @@ contract Exile is IExile, ReentrancyGuard, IERC721Receiver, IERC1155Receiver {
         if (l.poolId == 0) return 0;
         Pool storage p = _pools[l.poolId];
         _settle(p, l);
+        amount = _payReward(p, l, lockId, to);
+        _payStake(p, l, lockId, to);
+    }
+
+    function _payReward(Pool storage p, Lock storage l, uint256 lockId, address to) internal returns (uint256 amount) {
         amount = l.rewardsAccrued;
         if (amount != 0) {
             l.rewardsAccrued = 0;
             IERC20(p.rewardToken).safeTransfer(to, amount);
             emit RewardsClaimed(lockId, to, amount);
         }
-        _payStake(p, l, lockId, to);
     }
 
     function _payStake(Pool storage p, Lock storage l, uint256 lockId, address to) internal returns (uint256 amount) {

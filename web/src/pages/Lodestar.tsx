@@ -202,6 +202,17 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         <div className="summary">
           <Row k="Router" v={<Addr address={lodestar} />} />
           <Row k="Steward" v={<Addr address={core.steward} />} />
+          {Number(lockedUntil) > now && (
+            <Row
+              k="Creator role"
+              v={
+                <span className="muted small">
+                  Locked {lockForever ? "forever" : `until ${date(lockedUntil)}`}, apart from one exception: a move to this token's router on a newer Monarchy factory, which Monarchy and the steward
+                  both have to approve and which is announced here 7 days ahead.
+                </span>
+              }
+            />
+          )}
           <Row k="Token-side fees" v={cfg.tokenToHolders ? <Badge tone="gold">All paid to Exile lockers</Badge> : <Badge tone="grey">All burned</Badge>} />
           <Row k="Buyback route" v={cfg.swapper === ZERO ? <Badge tone="amber">None: buybacks wait in reserve</Badge> : <Addr address={cfg.swapper} />} />
           <Row k="Max slippage" v={`${pct(cfg.maxSlippageBps)} vs Ascend's EMA price`} />
@@ -333,7 +344,7 @@ function Steward({
           <p className="muted small">Promise holders the fee stream stays with this router, apart from an upgrade announced 7 days ahead. Current lock: {lockedUntil > 0n ? `until ${date(lockedUntil)}` : "none"}.</p>
           <label className="check">
             <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
-            Lock it for good. I understand this can't be undone.
+            Lock it for good. I understand I can't unlock it later.
           </label>
           <TxButton className="btn btn-sm" disabledReason={!sure ? "Tick the box first" : undefined} request={() => ({ ...l, functionName: "lockCreatorRole", args: [2n ** 64n - 1n] })}>
             Lock forever
@@ -493,7 +504,7 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
             </label>
             <p className="muted small">
               {lockForever
-                ? "Holders can see the fee stream can't be moved away from this router. The only exception is a move to this token's router on a newer Monarchy Lodestar, announced 7 days ahead. This can't be undone."
+                ? "Holders can see the fee stream can't be moved away from this router, and you can't unlock it later. One exception: a move to this token's router on a newer Monarchy factory, which Monarchy and you both have to approve, announced to holders 7 days ahead."
                 : "Without a lock the steward could hand the creator role away later. You can still lock it forever from the steward controls."}
             </p>
             <h5>HyperCore listing savings</h5>

@@ -11,6 +11,9 @@ import {MockSwapper} from "../src/mocks/MockSwapper.sol";
 import {IExile} from "../src/interfaces/IExile.sol";
 import {Exile} from "../src/Exile.sol";
 import {IAscendLaunchpad} from "../src/interfaces/IAscendLaunchpad.sol";
+import {IListingDesk} from "../src/interfaces/IListingDesk.sol";
+import {ICLPoolManager} from "../src/interfaces/IInfinity.sol";
+import {ISandfall} from "../src/interfaces/ISandfall.sol";
 import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -92,6 +95,51 @@ contract LodestarTest is MonarchyFixture {
         vm.prank(dev);
         vm.expectRevert(LodestarFactory.WrongTokenOrder.selector);
         factory.deploy(p);
+    }
+
+    /// @dev The owner role moves in two steps, so handing it to a multisig can't strand it on a mistyped address.
+    function test_ownerHandoverTakesTwoSteps() public {
+        assertEq(factory.owner(), address(this));
+        address multisig = makeAddr("multisig");
+        vm.prank(trader);
+        vm.expectRevert(LodestarFactory.OnlyOwner.selector);
+        factory.transferOwner(trader);
+
+        factory.transferOwner(multisig);
+        assertEq(factory.owner(), address(this), "nothing moves until it is accepted");
+        assertEq(factory.pendingOwner(), multisig);
+        vm.prank(trader);
+        vm.expectRevert(LodestarFactory.NotPendingOwner.selector);
+        factory.acceptOwner();
+        vm.prank(multisig);
+        factory.acceptOwner();
+        assertEq(factory.owner(), multisig);
+        assertEq(factory.pendingOwner(), address(0));
+        vm.expectRevert(LodestarFactory.OnlyOwner.selector);
+        factory.setSuccessor(trader);
+
+        // a pending handover can be cancelled
+        vm.startPrank(multisig);
+        factory.transferOwner(trader);
+        factory.transferOwner(address(0));
+        vm.stopPrank();
+        vm.prank(trader);
+        vm.expectRevert(LodestarFactory.NotPendingOwner.selector);
+        factory.acceptOwner();
+    }
+
+    function test_factoryNeedsAnOwner() public {
+        vm.expectRevert(LodestarFactory.ZeroAddress.selector);
+        new LodestarFactory(
+            address(impl),
+            IAscendLaunchpad(address(launchpad)),
+            IListingDesk(address(desk)),
+            ICLPoolManager(address(pool)),
+            exile,
+            ISandfall(address(sandfall)),
+            address(swapper),
+            address(0)
+        );
     }
 
     function test_newDefaultSwapperWaitsTwelveHours() public {
@@ -939,6 +987,48 @@ contract LodestarTest is MonarchyFixture {
         l.distribute();
         assertEq(l.totalTokenBurned(), 500e18);
         assertEq(l.totalTokenToHolders(), 500e18, "now paid to lockers");
+    }
+
+    /// @dev After a long outage with a dust lock expiring every hour, Exile's pool is more than one catch-up
+    /// behind. distribute moves it forward by one bounded poke and parks both holder payouts instead of
+    /// walking every hour inside them; the treasury is still paid and the call stays well inside a block.
+    /// Each later distribute moves the pool on, and the parked payouts go out once it is current.
+    function test_farBehindExileParksHolderPayoutsAndCatchesUp() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        p.cfg.tokenToHolders = true;
+        Lodestar l = _activate(p);
+        uint256 pid = l.exilePoolId();
+        address holder = makeAddr("holder");
+        uint256 id = _lockToken(l, holder, 1_000e18, 365 days);
+        address mallory = makeAddr("mallory");
+        token.mint(mallory, 1e18);
+        vm.startPrank(mallory);
+        token.approve(address(exile), type(uint256).max);
+        for (uint256 k; k < 720; ++k) {
+            exile.lockERC20(address(token), 2, uint64(block.timestamp + 1 days + k * 1 hours), pid);
+        }
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 31 days); // nobody distributes or pokes for a month
+        launchpad.injectFees(poolId, 1000e18, 1000e6);
+        uint256 g = gasleft();
+        l.distribute();
+        assertLt(g - gasleft(), 20_000_000, "one bounded catch-up, not the whole month");
+        assertEq(l.holdersReserve(), 200e6, "quote holder share parked");
+        assertEq(token.balanceOf(address(l)), 500e18, "token-side payout parked");
+        assertEq(l.totalTreasuryQuote(), 100e6, "treasury still paid");
+
+        // every distribute moves the pool on; once it is current the parked payouts go out
+        for (uint256 i; i < 3 && l.holdersReserve() > 0; ++i) {
+            l.distribute();
+        }
+        assertEq(l.holdersReserve(), 0);
+        assertEq(token.balanceOf(address(l)), 0);
+        assertEq(l.totalHoldersQuote(), 200e6);
+        assertEq(l.totalTokenToHolders(), 500e18);
+        vm.warp(block.timestamp + 3 days);
+        assertApproxEqRel(exile.pendingRewards(id), 200e6, 0.001e18);
+        assertApproxEqRel(exile.pendingStakeRewards(id), 500e18, 0.001e18);
     }
 
     // ---------------------------------------------------------------- 15. upgrade to a newer Lodestar

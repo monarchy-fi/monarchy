@@ -7,9 +7,9 @@
 #   wrong or hostile RPC must stop the run, not get a signed transaction).
 # - Lets cast estimate the gas instead of using a fixed limit, and checks the receipt: a reverted
 #   transaction fails this script, where `cast send` alone exits 0 and the run would look green.
-# - Recovery: Exile walks every idle hour of its reward pool inside notifyReward, so after a long
-#   keeper outage distribute() can need more gas than one block allows, and nothing in distribute()
-#   itself can fix that. A read-only poke first says whether the pool is more than a few hours behind
+# - Recovery: after a long keeper outage Exile's reward pool is far behind. distribute() catches it up
+#   by at most 720 hours per call and parks the holder payouts until it is current (routers from before
+#   that walked every idle hour inside the payout and could need more gas than a block allows). A read-only poke first says whether the pool is more than a few hours behind
 #   (CURRENT_WITHIN); if so this script pokes Exile.MAX_BUCKETS_PER_CALL buckets at a time until the pool
 #   reports it is caught up (at most 40 times) before distributing. Catching up first also keeps the
 #   payouts inside distribute() light, so cast's gas estimate can't land where a payout runs out of gas

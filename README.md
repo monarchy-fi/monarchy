@@ -7,7 +7,7 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 157 passing](https://img.shields.io/badge/Foundry-157%20tests%20passing-111111.svg)](contracts/test)
+[![Tests: 170 passing](https://img.shields.io/badge/Foundry-170%20tests%20passing-111111.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
 [![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-111111.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-111111.svg)](#how-it-works)
@@ -63,12 +63,12 @@ No lock, no rewards. With four holders each locking 10,000 tokens and fees dripp
 - **No upgrades.** Each Lodestar is an EIP-1167 clone of a fixed implementation. Nobody can change its code.
 - **No sweep.** There is no rescue or withdraw function. Funds can only go to the burn address, Exile, Sandfall or the swapper. Locked tokens and vesting streams can only go to their owners.
 - **Slow changes.** Split, swapper and slippage changes, and Exile tier changes, wait behind a 12 hour timelock and expire if not executed within 7 days after it. Settings chosen at activation apply immediately.
-- **Locked router.** At activation the creator can lock the creator role to the Lodestar forever (the default on the site and in the activation script), so the router can't be swapped out; without it, the steward can lock it later. Even locked, it can move to the same token's router on a newer Monarchy factory: the factory owner names that factory, the steward proposes the move, and anyone can carry it out after 7 days' notice. A different successor named meanwhile stops it. A lock can't be placed while a hand-off is pending.
+- **Locked router.** At activation the creator can lock the creator role to the Lodestar forever (the default on the site and in the activation script), so the router can't be swapped out; without it, the steward can lock it later. Even locked, it can move to the same token's router on a newer Monarchy factory: the factory owner names that factory, the steward proposes the move, and anyone can carry it out after 7 days' notice. On a live chain the factory owner is a multisig, separate from every steward, so no single key can start a move; the deploy script refuses a plain wallet there. For mainnet the plan is a 2-of-2 with one key held by the Ascend team. On testnet the owner is still the deploy wallet. A different successor named meanwhile stops it. A lock can't be placed while a hand-off is pending.
 - **Guarded buybacks.** The minimum output is the stricter of a floor at Ascend's on-chain EMA price and one at spot, less the pool fee and a slippage allowance (default 10%, min 1%, max 20%); spot alone is never trusted. Each buy spends at most 0.5% of the pool's quote depth, so it moves the price less than a sandwich pays in fees, and buys are at least 30 minutes apart, so calling `distribute` many times in one block can't push the whole reserve through between a buy and a sell. Bigger amounts and skipped buys wait in reserve and go out in pieces; holders and treasury are still paid. Every buyback must actually deliver its minimum to the burn address. The swapper is chosen by the steward behind the timelock, and a dishonest one could keep the margin above that minimum, so swapper changes are worth watching.
 - **Front-run safe activation.** Only the pool's current creator can deploy its Lodestar, at an address derived from the pool id.
 - **Fuzz and invariant tested.** Random sequences of locks, payouts, claims, top-ups, cancels, fees and failed buybacks check that Exile stays solvent and never pays out more than it received, that every Sandfall stream stays fully backed, and that every unit of quote a Lodestar handles ends up burned, locked, streamed or held in its buyback reserve.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [SECURITY.md](SECURITY.md) to report an issue. The contracts have not been audited yet.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [SECURITY.md](SECURITY.md) for the security reviews and how to report an issue. The contracts have had four internal security reviews but no third-party audit yet.
 
 ## Live on Elysium testnet
 
@@ -187,7 +187,7 @@ The keeper (`.github/workflows/distribute.yml`) calls `distribute()` every 3 hou
 |---|---|
 | **Working** | Lodestar, Exile and Sandfall live on Elysium testnet with two demo tokens (USDC and stock quotes); burns, buybacks and token rewards to lockers proven on Ascend's pools; web app for all three at monarchy.fi; docs at docs.monarchy.fi; CI on every change |
 | **In progress** | An analytics page |
-| **Before launch** | Security audit, mainnet deploy, Monarchy token launch on Ascend |
+| **Before launch** | Third-party security audit, the upgrade multisig shared with the Ascend team, mainnet deploy, Monarchy token launch on Ascend |
 | **Next** | kHYPE treasury option, TWAP buybacks, Ascend NFT holder bonus in Exile, other launchpads, an indexer for history and APR charts |
 
 Everything works with Ascend as it is today: a creator launches, then hands over the creator role in two steps. An option on Ascend's launch form to pick a Lodestar up front would make it one step.

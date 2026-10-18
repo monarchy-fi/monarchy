@@ -59,6 +59,19 @@ export const lodestarAbi = [
   },
   {
     "type": "function",
+    "name": "EXILE_CATCH_UP",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_BUYBACK_SHIFT",
     "inputs": [],
     "outputs": [
