@@ -37,6 +37,11 @@ export const lodestarFactoryAbi = [
         "name": "defaultSwapper_",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "owner_",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -53,6 +58,13 @@ export const lodestarFactoryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptOwner",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -313,6 +325,19 @@ export const lodestarFactoryAbi = [
   },
   {
     "type": "function",
+    "name": "pendingOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "poolManager",
     "inputs": [],
     "outputs": [
@@ -476,6 +501,19 @@ export const lodestarFactoryAbi = [
   },
   {
     "type": "event",
+    "name": "OwnerTransferStarted",
+    "inputs": [
+      {
+        "name": "next",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "OwnerTransferred",
     "inputs": [
       {
@@ -541,6 +579,11 @@ export const lodestarFactoryAbi = [
         "internalType": "uint256"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "NotPendingOwner",
+    "inputs": []
   },
   {
     "type": "error",

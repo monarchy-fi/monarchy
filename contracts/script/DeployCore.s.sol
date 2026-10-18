@@ -38,6 +38,16 @@ contract DeployCore is BaseScript {
         require(d.poolManager.code.length > 0 && d.vault.code.length > 0, "Infinity not deployed here");
         require(IAscendLaunchpad(d.launchpad).listingDesk() == d.desk, "desk is not the launchpad's");
 
+        // The factory owner names the successor factory an upgrade moves a router to, and the default swapper.
+        // On a live chain it must be a multisig (a contract), separate from every steward, so no single key
+        // can start an upgrade; on the testnet and anvil the deployer may keep it for rehearsals.
+        address owner = vm.envOr("FACTORY_OWNER", vm.addr(_deployerKey()));
+        bool rehearsal = block.chainid == 99801 || block.chainid == 31337;
+        require(
+            owner.code.length > 0 || rehearsal || vm.envOr("ALLOW_EOA_OWNER", false),
+            "FACTORY_OWNER must be a multisig on this chain (ALLOW_EOA_OWNER=true to override)"
+        );
+
         vm.startBroadcast(_deployerKey());
         Exile exile = new Exile();
         Sandfall sandfall = new Sandfall();
@@ -51,7 +61,8 @@ contract DeployCore is BaseScript {
             ICLPoolManager(d.poolManager),
             IExile(address(exile)),
             ISandfall(address(sandfall)),
-            address(swapper)
+            address(swapper),
+            owner
         );
         vm.stopBroadcast();
 
@@ -62,5 +73,6 @@ contract DeployCore is BaseScript {
         d.factory = address(factory);
         _save(d);
         console2.log("factory", address(factory));
+        console2.log("factory owner", owner);
     }
 }

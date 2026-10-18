@@ -40,7 +40,11 @@ contract LodestarFactory {
     IExile public immutable exile;
     ISandfall public immutable sandfall;
 
+    /// @notice Names the successor factory for upgrades and the default swapper for new activations. A multisig
+    /// in production, separate from every steward, so no single key can start an upgrade.
     address public owner;
+    /// @notice The owner role's next holder until it accepts (0 = no handover pending).
+    address public pendingOwner;
     address public defaultSwapper;
     /// @notice When the default swapper last changed. A new default only applies to deploys 12 hours
     /// later, so it can't be swapped in between a dev's `transferCreator` and `deploy`.
@@ -63,6 +67,7 @@ contract LodestarFactory {
     );
     event DefaultSwapperSet(address swapper);
     event SuccessorSet(address successor);
+    event OwnerTransferStarted(address indexed next);
     event OwnerTransferred(address indexed previous, address indexed next);
 
     error DeskMismatch();
@@ -73,6 +78,7 @@ contract LodestarFactory {
     error WrongTokenOrder();
     error DefaultSwapperJustChanged();
     error AlreadyDeployed();
+    error NotPendingOwner();
 
     constructor(
         address implementation_,
@@ -81,17 +87,20 @@ contract LodestarFactory {
         ICLPoolManager poolManager_,
         IExile exile_,
         ISandfall sandfall_,
-        address defaultSwapper_
+        address defaultSwapper_,
+        address owner_
     ) {
         if (launchpad_.listingDesk() != address(desk_)) revert DeskMismatch();
+        if (owner_ == address(0)) revert ZeroAddress();
         implementation = implementation_;
         launchpad = launchpad_;
         desk = desk_;
         poolManager = poolManager_;
         exile = exile_;
         sandfall = sandfall_;
-        owner = msg.sender;
+        owner = owner_;
         defaultSwapper = defaultSwapper_;
+        emit OwnerTransferred(address(0), owner_);
         emit DefaultSwapperSet(defaultSwapper_);
     }
 
@@ -177,10 +186,18 @@ contract LodestarFactory {
         emit SuccessorSet(next);
     }
 
+    /// @notice Start handing the owner role to `next`, which takes it with `acceptOwner`, so a mistyped address
+    /// can't strand the role. Naming another address replaces a pending handover; 0 cancels it.
     function transferOwner(address next) external {
         if (msg.sender != owner) revert OnlyOwner();
-        if (next == address(0)) revert ZeroAddress();
-        emit OwnerTransferred(owner, next);
-        owner = next;
+        pendingOwner = next;
+        emit OwnerTransferStarted(next);
+    }
+
+    function acceptOwner() external {
+        if (msg.sender != pendingOwner) revert NotPendingOwner();
+        emit OwnerTransferred(owner, msg.sender);
+        owner = msg.sender;
+        pendingOwner = address(0);
     }
 }

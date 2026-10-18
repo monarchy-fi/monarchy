@@ -11,6 +11,9 @@ import {MockSwapper} from "../src/mocks/MockSwapper.sol";
 import {IExile} from "../src/interfaces/IExile.sol";
 import {Exile} from "../src/Exile.sol";
 import {IAscendLaunchpad} from "../src/interfaces/IAscendLaunchpad.sol";
+import {IListingDesk} from "../src/interfaces/IListingDesk.sol";
+import {ICLPoolManager} from "../src/interfaces/IInfinity.sol";
+import {ISandfall} from "../src/interfaces/ISandfall.sol";
 import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -92,6 +95,51 @@ contract LodestarTest is MonarchyFixture {
         vm.prank(dev);
         vm.expectRevert(LodestarFactory.WrongTokenOrder.selector);
         factory.deploy(p);
+    }
+
+    /// @dev The owner role moves in two steps, so handing it to a multisig can't strand it on a mistyped address.
+    function test_ownerHandoverTakesTwoSteps() public {
+        assertEq(factory.owner(), address(this));
+        address multisig = makeAddr("multisig");
+        vm.prank(trader);
+        vm.expectRevert(LodestarFactory.OnlyOwner.selector);
+        factory.transferOwner(trader);
+
+        factory.transferOwner(multisig);
+        assertEq(factory.owner(), address(this), "nothing moves until it is accepted");
+        assertEq(factory.pendingOwner(), multisig);
+        vm.prank(trader);
+        vm.expectRevert(LodestarFactory.NotPendingOwner.selector);
+        factory.acceptOwner();
+        vm.prank(multisig);
+        factory.acceptOwner();
+        assertEq(factory.owner(), multisig);
+        assertEq(factory.pendingOwner(), address(0));
+        vm.expectRevert(LodestarFactory.OnlyOwner.selector);
+        factory.setSuccessor(trader);
+
+        // a pending handover can be cancelled
+        vm.startPrank(multisig);
+        factory.transferOwner(trader);
+        factory.transferOwner(address(0));
+        vm.stopPrank();
+        vm.prank(trader);
+        vm.expectRevert(LodestarFactory.NotPendingOwner.selector);
+        factory.acceptOwner();
+    }
+
+    function test_factoryNeedsAnOwner() public {
+        vm.expectRevert(LodestarFactory.ZeroAddress.selector);
+        new LodestarFactory(
+            address(impl),
+            IAscendLaunchpad(address(launchpad)),
+            IListingDesk(address(desk)),
+            ICLPoolManager(address(pool)),
+            exile,
+            ISandfall(address(sandfall)),
+            address(swapper),
+            address(0)
+        );
     }
 
     function test_newDefaultSwapperWaitsTwelveHours() public {
