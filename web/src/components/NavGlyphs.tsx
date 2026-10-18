@@ -33,16 +33,16 @@ export function GateGlyph() {
   );
 }
 
-/** Sandfall, an hourglass: sand pours from the top bulb into the bottom, then the glass turns over. */
+/** Sandfall, an hourglass: the glass turns over, then sand drips from the top bulb into the bottom. */
 export function HourglassGlyph() {
   return (
     <svg {...base}>
       <g className="sand-glass">
         <path d="M2.5 0.8h9M2.5 13.2h9" />
         <path d="M3.5 0.8C3.5 4.2 6.3 5.2 6.3 7S3.5 9.8 3.5 13.2M10.5 0.8C10.5 4.2 7.7 5.2 7.7 7S10.5 9.8 10.5 13.2" />
-        <path className="sand-top" d="M4.3 2.4h5.4L7 6.2Z" fill="currentColor" stroke="none" />
+        <path className="sand-top" d="M4.1 1.9h5.8L7 5.6Z" fill="currentColor" stroke="none" />
         <path className="sand-stream" d="M7 6.4V12.4" strokeWidth="0.7" strokeDasharray="0.5 0.9" />
-        <path className="sand-bottom" d="M4 12.6h6L7 9.5Z" fill="currentColor" stroke="none" />
+        <path className="sand-bottom" d="M4.1 12.1h5.8L7 8.4Z" fill="currentColor" stroke="none" />
       </g>
     </svg>
   );

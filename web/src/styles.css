@@ -13,6 +13,7 @@
   /* kept for the few places that signal state; everything else is black, white and grey */
   --green: #9be0b0;
   --amber: #e6c27a;
+  --gold: #e9c46a;
   --red: #ff8080;
   --radius: 3px;
   --radius-sm: 2px;
@@ -120,25 +121,26 @@ main { flex: 1; }
 .nl-lodestar:hover .nl-icon svg, .nl-lodestar:focus-visible .nl-icon svg { transform: rotate(45deg); }
 .nl-lodestar:hover .star-ray, .nl-lodestar:focus-visible .star-ray { transform: scale(1.2); opacity: 1; }
 /* Exile: a portcullis the width of the word drops in front of it, spikes first */
-.nl-exile .nl-icon { width: calc(100% + 4px); height: 30px; opacity: 1; clip-path: inset(0 -2px -4px -2px); transform: translate(-50%, -50%); }
+.nl-exile .nl-icon { width: 78%; height: 26px; opacity: 1; clip-path: inset(0 -2px -4px -2px); transform: translate(-50%, -50%); }
 .nl-exile .nl-icon svg { transform: translateY(-110%); transition: transform 0.42s cubic-bezier(0.5, 0, 0.75, 1.4); }
 .nav-links .nl-exile:hover .nl-icon, .nav-links .nl-exile:focus-visible .nl-icon { transform: translate(-50%, -50%); }
 .nl-exile:hover .nl-icon svg, .nl-exile:focus-visible .nl-icon svg { transform: translateY(0); }
 .nav-links .nl-exile:hover .nl-word, .nav-links .nl-exile:focus-visible .nl-word { opacity: 0.45; }
-/* Sandfall: an hourglass pours its sand into the bottom bulb, then turns over and pours again */
+/* Sandfall: an hourglass rests with its sand settled, turns over, then drips the sand back down */
 .nl-sandfall .sand-glass { transform-origin: 7px 7px; }
 .nl-sandfall .sand-top, .nl-sandfall .sand-bottom { transform-box: fill-box; transform-origin: 50% 100%; }
-.nl-sandfall .sand-bottom { transform: scaleY(0); }
+.nl-sandfall .sand-top { transform: scaleY(0); }
 .nl-sandfall .sand-stream { opacity: 0; }
-.nl-sandfall:hover .sand-glass, .nl-sandfall:focus-visible .sand-glass { animation: sf-flip 2.8s var(--ease) infinite; }
-.nl-sandfall:hover .sand-top, .nl-sandfall:focus-visible .sand-top { animation: sf-top 2.8s linear infinite; }
-.nl-sandfall:hover .sand-bottom, .nl-sandfall:focus-visible .sand-bottom { animation: sf-bottom 2.8s linear infinite; }
-.nl-sandfall:hover .sand-stream, .nl-sandfall:focus-visible .sand-stream { animation: sf-stream 2.8s linear infinite, sf-fall 0.35s linear infinite; }
-@keyframes sf-top { 0% { transform: scaleY(1); } 78%, 100% { transform: scaleY(0); } }
-@keyframes sf-bottom { 0% { transform: scaleY(0); } 78%, 100% { transform: scaleY(1); } }
-@keyframes sf-stream { 0%, 74% { opacity: 1; } 78%, 100% { opacity: 0; } }
+.nl-sandfall:hover .sand-glass, .nl-sandfall:focus-visible .sand-glass { animation: sf-flip 3.4s var(--ease) infinite; }
+.nl-sandfall:hover .sand-top, .nl-sandfall:focus-visible .sand-top { animation: sf-top 3.4s linear infinite; }
+.nl-sandfall:hover .sand-bottom, .nl-sandfall:focus-visible .sand-bottom { animation: sf-bottom 3.4s linear infinite; }
+.nl-sandfall:hover .sand-stream, .nl-sandfall:focus-visible .sand-stream { animation: sf-stream 3.4s linear infinite, sf-fall 0.35s linear infinite; }
+/* the two sand shapes mirror each other, so once the turn ends the glass can snap back upright with full sand on top and nothing moves */
+@keyframes sf-top { 0%, 24% { transform: scaleY(0); } 24.01% { transform: scaleY(1); } 92%, 100% { transform: scaleY(0); } }
+@keyframes sf-bottom { 0%, 24% { transform: scaleY(1); } 24.01% { transform: scaleY(0); } 92%, 100% { transform: scaleY(1); } }
+@keyframes sf-stream { 0%, 25% { opacity: 0; } 28%, 89% { opacity: 1; } 92%, 100% { opacity: 0; } }
 @keyframes sf-fall { to { stroke-dashoffset: -1.4; } }
-@keyframes sf-flip { 0%, 80% { transform: rotate(0); } 100% { transform: rotate(180deg); } }
+@keyframes sf-flip { 0% { transform: rotate(0); } 24% { transform: rotate(180deg); } 24.01%, 100% { transform: rotate(0); } }
 
 /* Kingdom: the castle rises into place, its flag waves, a glint sweeps across the walls and a star sparkles */
 .nl-kingdom .nl-icon svg { transform: translateY(45%); transition: transform 0.45s var(--ease); }
@@ -179,9 +181,7 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .wordmark { font: 800 clamp(30px, min(6.2vw, 7.6vh), 92px)/1 var(--display); letter-spacing: 0.06em; margin: 0 0 0 0.06em; text-transform: uppercase; }
 .ascii-crown-box { width: 100%; height: 100%; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .ascii-crown { margin: 0; font-family: var(--mono); font-weight: 700; line-height: 1; letter-spacing: 0; color: var(--text); white-space: pre; user-select: none; text-align: left; }
-.tagline { margin: clamp(4px, 1vh, 12px) 0 0; font: 700 clamp(17px, min(2.1vw, 3.4vh), 30px)/1.1 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; }
-.tagline-prompt { color: var(--faint); }
-.tagline-caret { animation: blink 1.1s steps(1) infinite; }
+.tagline { margin: clamp(4px, 1vh, 12px) 0 0; padding: 0 0.1em; font: 700 clamp(19px, min(2.4vw, 3.8vh), 34px)/1.15 var(--display); letter-spacing: 0.05em; color: var(--gold); background: linear-gradient(180deg, #f8e3a0 10%, var(--gold) 50%, #c8972f 95%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 14px rgba(233, 196, 106, 0.18)); }
 .landing-sub { margin: clamp(6px, 1.3vh, 14px) 0 clamp(14px, 3vh, 32px); color: var(--muted); font-size: clamp(14px, 1.1vw, 16px); line-height: 1.5; text-wrap: balance; }
 .landing-links { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0 16px; border-top: 1px solid var(--line); font: 12px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .landing-out { display: inline-flex; gap: 10px; }
@@ -247,7 +247,7 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .feature-top { display: flex; align-items: center; gap: 10px; }
 .feature-icon { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; color: var(--text); border: 1px solid var(--line-2); }
 .feature-icon svg { width: 18px; height: 18px; overflow: visible; }
-.nl-exile .feature-icon svg { width: 22px; height: 12px; }
+.nl-exile .feature-icon svg { width: 18px; height: 11px; }
 .feature-go { font: 600 12.5px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; display: inline-flex; gap: 8px; }
 .feature-go span { transition: transform 0.2s var(--ease); }
 .feature:hover .feature-go span { transform: translateX(4px); }
