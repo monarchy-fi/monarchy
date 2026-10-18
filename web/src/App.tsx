@@ -1,38 +1,72 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useConnect, useConnection, useConnectors } from "wagmi";
 import { Connect } from "./components/Connect";
 import { Crown } from "./components/Crown";
-import { GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
+import { CastleGlyph, GateGlyph, HourglassGlyph, StarGlyph } from "./components/NavGlyphs";
 import { NetworkNotice, TestnetStrip } from "./components/States";
-import { chainName } from "./lib/chains";
-import { useNetwork } from "./lib/network";
+import { MONARCHY_CA } from "./lib/constants";
+import { short } from "./lib/format";
 import { useMock } from "./lib/wagmi";
 import { ExilePage } from "./pages/Exile";
 import { Home } from "./pages/Home";
+import { KingdomPage } from "./pages/Kingdom";
 import { LodestarPage } from "./pages/Lodestar";
 import { NotFound } from "./pages/NotFound";
 import { SandfallPage } from "./pages/Sandfall";
 
 const LINKS = [
+  { to: "/kingdom", label: "Kingdom", hint: "How it works and live stats", key: "kingdom", glyph: <CastleGlyph /> },
   { to: "/lodestar", label: "Lodestar", hint: "Fee router", key: "lodestar", glyph: <StarGlyph /> },
   { to: "/exile", label: "Exile", hint: "Locks and rewards", key: "exile", glyph: <GateGlyph /> },
   { to: "/sandfall", label: "Sandfall", hint: "Vesting", key: "sandfall", glyph: <HourglassGlyph /> },
 ];
 
+// the word, with the tool's mark hidden in front of it until hover
 function LinkLabel({ l }: { l: (typeof LINKS)[number] }) {
   return (
     <>
-      <span className="nl-icon">{l.glyph}</span>
       <span className="nl-word">{l.label}</span>
+      <span className="nl-icon" aria-hidden="true">
+        {l.glyph}
+      </span>
     </>
+  );
+}
+
+/** The MONARCHY token's contract address, shortened, and a click copies it. Until launch it reads "CA: soon". */
+function ContractChip({ className }: { className?: string }) {
+  const [copied, setCopied] = useState(false);
+  const token = MONARCHY_CA;
+  if (!token) {
+    return (
+      <span className={`ca ca-soon ${className ?? ""}`}>
+        <span className="ca-k">CA</span>
+        <span className="ca-v">soon</span>
+      </span>
+    );
+  }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // clipboard blocked: the full address is still in the tooltip
+    }
+  };
+  return (
+    <button type="button" className={`ca ${className ?? ""}`} onClick={copy} title={`${token}, click to copy`}>
+      <span className="ca-k">CA</span>
+      <span className="ca-v">{copied ? "Copied" : short(token)}</span>
+    </button>
   );
 }
 
 export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
-  const { walletChainId, isConnected, target } = useNetwork();
+  const home = pathname === "/";
   useMockAutoConnect();
 
   // close the phone menu and go to the top on every navigation
@@ -42,27 +76,34 @@ export function App() {
   }, [pathname]);
 
   return (
-    <div className="app">
+    <div className={`app ${home ? "app-home" : ""}`}>
       <TestnetStrip />
       <header className="nav-wrap">
         <nav className="nav" aria-label="Main">
-          <NavLink to="/" className="brand" aria-label="Monarchy home">
-            <Crown size={20} className="brand-glyph" />
-            <span>MONARCHY</span>
-          </NavLink>
+          <div className="nav-left">
+            <NavLink to="/" end className="nav-crown nav-crown-m" aria-label="Monarchy home">
+              <Crown size={22} />
+            </NavLink>
+          </div>
+          {/* the four tabs, with the crown for home in the middle */}
           <div className="nav-links">
-            {LINKS.map((l) => (
-              <NavLink key={l.to} to={l.to} className={`nl nl-${l.key}`}>
-                <LinkLabel l={l} />
-              </NavLink>
+            {LINKS.map((l, i) => (
+              <Fragment key={l.to}>
+                {i === 2 && (
+                  <NavLink to="/" end className="nav-crown" aria-label="Monarchy home">
+                    <Crown size={24} />
+                  </NavLink>
+                )}
+                <NavLink to={l.to} className={`nl nl-${l.key}`}>
+                  <LinkLabel l={l} />
+                </NavLink>
+              </Fragment>
             ))}
           </div>
           <div className="nav-right">
-            <span className="net" title="Network">
-              <i className="net-dot" />
-              {chainName(isConnected && walletChainId ? walletChainId : target.id)}
-            </span>
-            <Connect className="nav-connect" />
+            <ContractChip />
+            {/* the landing page is for looking; connecting happens on the tool pages */}
+            {!home && <Connect className="nav-connect" />}
             <button
               className="menu-btn"
               aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -88,9 +129,7 @@ export function App() {
                 <span className="menu-hint">{l.hint}</span>
               </NavLink>
             ))}
-            <div className="menu-net">
-              <i className="net-dot" /> {chainName(isConnected && walletChainId ? walletChainId : target.id)}
-            </div>
+            <ContractChip className="menu-ca" />
           </div>
         )}
       </header>
@@ -98,30 +137,33 @@ export function App() {
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/kingdom" element={<KingdomPage />} />
           <Route path="/lodestar" element={<LodestarPage />} />
           <Route path="/exile" element={<ExilePage />} />
           <Route path="/sandfall" element={<SandfallPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
-      <footer className="foot">
-        <div className="foot-brand">
-          <span>MONARCHY</span>
-          <span className="foot-sep" aria-hidden="true" />
-          <span>Built on Ascend. No fees.</span>
-        </div>
-        <div className="foot-links">
-          <a href="https://docs.monarchy.fi" target="_blank" rel="noreferrer">
-            Docs
-          </a>
-          <a href="https://github.com/monarchy-fi/monarchy" target="_blank" rel="noreferrer">
-            GitHub
-          </a>
-          <a href="https://x.com/monarchyfi" target="_blank" rel="noreferrer">
-            X
-          </a>
-        </div>
-      </footer>
+      {!home && (
+        <footer className="foot">
+          <div className="foot-brand">
+            <span>MONARCHY</span>
+            <span className="foot-sep" aria-hidden="true" />
+            <span>Built on Ascend. No fees.</span>
+          </div>
+          <div className="foot-links">
+            <a href="https://docs.monarchy.fi" target="_blank" rel="noreferrer">
+              Docs
+            </a>
+            <a href="https://github.com/monarchy-fi/monarchy" target="_blank" rel="noreferrer">
+              GitHub
+            </a>
+            <a href="https://x.com/monarchyfi" target="_blank" rel="noreferrer">
+              X
+            </a>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

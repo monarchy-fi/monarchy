@@ -1,7 +1,10 @@
-// The small marks beside each tool in the nav. Their hover motion lives in styles.css (.nl-*).
-const base = { viewBox: "0 0 14 14", fill: "none", stroke: "currentColor", strokeWidth: 1.3, strokeLinecap: "square", "aria-hidden": true } as const;
+import { useId } from "react";
 
-/** Lodestar, the guiding star: four long points and four short rays that flare on hover. */
+// The marks for each tool in the nav. They stay hidden until the link is hovered, then appear in front of the
+// word with their own motion, which lives in styles.css (.nl-*).
+const base = { viewBox: "0 0 14 14", fill: "none", stroke: "currentColor", strokeWidth: 1.2, strokeLinecap: "square", "aria-hidden": true } as const;
+
+/** Lodestar, the guiding star: it turns in and its short rays flare. */
 export function StarGlyph() {
   return (
     <svg {...base}>
@@ -13,27 +16,57 @@ export function StarGlyph() {
   );
 }
 
-/** Exile, a gate: the bars drop a little on hover while a portcullis falls over the word. */
+/** Exile, a portcullis: it drops in front of the word, spikes first. Stretched to the word's width. */
 export function GateGlyph() {
+  const bars = [3, 11, 19, 27, 35, 43, 51, 59, 67, 75, 83, 91, 97];
   return (
-    <svg {...base}>
-      <path d="M1 13V4.5a6 4 0 0 1 12 0V13" />
-      <g className="gate-bars">
-        <path d="M4 3v7M7 2v8M10 3v7M2.5 6.5h9" />
-      </g>
-      <path d="M0.5 13.2h13" />
+    <svg viewBox="0 0 100 40" preserveAspectRatio="none" fill="none" stroke="currentColor" aria-hidden="true">
+      <path d="M0 1.5H100" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+      <path d="M0 13H100M0 25H100" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      {bars.map((x) => (
+        <path key={x} d={`M${x} 0V34`} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      ))}
+      {bars.map((x) => (
+        <path key={`t${x}`} d={`M${x - 2.2} 33 ${x} 40 ${x + 2.2} 33Z`} fill="currentColor" stroke="none" />
+      ))}
     </svg>
   );
 }
 
-/** Sandfall, an hourglass that flips on hover. */
+/** Sandfall, an hourglass: the glass turns over, then sand drips from the top bulb into the bottom. */
 export function HourglassGlyph() {
   return (
     <svg {...base}>
-      <path d="M2.5 0.8h9M2.5 13.2h9" />
-      <path d="M3.5 0.8c0 3.5 7 3.5 7 6.2s-7 2.7-7 6.2M10.5 0.8c0 3.5-7 3.5-7 6.2s7 2.7 7 6.2" />
-      <path className="sand-top" d="M4.8 2.6h4.4L7 5.2Z" fill="currentColor" stroke="none" />
-      <path className="sand-bottom" d="M4.6 12.2h4.8L7 9.6Z" fill="currentColor" stroke="none" />
+      <g className="sand-glass">
+        <path d="M2.5 0.8h9M2.5 13.2h9" />
+        <path d="M3.5 0.8C3.5 4.2 6.3 5.2 6.3 7S3.5 9.8 3.5 13.2M10.5 0.8C10.5 4.2 7.7 5.2 7.7 7S10.5 9.8 10.5 13.2" />
+        <path className="sand-top" d="M4.1 1.9h5.8L7 5.6Z" fill="currentColor" stroke="none" />
+        <path className="sand-stream" d="M7 6.4V12.4" strokeWidth="0.7" strokeDasharray="0.5 0.9" />
+        <path className="sand-bottom" d="M4.1 12.1h5.8L7 8.4Z" fill="currentColor" stroke="none" />
+      </g>
+    </svg>
+  );
+}
+
+/** Kingdom, a castle: it rises in front of the word, its flag waves and a glint of light sweeps across it. */
+export function CastleGlyph() {
+  const clip = `castle-${useId().replace(/:/g, "")}`;
+  const wall =
+    "M1 13V4.5H1.8V5.2H2.2V4.5H3V5.2H3.4V4.5H4.2V6.5H4.8V2.8H5.8V3.5H6.5V2.8H7.5V3.5H8.2V2.8H9.2V6.5H9.8V4.5H10.6V5.2H11V4.5H11.8V5.2H12.2V4.5H13V13H8V10.6A1 1 0 0 0 6 10.6V13Z";
+  return (
+    <svg {...base} strokeWidth={0.7} strokeLinejoin="miter">
+      <defs>
+        <clipPath id={clip}>
+          <path d={wall} />
+        </clipPath>
+      </defs>
+      <path d={wall} fill="currentColor" fillOpacity="0.1" />
+      <g clipPath={`url(#${clip})`}>
+        <path className="castle-glint" d="M-4 14 1.2 -1H4.6L-0.6 14Z" fill="currentColor" stroke="none" />
+      </g>
+      <path className="castle-flag" d="M7 2.8V0.3M7 0.4 9.6 1.05 7 1.7Z" fill="currentColor" />
+      <path d="M2.2 7.4h0.8v1.5h-0.8ZM11 7.4h0.8v1.5h-0.8Z" fill="currentColor" stroke="none" />
+      <path className="castle-spark" d="M12.4 0 12.75 1.05 13.8 1.4 12.75 1.75 12.4 2.8 12.05 1.75 11 1.4 12.05 1.05Z" fill="currentColor" stroke="none" />
     </svg>
   );
 }

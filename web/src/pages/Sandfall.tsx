@@ -60,7 +60,7 @@ export function SandfallPage() {
       <CreateStream sandfall={d.sandfall} quote={core.quote} token={core.token} quoteSymbol={core.quoteMeta?.symbol} tokenSymbol={core.tokenMeta?.symbol} />
 
       <Card title="Streams to me">
-        {!address && <ConnectPrompt>Connect a wallet to see what is vesting to you.</ConnectPrompt>}
+        {!address && <ConnectPrompt>What is vesting to you shows up here once a wallet is connected.</ConnectPrompt>}
         {address && !lists.data && (
           <div className="locks">
             <div className="lock skeleton" />
@@ -93,12 +93,42 @@ type Unit = keyof typeof UNITS;
 const STEPS = { daily: DAY, weekly: 7 * DAY, monthly: 30 * DAY } as const;
 type Freq = "continuous" | keyof typeof STEPS;
 const FREQ_LABEL: Record<Freq, string> = { continuous: "every second", daily: "every day", weekly: "every week", monthly: "every month" };
+const MONTH = 30 * DAY;
+// common vesting lengths; months are 30 days, so monthly steps divide them evenly
+const LENGTHS = [
+  { v: 7 * DAY, title: "1 week" },
+  { v: MONTH, title: "1 month" },
+  { v: 3 * MONTH, title: "3 months" },
+  { v: 6 * MONTH, title: "6 months" },
+  { v: 12 * MONTH, title: "12 months" },
+  { v: 24 * MONTH, title: "24 months" },
+  { v: 48 * MONTH, title: "48 months" },
+];
+// the cliff slider snaps to these, keeping only the ones shorter than the stream
+const CLIFFS = [0, 3600, 6 * 3600, 12 * 3600, DAY, 3 * DAY, 7 * DAY, 14 * DAY, MONTH, 2 * MONTH, 3 * MONTH, 6 * MONTH, 9 * MONTH, 12 * MONTH, 18 * MONTH, 24 * MONTH, 36 * MONTH];
 
-function Choice<T extends string>({ value, onChange, options, cols }: { value: T; onChange: (v: T) => void; options: { v: T; title: string; sub?: string }[]; cols?: number }) {
+/** A length of time in the largest whole unit that fits: "3 months", "2 weeks", "6 hours". */
+export function spanLabel(sec: number): string {
+  const units: [number, string][] = [
+    [MONTH, "month"],
+    [7 * DAY, "week"],
+    [DAY, "day"],
+    [3600, "hour"],
+  ];
+  for (const [u, name] of units) {
+    if (sec >= u && sec % u === 0) {
+      const n = sec / u;
+      return `${n} ${name}${n === 1 ? "" : "s"}`;
+    }
+  }
+  return duration(sec);
+}
+
+function Choice<T extends string | number>({ value, onChange, options, cols }: { value: T; onChange: (v: T) => void; options: { v: T; title: string; sub?: string; off?: boolean }[]; cols?: number }) {
   return (
     <div className={`choice choice-${cols ?? 3}`} role="radiogroup">
       {options.map((o) => (
-        <button key={o.v} type="button" role="radio" aria-checked={value === o.v} className={value === o.v ? "on" : ""} onClick={() => onChange(o.v)}>
+        <button key={o.v} type="button" role="radio" aria-checked={value === o.v} className={value === o.v ? "on" : ""} disabled={o.off} onClick={() => onChange(o.v)}>
           <b>{o.title}</b>
           {o.sub && <span>{o.sub}</span>}
         </button>
@@ -119,10 +149,10 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
-function SpanInput({ label, value, unit, onValue, onUnit, min = 0 }: { label: string; value: number; unit: Unit; onValue: (n: number) => void; onUnit: (u: Unit) => void; min?: number }) {
+function SpanInput({ label, value, unit, onValue, onUnit, min = 0 }: { label?: string; value: number; unit: Unit; onValue: (n: number) => void; onUnit: (u: Unit) => void; min?: number }) {
   return (
     <label className="field">
-      <span className="field-label">{label}</span>
+      {label && <span className="field-label">{label}</span>}
       <div className="input-row">
         <input className="input" type="number" min={min} value={value} onChange={(e) => onValue(Math.max(0, Number(e.target.value)))} />
         <select className="input input-unit" value={unit} onChange={(e) => onUnit(e.target.value as Unit)}>
@@ -145,11 +175,11 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
   const [amount, setAmount] = useState("");
   const [startMode, setStartMode] = useState<"now" | "later">("now");
   const [startAt, setStartAt] = useState("");
+  const [lengthPick, setLengthPick] = useState<number | "custom">(12 * MONTH);
   const [length, setLength] = useState(12);
   const [lengthUnit, setLengthUnit] = useState<Unit>("months");
-  const [cliff, setCliff] = useState(0);
-  const [cliffUnit, setCliffUnit] = useState<Unit>("months");
-  const [freq, setFreq] = useState<Freq>("monthly");
+  const [cliffWant, setCliffWant] = useState(0);
+  const [freqWant, setFreqWant] = useState<Freq>("monthly");
   const [cancellable, setCancellable] = useState<"no" | "yes">("no");
   const now = useNow(15_000);
 
@@ -171,8 +201,15 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
   const later = startMode === "later" && startAt ? Math.floor(new Date(startAt).getTime() / 1000) : undefined;
   // "now" starts a minute out so the transaction lands before the stream begins
   const startFor = (t: number) => (startMode === "later" ? (later ?? 0) : t + 60);
-  const lengthS = length * UNITS[lengthUnit];
-  const cliffS = cliff * UNITS[cliffUnit];
+  const lengthS = lengthPick === "custom" ? length * UNITS[lengthUnit] : lengthPick;
+  // the cliff can only be picked from lengths shorter than the stream, so it always ends before the stream does
+  const cliffOpts = CLIFFS.filter((c) => c < lengthS);
+  const cliffIdx = Math.max(0, cliffOpts.filter((c) => c <= cliffWant).length - 1);
+  const cliffS = cliffOpts[cliffIdx] ?? 0;
+  // steps longer than the stream are greyed out; if the chosen one no longer fits, fall back to the next that does
+  const fits = (f: Freq) => f === "continuous" || STEPS[f] <= lengthS;
+  const order: Freq[] = ["monthly", "weekly", "daily", "continuous"];
+  const freq: Freq = fits(freqWant) ? freqWant : (order.slice(order.indexOf(freqWant)).find(fits) ?? "continuous");
   const step = freq === "continuous" ? 0 : STEPS[freq];
   const start = startFor(now);
   const schedule = { start, cliff: start + cliffS, end: start + lengthS, step };
@@ -258,20 +295,25 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
               ]}
             />
             {startMode === "later" && <input className="input" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />}
-            <div className="grid-2">
-              <SpanInput label="Vests over" value={length} unit={lengthUnit} onValue={setLength} onUnit={setLengthUnit} min={1} />
-              <SpanInput label="Cliff (0 for none)" value={cliff} unit={cliffUnit} onValue={setCliff} onUnit={setCliffUnit} />
-            </div>
+            <span className="field-label">Vests over</span>
+            <Choice
+              value={lengthPick}
+              onChange={setLengthPick}
+              cols={4}
+              options={[...LENGTHS.map((l) => ({ v: l.v as number | "custom", title: l.title })), { v: "custom", title: "Custom" }]}
+            />
+            {lengthPick === "custom" && <SpanInput value={length} unit={lengthUnit} onValue={setLength} onUnit={setLengthUnit} min={1} />}
+            <CliffSlider options={cliffOpts} index={cliffIdx} length={lengthS} onPick={setCliffWant} />
             <span className="field-label">Unlocks</span>
             <Choice
               value={freq}
-              onChange={setFreq}
+              onChange={setFreqWant}
               cols={4}
               options={[
                 { v: "continuous", title: "Linear", sub: "Every second" },
-                { v: "daily", title: "Daily", sub: "Steps" },
-                { v: "weekly", title: "Weekly", sub: "Steps" },
-                { v: "monthly", title: "Monthly", sub: "30 day steps" },
+                { v: "daily", title: "Daily", sub: "Steps", off: !fits("daily") },
+                { v: "weekly", title: "Weekly", sub: "Steps", off: !fits("weekly") },
+                { v: "monthly", title: "Monthly", sub: "30 day steps", off: !fits("monthly") },
               ]}
             />
           </Step>
@@ -309,6 +351,33 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
         </aside>
       </div>
     </Card>
+  );
+}
+
+/** The cliff as a slider over lengths shorter than the stream, with a few of them marked underneath. */
+function CliffSlider({ options, index, length, onPick }: { options: number[]; index: number; length: number; onPick: (sec: number) => void }) {
+  const last = options.length - 1;
+  const value = options[index] ?? 0;
+  // mark at most five stops, spread along the slider, always including both ends
+  const marks = last <= 4 ? options.map((_, i) => i) : [0, Math.round(last / 4), Math.round(last / 2), Math.round((3 * last) / 4), last];
+  return (
+    <div className="dur cliff">
+      <div className="dur-top">
+        <span className="field-label">Cliff</span>
+        <span>
+          <span className="dur-value">{value ? spanLabel(value) : "None"}</span>
+          <span className="muted small"> {value ? `${Math.round((value / length) * 100)}% of the stream, then it starts unlocking` : "starts unlocking right away"}</span>
+        </span>
+      </div>
+      <input type="range" min={0} max={Math.max(1, last)} step={1} value={index} disabled={last === 0} onChange={(e) => onPick(options[Number(e.target.value)] ?? 0)} aria-label="Cliff length" aria-valuetext={value ? spanLabel(value) : "No cliff"} />
+      <div className="dur-marks">
+        {[...new Set(marks)].map((i) => (
+          <button key={i} type="button" className={`dur-mark ${i === index ? "on" : ""}`} style={{ left: `${last ? (i / last) * 100 : 0}%` }} onClick={() => onPick(options[i])}>
+            {options[i] ? spanLabel(options[i]) : "None"}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
