@@ -7,15 +7,17 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 159 passing](https://img.shields.io/badge/Foundry-159%20tests%20passing-2E7D5B.svg)](contracts/test)
+[![Tests: 159 passing](https://img.shields.io/badge/Foundry-159%20tests%20passing-111111.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
-[![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-6930EA.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
-[![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-C9A24A.svg)](#how-it-works)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-111111.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
+[![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-111111.svg)](#how-it-works)
+[![License: MIT](https://img.shields.io/badge/License-MIT-111111.svg)](LICENSE)
 
 **Every creator fee burned, bought back, paid to locked holders or streamed to the team in the open. Monarchy takes nothing.**
 
 [Website](https://monarchy.fi) · [Docs](https://docs.monarchy.fi) · [X](https://x.com/monarchyfi) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO.md) · [Testnet contracts](#live-on-elysium-testnet)
+
+<img src="docs/img/site-home.png" alt="The Monarchy home page: the word MONARCHY in white on black above a crown drawn in text characters" width="840" />
 
 </div>
 
@@ -43,7 +45,7 @@ flowchart LR
 |---|---|
 | **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`, and the team's keeper calls it every 3 hours so fees never pile up into one big payout: token-side fees are burned (or, if the creator chooses, all paid to Exile lockers in the token itself), and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. |
 | **Exile** | Locks ERC-20s (including v2 LP), ERC-721s and ERC-1155s. Locks can be extended, never shortened, cancelled or transferred. ERC-20 locks earn holder rewards by tier, paid as a 3 day drip, and stop earning the second they unlock. |
-| **Sandfall** | Vesting streams (linear, cliff or monthly steps) in any non-rebasing ERC-20 or native HYPE. The creator decides at creation whether a stream can be cancelled, and the site badges it. Rolling streams back Lodestar's Team Treasury. |
+| **Sandfall** | Vesting streams (linear, with an optional cliff, or in daily, weekly or monthly steps) in any non-rebasing ERC-20 or native HYPE, each with a chart of what unlocks by when. The creator decides at creation whether a stream can be cancelled, and the site badges it. Rolling streams back Lodestar's Team Treasury. |
 
 ### Exile tiers
 
@@ -183,8 +185,8 @@ The keeper (`.github/workflows/distribute.yml`) calls `distribute()` every 3 hou
 
 | | |
 |---|---|
-| **Working** | Lodestar, Exile and Sandfall live on Elysium testnet; burns and buybacks proven on Ascend's pool; web app for all three; CI on every change |
-| **In progress** | monarchy.fi and public docs, site design |
+| **Working** | Lodestar, Exile and Sandfall live on Elysium testnet with two demo tokens (USDC and stock quotes); burns, buybacks and token rewards to lockers proven on Ascend's pools; web app for all three at monarchy.fi; docs at docs.monarchy.fi; CI on every change |
+| **In progress** | An analytics page |
 | **Before launch** | Security audit, mainnet deploy, Monarchy token launch on Ascend |
 | **Next** | kHYPE treasury option, TWAP buybacks, Ascend NFT holder bonus in Exile, other launchpads, an indexer for history and APR charts |
 
