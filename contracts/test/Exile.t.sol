@@ -743,6 +743,35 @@ contract ExileTest is Test {
         assertEq(exile.pendingStakeRewards(a), 0, "stake rewards not paid twice");
     }
 
+    /// @dev And the other way round: a stake token that can't be paid out right now (paused) doesn't hold the
+    /// reward-token rewards hostage.
+    function test_rewardTokenClaimableWhileStakeTokenIsStuck() public {
+        uint256 a = _lock(alice, 1000e18, 30 days);
+        _notify(300e18);
+        _fundStake(300e18);
+        _skip(3 days);
+        vm.mockCallRevert(address(monarch), abi.encodeWithSelector(monarch.transfer.selector), "paused");
+        vm.prank(alice);
+        vm.expectRevert();
+        exile.claimRewards(a);
+        vm.prank(alice);
+        vm.expectRevert(Exile.ZeroAddress.selector);
+        exile.claimRewardTokenTo(a, address(0));
+        vm.prank(bob);
+        vm.expectRevert(Exile.NotOwner.selector);
+        exile.claimRewardTokenTo(a, bob);
+        vm.prank(alice);
+        uint256 got = exile.claimRewardTokenTo(a, carol);
+        assertApproxEqAbs(got, 300e18, 1e9, "reward token paid on its own");
+        assertEq(reward.balanceOf(carol), got);
+        vm.clearMockedCalls();
+        assertApproxEqAbs(exile.pendingStakeRewards(a), 300e18, 1e9, "stake rewards still owed once it works again");
+        vm.prank(alice);
+        exile.claimRewards(a);
+        assertEq(exile.pendingRewards(a), 0, "reward token not paid twice");
+        assertEq(reward.balanceOf(alice), 0);
+    }
+
     function test_stakeRewardRejectsZero() public {
         vm.prank(funder);
         vm.expectRevert(Exile.InvalidAmount.selector);

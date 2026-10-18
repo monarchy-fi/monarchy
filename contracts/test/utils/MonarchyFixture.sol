@@ -62,7 +62,8 @@ abstract contract MonarchyFixture is Test {
             ICLPoolManager(address(pool)),
             exile,
             ISandfall(address(sandfall)),
-            address(swapper)
+            address(swapper),
+            address(this)
         );
     }
 

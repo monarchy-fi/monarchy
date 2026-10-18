@@ -119,6 +119,30 @@ export const exileAbi = [
   },
   {
     "type": "function",
+    "name": "claimRewardTokenTo",
+    "inputs": [
+      {
+        "name": "lockId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimRewards",
     "inputs": [
       {
