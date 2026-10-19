@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useConnection, useReadContract, useReadContracts } from "wagmi";
-import { isAddress, stringToHex, type Address } from "viem";
+import { useConnection, useEstimateGas, useReadContract, useReadContracts } from "wagmi";
+import { encodeFunctionData, isAddress, stringToHex, type Address } from "viem";
 import { exileAbi, iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
 import { TierBadge, tagline } from "../components/Tiers";
 import { TxButton } from "../components/Tx";
 import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
-import { DEFAULT_TREASURY_WINDOW_DAYS, DISTRIBUTE_NOTE } from "../lib/constants";
+import { CATCH_UP_ALONE_ABOVE_GAS, DEFAULT_TREASURY_WINDOW_DAYS, DISTRIBUTE_NOTE, EXILE_CATCH_UP_HOURS } from "../lib/constants";
 import { isSet, useDeployment, ZERO, type Deployment } from "../lib/deployments";
 import { date, duration, fmt, label, mult, pct } from "../lib/format";
 import { POLL, useNow, usePageTitle } from "../lib/hooks";
@@ -108,6 +108,29 @@ function ForToken({ d, token, quote }: { d: Deployment; token: Address; quote: A
     <Router d={d} lodestar={deployed} />
   ) : (
     <Activate d={d} token={token} quote={quote} predicted={predicted} poolId={poolId} />
+  );
+}
+
+/** Distribute, after catching Exile's reward pool up when a long pause left it far behind. distribute catches it up
+ * itself, but then it needs more gas than a wallet estimates (and older routers park the payouts without moving
+ * the pool), so like the keeper the card pokes the pool forward first, EXILE_CATCH_UP_HOURS per transaction. */
+function DistributeButton({ d, lodestar, exilePoolId }: { d: Deployment; lodestar: Address; exilePoolId?: bigint }) {
+  const poke = exilePoolId === undefined ? undefined : ({ address: d.exile, abi: exileAbi, functionName: "poke", args: [exilePoolId, BigInt(EXILE_CATCH_UP_HOURS)] } as const);
+  // what one catch-up costs right now: a few idle hours cost little, weeks of expiring locks cost millions
+  const catchUp = useEstimateGas({ to: d.exile, data: poke && encodeFunctionData(poke), query: { enabled: !!poke, ...POLL.query } });
+  const heavy = (catchUp.data ?? 0n) > CATCH_UP_ALONE_ABOVE_GAS;
+  return (
+    <>
+      {heavy && (
+        <>
+          <p className="muted small">Lockers' rewards have fallen behind after a long pause. Catch them up first; it can take a few transactions.</p>
+          <TxButton request={() => poke}>Catch up rewards</TxButton>
+        </>
+      )}
+      <TxButton disabledReason={heavy ? "Catch up rewards first" : undefined} request={() => ({ address: lodestar, abi: lodestarAbi, functionName: "distribute" })}>
+        Distribute
+      </TxButton>
+    </>
   );
 }
 
@@ -232,7 +255,7 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         </div>
         <p className="muted small">Plus any fees still sitting in the pool, which distribute collects first.</p>
         <p className="small cadence">{DISTRIBUTE_NOTE}</p>
-        <TxButton request={() => ({ ...l, functionName: "distribute" })}>Distribute</TxButton>
+        <DistributeButton d={d} lodestar={lodestar} exilePoolId={core.exilePoolId} />
       </Card>
 
       {eta > 0n && (

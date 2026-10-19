@@ -13,6 +13,13 @@ export const DISTRIBUTE_EVERY_HOURS = 3;
 /** One line on who calls distribute, shown next to the drip stats and the Distribute button. */
 export const DISTRIBUTE_NOTE = `Distributed every ${DISTRIBUTE_EVERY_HOURS} hours by the team, and anyone can call it.`;
 
+/** Exile.MAX_BUCKETS_PER_CALL: the hours one catch-up transaction moves the reward pool forward. */
+export const EXILE_CATCH_UP_HOURS = 720;
+
+/** Gas above which the Distribute card catches Exile's reward pool up in its own transactions first, like the keeper
+ * (tools/keeper-distribute.sh). A quiet day costs far less; a long pause with locks expiring every hour costs millions. */
+export const CATCH_UP_ALONE_ABOVE_GAS = 2_000_000n;
+
 /** The MONARCHY token's contract address, shown in the nav with click to copy. Unset, the nav shows "CA: soon".
  * For now it holds the standard burn address so the copy button can be tried; swap in the token's address at launch. */
 export const MONARCHY_CA: `0x${string}` | undefined = "0x000000000000000000000000000000000000dEaD";

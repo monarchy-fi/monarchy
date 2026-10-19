@@ -34,7 +34,8 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     uint64 public constant TIMELOCK = 12 hours;
     /// @dev A ready config change must be executed within this window, or proposed again.
     uint64 public constant EXECUTION_WINDOW = 7 days;
-    /// @dev After a skipped buyback the next attempt halves, down to 1/256 of the amount due.
+    /// @dev After a skipped buyback that a smaller one could have fixed, the next attempt halves, down to 1/256
+    /// of the amount due.
     uint8 public constant MAX_BUYBACK_SHIFT = 8;
     /// @dev Each buyback spends at most this share of the quote side of the pool's active liquidity
     /// (valued at the EMA price, or at spot when that gives a smaller depth). A buy that small moves
@@ -51,7 +52,8 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// @dev How many hours of Exile's reward pool one distribute catches up before paying holders (Exile's
     /// own per-call cap, with at most 300 hours in which locks expire). A pool further behind, after a long
     /// outage or with dust locks expiring hour after hour, parks the holder payouts for that call instead of
-    /// running distribute out of gas; each call still moves the pool forward by this much.
+    /// running distribute out of gas; each call still moves the pool forward by this much, and a call sent
+    /// with too little gas for that reverts (`CatchUpOutOfGas`) instead of parking without moving it.
     uint256 public constant EXILE_CATCH_UP = 720;
     /// @dev Burn sink. Ascend's launch tokens reject transfers to address(0) and to 0x…dEaD, so burns go
     /// to this widely used dead address instead. Nobody holds its key.
@@ -148,6 +150,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     error NoSuccessor();
     error NoPendingUpgrade();
     error SuccessorChanged();
+    error CatchUpOutOfGas();
 
     constructor() {
         _initialized = true; // the implementation itself can never be initialized
@@ -307,33 +310,42 @@ contract Lodestar is ILodestar, ReentrancyGuard {
             uint256 ema = _ema();
             uint256 spot = _spot();
             uint256 cap = _maxBuyback(ema, spot);
-            uint256 full = cap != 0 && buyAmt > cap ? cap : buyAmt;
-            uint256 attempt = full >> buybackShift;
-            if (attempt == 0) attempt = full;
-            uint256 minOut = _minOut(ema, spot, attempt, c.maxSlippageBps);
-            bool ok;
-            if (minOut > 0) {
-                try this.buybackStep(c.swapper, attempt, minOut) returns (uint256 s_, uint256 b_) {
-                    (spent, bought, ok) = (s_, b_, true);
-                } catch {}
-            }
-            if (ok) {
-                lastBuybackAt = uint64(block.timestamp);
-                totalBuybackQuote += spent;
-                totalBuybackTokensBurned += bought;
-                if (buybackShift > 0) --buybackShift;
+            if (cap == 0) {
+                // no EMA, or no active liquidity to size the buy against (a pool below Ascend's first band):
+                // nothing is tried, so the reserve waits and nothing counts towards halving
+                emit BuybackSkipped(0, 0);
             } else {
-                // only a real attempt counts: with no EMA nothing was tried, and dust attempts are exempt,
-                // so neither an EMA-less first day nor a few wei can shrink the next real buyback; and it
-                // halves at most once per interval, so repeated calls during one pump can't run it to 1/256
-                if (
-                    ema != 0 && buybackShift < MAX_BUYBACK_SHIFT && (cap == 0 || attempt * 256 >= cap)
-                        && block.timestamp >= lastHalvingAt + BUYBACK_INTERVAL
-                ) {
-                    ++buybackShift;
-                    lastHalvingAt = uint64(block.timestamp);
+                uint256 full = buyAmt > cap ? cap : buyAmt;
+                uint256 attempt = full >> buybackShift;
+                if (attempt == 0) attempt = full;
+                uint256 minOut = _minOut(ema, spot, attempt, c.maxSlippageBps);
+                bool ok;
+                if (minOut > 0) {
+                    try this.buybackStep(c.swapper, attempt, minOut) returns (uint256 s_, uint256 b_) {
+                        (spent, bought, ok) = (s_, b_, true);
+                    } catch {}
                 }
-                emit BuybackSkipped(attempt, minOut);
+                if (ok) {
+                    lastBuybackAt = uint64(block.timestamp);
+                    totalBuybackQuote += spent;
+                    totalBuybackTokensBurned += bought;
+                    if (buybackShift > 0) --buybackShift;
+                } else {
+                    // only a miss that a smaller attempt could fix halves the next one. Dust attempts are
+                    // exempt, and so is an EMA still trailing a pump: when its floor asks for more than a
+                    // swap at spot pays even with no price impact, no size gets through, so waiting for
+                    // trades to move the EMA can't shrink the next real buyback. It halves at most once per
+                    // interval, so repeated calls during one pump can't run it to 1/256.
+                    if (
+                        buybackShift < MAX_BUYBACK_SHIFT && attempt * 256 >= cap
+                            && block.timestamp >= lastHalvingAt + BUYBACK_INTERVAL
+                            && _floor(ema, attempt, c.maxSlippageBps) < _floor(spot, attempt, 0)
+                    ) {
+                        ++buybackShift;
+                        lastHalvingAt = uint64(block.timestamp);
+                    }
+                    emit BuybackSkipped(attempt, minOut);
+                }
             }
         }
         buybackReserve = buyAmt - spent;
@@ -366,7 +378,8 @@ contract Lodestar is ILodestar, ReentrancyGuard {
         return _minOut(_ema(), _spot(), quoteIn, slippageBps);
     }
 
-    /// @notice Largest single buyback right now (0 = the pool doesn't report its liquidity, no cap).
+    /// @notice Largest single buyback right now. 0 means none can go through now: there is no EMA, or the pool
+    /// has no active liquidity to size it against (or doesn't report it).
     function maxBuyback() external view returns (uint256) {
         return _maxBuyback(_ema(), _spot());
     }
@@ -391,6 +404,7 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// @dev Quote side of the active liquidity: L * sqrtP for currency1, L / sqrtP for currency0. Valued
     /// at whichever of the EMA and spot prices gives the smaller depth: a pump raises spot and the EMA
     /// stays in charge, a dump lowers spot and the cap shrinks with it instead of trusting a stale EMA.
+    /// 0 when there is nothing to size against, which `_buyback` treats as "wait", never as "no cap".
     function _maxBuyback(uint256 ema, uint256 spot) internal view returns (uint256) {
         if (ema == 0) return 0;
         uint256 liq;
@@ -582,9 +596,16 @@ contract Lodestar is ILodestar, ReentrancyGuard {
     /// without a cap, so without this a pool weeks behind could make distribute need more gas than a block
     /// holds and revert, treasury and buyback included. A failed poke counts as not caught up.
     function _catchUpExile() internal returns (bool current) {
+        uint256 g = gasleft();
         try exile.poke(exilePoolId, EXILE_CATCH_UP) returns (bool caughtUp) {
             current = caughtUp;
-        } catch {}
+        } catch {
+            // Out of gas inside the poke leaves this call the 1/64 EIP-150 holds back, which is enough to
+            // finish with both payouts parked and the pool not moved at all, and a wallet's gas estimate
+            // lands right there. Fail instead, so the caller sends enough. A poke that fails for any other
+            // reason uses little gas and still only parks the payouts.
+            if (gasleft() <= g / 63) revert CatchUpOutOfGas();
+        }
     }
 
     function _tryTransfer(IERC20 asset, address to, uint256 amount) internal returns (bool) {

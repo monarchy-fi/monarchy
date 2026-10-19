@@ -773,23 +773,18 @@ contract LodestarTest is MonarchyFixture {
         assertEq(l.buybackReserve(), 220e6, "40% of 500, plus 40% of the pump's own 50 USDC creator fee");
     }
 
-    /// @dev A pump that blocks the buyback can't be milked for halvings: however many times distribute is
-    /// called during it, the attempt size halves at most once every 30 minutes, the same rate at which
+    /// @dev Failed attempts can't be milked for halvings: however many times distribute is called while the
+    /// route keeps failing, the attempt size halves at most once every 30 minutes, the same rate at which
     /// successes double it back.
     function test_halvingIsAtMostEveryThirtyMinutes() public {
-        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(swapper), false);
-        p.cfg.maxSlippageBps = 1_000;
-        Lodestar l = _activate(p);
+        Lodestar l = _activateDefault(false);
         launchpad.injectFees(poolId, 0, 10_000e6);
-        (uint160 emaBefore,,,) = pool.getSlot0(poolId);
-        address attacker = makeAddr("attacker");
-        _buy(poolId, attacker, 3_500e6); // +14%, past the fee plus 10% slippage
-        launchpad.setEma(poolId, emaBefore); // the EMA has not seen the pump yet, so the floor holds
+        mockSwapper.setFail(true); // a miss a smaller attempt might fix, at a calm price
 
         for (uint256 i; i < 8; ++i) {
             l.distribute();
         }
-        assertEq(l.totalBuybackQuote(), 0, "the pumped price is refused");
+        assertEq(l.totalBuybackQuote(), 0);
         assertEq(l.buybackShift(), 1, "eight failed calls in one block halve once");
         assertEq(l.lastHalvingAt(), block.timestamp);
 
@@ -800,6 +795,57 @@ contract LodestarTest is MonarchyFixture {
         vm.warp(block.timestamp + 1);
         l.distribute();
         assertEq(l.buybackShift(), 2, "30 minutes later it can halve again");
+    }
+
+    /// @dev Ascend's EMA starts at the launch price and only moves on swaps, so after a pump it trails spot
+    /// until people trade. While its floor asks for more than a swap at spot can pay, no attempt size gets
+    /// through, so those skips don't halve: a quiet day after a launch pump leaves the next buyback full size.
+    function test_emaTrailingAPumpDoesNotHalve() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(swapper), false);
+        p.cfg.maxSlippageBps = 1_000;
+        Lodestar l = _activate(p);
+        launchpad.injectFees(poolId, 0, 10_000e6);
+        (uint160 emaBefore,,,) = pool.getSlot0(poolId);
+        _buy(poolId, makeAddr("pumper"), 3_500e6); // +14%, past the fee plus 10% slippage
+        launchpad.setEma(poolId, emaBefore); // nobody trades after the pump, so the EMA stays behind
+
+        for (uint256 i; i < 8; ++i) {
+            l.distribute();
+            vm.warp(block.timestamp + 3 hours); // keeper cadence
+        }
+        assertEq(l.totalBuybackQuote(), 0, "the pumped price is refused");
+        assertEq(l.buybackShift(), 0, "a trailing EMA is not a reason to buy smaller");
+
+        (uint160 spotNow,,,) = pool.getSlot0(poolId);
+        launchpad.setEma(poolId, spotNow); // trades pull the EMA up to the price
+        uint256 cap = l.maxBuyback();
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), cap, "the next buyback is a full capped piece");
+    }
+
+    /// @dev With no active liquidity (a price below Ascend's first band) there is no depth to cap the buy
+    /// against, so the buyback waits instead of spending the whole reserve in one swap, and the wait doesn't
+    /// count as a skip. The same holds when the pool doesn't report its liquidity at all.
+    function test_noActiveLiquidityWaitsInsteadOfBuyingUncapped() public {
+        Lodestar l = _activate(_params(token, 10_000, 0, 0, address(mockSwapper), false));
+        launchpad.injectFees(poolId, 0, 4_000e6); // 2,000 USDC to buy back
+        vm.mockCall(address(pool), abi.encodeWithSelector(pool.getLiquidity.selector, poolId), abi.encode(uint128(0)));
+        assertEq(l.maxBuyback(), 0, "nothing to size a buy against");
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), 0, "waits rather than buying uncapped");
+        assertEq(l.buybackReserve(), 2_000e6);
+        assertEq(l.buybackShift(), 0, "and the wait doesn't count");
+
+        vm.mockCallRevert(address(pool), abi.encodeWithSelector(pool.getLiquidity.selector, poolId), "no liquidity view");
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), 0, "an unreported liquidity fails closed too");
+
+        vm.clearMockedCalls();
+        uint256 cap = l.maxBuyback();
+        assertGt(cap, 0);
+        l.distribute();
+        assertEq(l.totalBuybackQuote(), cap, "one capped piece once there is depth");
+        assertEq(l.buybackReserve(), 2_000e6 - cap);
     }
 
     /// @dev The steward can't hand the role to the router itself: that would let anyone "accept" a no-op
@@ -994,23 +1040,7 @@ contract LodestarTest is MonarchyFixture {
     /// walking every hour inside them; the treasury is still paid and the call stays well inside a block.
     /// Each later distribute moves the pool on, and the parked payouts go out once it is current.
     function test_farBehindExileParksHolderPayoutsAndCatchesUp() public {
-        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
-        p.cfg.tokenToHolders = true;
-        Lodestar l = _activate(p);
-        uint256 pid = l.exilePoolId();
-        address holder = makeAddr("holder");
-        uint256 id = _lockToken(l, holder, 1_000e18, 365 days);
-        address mallory = makeAddr("mallory");
-        token.mint(mallory, 1e18);
-        vm.startPrank(mallory);
-        token.approve(address(exile), type(uint256).max);
-        for (uint256 k; k < 720; ++k) {
-            exile.lockERC20(address(token), 2, uint64(block.timestamp + 1 days + k * 1 hours), pid);
-        }
-        vm.stopPrank();
-
-        vm.warp(block.timestamp + 31 days); // nobody distributes or pokes for a month
-        launchpad.injectFees(poolId, 1000e18, 1000e6);
+        (Lodestar l, uint256 id) = _farBehind(false);
         uint256 g = gasleft();
         l.distribute();
         assertLt(g - gasleft(), 20_000_000, "one bounded catch-up, not the whole month");
@@ -1029,6 +1059,105 @@ contract LodestarTest is MonarchyFixture {
         vm.warp(block.timestamp + 3 days);
         assertApproxEqRel(exile.pendingRewards(id), 200e6, 0.001e18);
         assertApproxEqRel(exile.pendingStakeRewards(id), 500e18, 0.001e18);
+    }
+
+    /// @dev A month-long outage with a dust lock expiring every hour, then 1,000 tokens and 1,000 USDC of fees.
+    /// `paidBefore` pays one round to lockers before the outage instead, so every hour Exile walks afterwards
+    /// writes a fresh reward snapshot, as it does for a live token.
+    function _farBehind(bool paidBefore) internal returns (Lodestar l, uint256 id) {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        p.cfg.tokenToHolders = true;
+        l = _activate(p);
+        uint256 pid = l.exilePoolId();
+        id = _lockToken(l, makeAddr("holder"), 1_000e18, 365 days);
+        address mallory = makeAddr("mallory");
+        token.mint(mallory, 1e18);
+        vm.startPrank(mallory);
+        token.approve(address(exile), type(uint256).max);
+        for (uint256 k; k < 720; ++k) {
+            exile.lockERC20(address(token), 2, uint64(block.timestamp + 1 days + k * 1 hours), pid);
+        }
+        vm.stopPrank();
+
+        if (paidBefore) {
+            launchpad.injectFees(poolId, 1000e18, 1000e6);
+            l.distribute();
+        }
+        vm.warp(block.timestamp + 31 days); // nobody distributes or pokes for a month
+        if (!paidBefore) launchpad.injectFees(poolId, 1000e18, 1000e6);
+    }
+
+    /// @dev Sent with too little gas for the catch-up, the poke runs out inside its try, and EIP-150's held-back
+    /// 1/64 used to be enough to finish with the payouts parked and the pool not moved at all, which is where a
+    /// wallet's gas estimate lands. Now every gas limit either reverts or moves the pool on. Measured cold, as
+    /// a fresh transaction would run.
+    function test_everyGasLimitRevertsOrMovesExileOn() public {
+        (Lodestar l,) = _farBehind(true);
+        uint256 pid = l.exilePoolId();
+        uint64 cursor = _exileCursor(pid);
+        assertLt(cursor, block.timestamp - 30 days, "precondition: a month behind");
+        uint256 snap = vm.snapshotState();
+        _coolAll(l);
+        uint256 g = gasleft();
+        exile.poke(pid, l.EXILE_CATCH_UP());
+        uint256 pokeGas = g - gasleft();
+        vm.revertToState(snap);
+
+        uint256 starved;
+        for (uint256 i = 30; i <= 110; i += 4) {
+            snap = vm.snapshotState();
+            _coolAll(l);
+            (bool ok, bytes memory ret) = address(l).call{gas: pokeGas * i / 100}(abi.encodeCall(Lodestar.distribute, ()));
+            if (ok) {
+                assertGt(_exileCursor(pid), cursor, "a distribute that succeeds moves the pool on");
+            } else if (ret.length == 4 && bytes4(ret) == Lodestar.CatchUpOutOfGas.selector) {
+                ++starved;
+            }
+            vm.revertToState(snap);
+        }
+        assertGt(starved, 0, "the starved limits revert with CatchUpOutOfGas");
+
+        l.distribute(); // with enough gas the pool moves on
+        assertGt(_exileCursor(pid), cursor);
+    }
+
+    /// @dev Marks every contract distribute touches cold again (EIP-2929), as at the start of a transaction.
+    function _coolAll(Lodestar l) internal {
+        address[8] memory a = [
+            address(l),
+            address(exile),
+            address(token),
+            address(usdc),
+            address(sandfall),
+            address(launchpad),
+            address(pool),
+            address(mockSwapper)
+        ];
+        for (uint256 i; i < a.length; ++i) {
+            vm.cool(a[i]);
+        }
+    }
+
+    /// @dev Exile's processed-hour cursor for a pool, read from storage (`_pools` is slot 1; `cursor` sits after
+    /// `lastUpdate` in the struct's fourth slot).
+    function _exileCursor(uint256 pid) internal view returns (uint64) {
+        bytes32 slot = bytes32(uint256(keccak256(abi.encode(pid, uint256(1)))) + 3);
+        return uint64(uint256(vm.load(address(exile), slot)) >> 64);
+    }
+
+    /// @dev A poke that fails for any other reason doesn't stop distribute: the payouts park and the treasury
+    /// and buyback still run.
+    function test_catchUpThatFailsForAnotherReasonParks() public {
+        LodestarFactory.DeployParams memory p = _params(token, 4_000, 4_000, 2_000, address(mockSwapper), false);
+        p.cfg.tokenToHolders = true;
+        Lodestar l = _activate(p);
+        launchpad.injectFees(poolId, 1000e18, 1000e6);
+        vm.mockCallRevert(address(exile), abi.encodeWithSelector(exile.poke.selector), "stuck");
+        l.distribute();
+        assertEq(l.holdersReserve(), 200e6, "holder share parked");
+        assertEq(token.balanceOf(address(l)), 500e18, "token-side payout parked");
+        assertEq(l.totalTreasuryQuote(), 100e6, "treasury still paid");
+        assertGt(l.totalBuybackQuote(), 0, "buyback still ran");
     }
 
     // ---------------------------------------------------------------- 15. upgrade to a newer Lodestar

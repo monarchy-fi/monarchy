@@ -1520,6 +1520,11 @@ export const lodestarAbi = [
   },
   {
     "type": "error",
+    "name": "CatchUpOutOfGas",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "CreatorNotPending",
     "inputs": []
   },
