@@ -58,8 +58,9 @@ export function ExilePage() {
           Exile
         </h1>
         <p className="muted">
-          Lock tokens, LP or NFTs. A lock can be extended but never shortened, cancelled or transferred. Longer
-          locks earn a bigger share of holder rewards.
+          Lock to earn. Holding a token earns nothing; locking it earns a share of its fees, and the longer the lock, the
+          bigger the share. A lock can be extended but never shortened, cancelled or transferred. LP tokens and NFTs can be
+          locked too.
         </p>
       </header>
 

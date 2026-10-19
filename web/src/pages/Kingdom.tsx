@@ -62,8 +62,9 @@ export function KingdomPage() {
           Kingdom
         </h1>
         <p>
-          Every token launched on Ascend can run its own kingdom. Creator fees are burned, bought back, paid to locked holders or
-          streamed to the team, all in the open, and Monarchy keeps none of it.
+          Every token launched on Ascend can run its own kingdom, by its own rules. Holders who lock earn a share of every fee,
+          more the longer they lock, and the creator decides how the rest is burned, bought back or streamed to the team. All of
+          it happens in the open, and Monarchy keeps none of it.
         </p>
       </div>
 
@@ -76,12 +77,17 @@ export function KingdomPage() {
         </li>
         <li className="seal">
           <span className="seal-text">
-            <b>No sweep.</b> Funds only go where the contracts say, and a router moves only after 7 days' notice.
+            <b>Lock to earn.</b> Holding alone earns nothing. Longer locks earn a bigger share of every fee.
           </span>
         </li>
         <li className="seal">
           <span className="seal-text">
-            <b>12 hour timelock</b> on every split or tier change.
+            <b>Your rules, in public.</b> Each token sets its own split, burns and tiers, and every change waits 12 hours.
+          </span>
+        </li>
+        <li className="seal">
+          <span className="seal-text">
+            <b>No sweep.</b> Funds only go where the contracts say, and a router moves only after 7 days' notice.
           </span>
         </li>
       </ul>
@@ -143,8 +149,8 @@ export function KingdomPage() {
             )
           }
         >
-          Holds your token's Ascend creator role. You keep your dev buy. Fees split by your percentages into buyback and burn,
-          holder rewards and a Team Treasury.
+          Holds your token's Ascend creator role, and you keep your dev buy. You set the rules: the split between buyback and
+          burn, lockers and a Team Treasury, where token-side fees go, and the lock tiers.
         </Feature>
         <Feature
           to="/exile"
@@ -163,8 +169,8 @@ export function KingdomPage() {
             )
           }
         >
-          Lock tokens, v2 LP and NFTs. Locks can be extended, never shortened or cancelled. Longer locks earn a bigger share,
-          paid as a {dayLabel(drip)} drip.
+          Lock to earn. Holding alone earns nothing, and longer locks earn a bigger share, paid as a {dayLabel(drip)} drip.
+          Locks can be extended, never shortened or cancelled, and work for v2 LP and NFTs too.
         </Feature>
         <Feature
           to="/sandfall"

@@ -304,7 +304,7 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .card-head h3 { font-size: 14px; display: inline-flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.1em; }
 .card-head h3::before { content: "▍"; color: var(--white); margin-right: -2px; }
 /* the Kingdom page: promises, tool cards */
-.seals { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1.3fr 1fr 1fr; border: 1px solid var(--line); background: var(--card); }
+.seals { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1.2fr 1.2fr 1.2fr; border: 1px solid var(--line); background: var(--card); }
 .seal { display: flex; align-items: center; gap: 14px; padding: 16px 18px; color: var(--muted); font-size: 14px; line-height: 1.45; }
 .seal + .seal { border-left: 1px solid var(--line); }
 .seal b { color: var(--text); }
@@ -653,6 +653,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .foot-links a:first-child { color: var(--text); }
 
 /* ------------------------------------------------------------------ responsive */
+/* four seals squeeze the 0% one on mid-width screens, so they go two by two there */
+@media (max-width: 1200px) and (min-width: 961px) {
+  .seals { grid-template-columns: 1fr 1fr; }
+  .seal:nth-child(odd) { border-left: 0; }
+  .seal:nth-child(n + 3) { border-top: 1px solid var(--line); }
+}
+
 @media (max-width: 960px) {
   .flow-body { grid-template-columns: 1fr; justify-items: stretch; gap: 0; }
   .flow-arrow, .flow-arrow-split { display: block; margin: 8px auto; }
