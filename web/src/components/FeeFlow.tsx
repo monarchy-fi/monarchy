@@ -19,12 +19,13 @@ type Dest = { key: string; mark: string; title: string; tag: string; body: strin
 
 /** Ascend pool fees, through Lodestar, out to the four places they can go: token-side fees on one route, quote-side fees split three ways. */
 export function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { drip: number; burn?: number; holders?: number; treasury?: number; tokenToHolders?: boolean }) {
-  const share = (bps?: number) => (bps === undefined ? "Quote share" : `${pct(bps)} of quote fees`);
+  // the live numbers are MONARCHY's own split; every token on Lodestar picks its own
+  const share = (bps?: number) => (bps === undefined ? "Quote share" : `${pct(bps)} for MONARCHY`);
   const tokenSide: Dest = {
     key: "fire",
     mark: "[x|+]",
     title: "Burned / sent to lockers",
-    tag: tokenToHolders === undefined ? "All token-side fees" : `All token-side fees, ${tokenToHolders ? "sent to lockers" : "burned"} right now`,
+    tag: tokenToHolders === undefined ? "All token-side fees" : `All token-side fees, ${tokenToHolders ? "sent to lockers" : "burned"} for MONARCHY`,
     body: `Burned by default. The creator can send all of it to Exile lockers instead, paid in the token itself over ${drip} days.`,
   };
   const quoteSide: Dest[] = [
@@ -41,7 +42,10 @@ export function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { dri
     <section className="flow" aria-labelledby="flow-title">
       <div className="flow-head">
         <h2 id="flow-title">Where the fees go</h2>
-        <p className="muted">Every creator fee follows the same public path. Nothing stops at Monarchy.</p>
+        <p className="muted">
+          Every creator fee follows the same public path, and nothing stops at Monarchy. The percentages below are MONARCHY's own: every token on Lodestar sets
+          its own split when it activates.
+        </p>
       </div>
       <div className="flow-body">
         <div className="flow-node flow-src ascii-box">
@@ -77,7 +81,7 @@ export function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { dri
             </ul>
           </div>
           <div className="flow-group">
-            <div className="flow-group-k">Quote side, split by the creator</div>
+            <div className="flow-group-k">Quote side, split by each token's creator</div>
             <ul>
               {quoteSide.map((d) => (
                 <DestItem key={d.key} d={d} />

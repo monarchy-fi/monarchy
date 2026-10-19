@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { isAddress, parseUnits, stringToHex, type Address } from "viem";
 import { iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
-import { tagline } from "../components/Tiers";
+import { TierBadge, tagline } from "../components/Tiers";
 import { TxButton } from "../components/Tx";
 import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
 import { DEFAULT_TREASURY_WINDOW_DAYS, DISTRIBUTE_NOTE } from "../lib/constants";
@@ -383,6 +383,59 @@ const DEFAULT_TIERS = [
   { name: "Duke", days: 7, mult: 1.5 },
   { name: "Monarch", days: 30, mult: 3 },
 ];
+type TierChoice = (typeof DEFAULT_TIERS)[number];
+/** The lock lengths and multipliers a tier can pick from. Every step stays inside Exile's rules: at least an hour, at most 5x. */
+const TIER_DAYS = [1, 2, 3, 5, 7, 14, 21, 30, 45, 60, 90, 180, 365];
+const TIER_MULTS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
+/** Treasury stream windows on offer, inside Sandfall's 1 to 365 day range. */
+const WINDOW_DAYS = [1, 3, 7, 14, 30, 60, 90, 180, 365];
+const dayCount = (n: number) => (n === 365 ? "1 year" : `${n} day${n === 1 ? "" : "s"}`);
+
+/** The four tiers with their names fixed: each picks a lock length and a multiplier from a list. A choice that would
+ * break the order (each tier longer than the one before, its multiplier no lower) is greyed out, so the table is
+ * always one Exile accepts. */
+function TierPicker({ tiers, setTiers }: { tiers: TierChoice[]; setTiers: (t: TierChoice[]) => void }) {
+  const edit = (i: number, patch: Partial<TierChoice>) => setTiers(tiers.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+  return (
+    <div className="tier-pick" role="table" aria-label="Exile reward tiers">
+      <div className="tier-pick-row tier-pick-head" role="row">
+        <span role="columnheader">Tier</span>
+        <span role="columnheader">Lock at least</span>
+        <span role="columnheader">Multiplier</span>
+      </div>
+      {tiers.map((t, i) => {
+        const prev = tiers[i - 1];
+        const next = tiers[i + 1];
+        return (
+          <div key={t.name} className="tier-pick-row" role="row">
+            <span className="tier-pick-name" role="cell">
+              <TierBadge name={t.name} />
+              <span className="muted small">{tagline(t.name)}</span>
+            </span>
+            <span role="cell">
+              <select className="input input-sm" aria-label={`${t.name} lock length`} value={t.days} onChange={(e) => edit(i, { days: Number(e.target.value) })}>
+                {TIER_DAYS.map((n) => (
+                  <option key={n} value={n} disabled={(!!prev && n <= prev.days) || (!!next && n >= next.days)}>
+                    {dayCount(n)}
+                  </option>
+                ))}
+              </select>
+            </span>
+            <span role="cell">
+              <select className="input input-sm" aria-label={`${t.name} multiplier`} value={t.mult} onChange={(e) => edit(i, { mult: Number(e.target.value) })}>
+                {TIER_MULTS.map((m) => (
+                  <option key={m} value={m} disabled={(!!prev && m < prev.mult) || (!!next && m > next.mult)}>
+                    {m}x
+                  </option>
+                ))}
+              </select>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token: Address; quote: Address; predicted: Address; poolId: `0x${string}` }) {
   const { address } = useConnection();
@@ -461,17 +514,11 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
             <h5>Token-side fees</h5>
             <TokenRoute name="activate-token-route" value={toHolders} onChange={setToHolders} />
             <h5>Exile reward tiers</h5>
-            <div className="tier-edit">
-              {tiers.map((t, i) => (
-                <div key={i} className="tier-edit-row">
-                  <input className="input input-sm" aria-label={`Tier ${i + 1} name`} value={t.name} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-                  <input className="input input-sm" type="number" aria-label={`Tier ${i + 1} length in days`} value={t.days} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, days: Number(e.target.value) } : x)))} />
-                  <span className="muted small">days</span>
-                  <input className="input input-sm" type="number" step="0.1" aria-label={`Tier ${i + 1} multiplier`} value={t.mult} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, mult: Number(e.target.value) } : x)))} />
-                  <span className="muted small">x {tagline(t.name) ? `· ${tagline(t.name)}` : ""}</span>
-                </div>
-              ))}
-            </div>
+            <p className="muted small">
+              The four tier names are the same on every Monarchy token, so holders always know what a Duke lock means. Pick how long each tier's
+              lock has to be and how big a share it earns.
+            </p>
+            <TierPicker tiers={tiers} setTiers={setTiers} />
             {tierProblem && <p className="warn small">{tierProblem}</p>}
             <div className="form">
               <label>
@@ -484,17 +531,25 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
                 </div>
               </label>
             </div>
-            <p className={badTreasury ? "warn small" : "muted small"}>
+            <p className={badTreasury ? "warn small field-help" : "muted small field-help"}>
               {badTreasury
                 ? "That isn't a valid address yet."
                 : "This address receives the Team Treasury stream. It can never be changed, not even by the steward, so check it twice."}
             </p>
-            <div className="form">
-              <label>
-                Treasury stream window (days)
-                <input className="input" type="number" min={1} max={365} value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))} />
-              </label>
-            </div>
+            <label className="field">
+              <span className="field-label">Treasury stream window</span>
+              <select className="input" style={{ maxWidth: 220 }} value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value))}>
+                {WINDOW_DAYS.map((n) => (
+                  <option key={n} value={n}>
+                    {dayCount(n)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted small field-help">
+              Each distribute adds the Team Treasury share to a Sandfall stream, which pays it out to the recipient bit by bit over this window
+              instead of all at once, so holders can watch it flow. It can't be changed later.
+            </p>
             <h5>Creator role</h5>
             <label className="check">
               <input type="checkbox" checked={lockForever} onChange={(e) => setLockForever(e.target.checked)} />
@@ -511,9 +566,10 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
               Save toward a HyperCore listing
             </label>
             <div className="note-box">
-              Ascend can list a token on <b>HyperCore</b>, Hyperliquid's order book. If you opt in, <b>20% of the creator's {quoteMeta?.symbol ?? "quote"} fees</b> are
-              set aside for that listing until they reach the savings goal below, and the rest is routed as usual. Once the goal is reached,
-              everything is routed as usual again. The steward can stop saving at any time.
+              Ascend can list a token on <b>HyperCore</b>, Hyperliquid's own exchange. If you opt in, <b>20% of the creator's {quoteMeta?.symbol ?? "quote"} fees</b> are
+              saved toward that listing until they reach the goal below, and the rest is routed as usual. Reaching the goal doesn't list the token by itself: saving
+              stops, and the savings wait until Ascend lists it, then pay for the listing. After that the router also receives half the trading fees from the
+              token's HyperCore market. The steward can stop saving at any time, and unspent savings come back to the router.
             </div>
             {listing && (
               <label className="field">
