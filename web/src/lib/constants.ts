@@ -16,3 +16,21 @@ export const DISTRIBUTE_NOTE = `Distributed every ${DISTRIBUTE_EVERY_HOURS} hour
 /** The MONARCHY token's contract address, shown in the nav with click to copy. Unset, the nav shows "CA: soon".
  * For now it holds the standard burn address so the copy button can be tried; swap in the token's address at launch. */
 export const MONARCHY_CA: `0x${string}` | undefined = "0x000000000000000000000000000000000000dEaD";
+
+/** The settings MONARCHY's own Lodestar will launch with: Monarchy's defaults. While a sample token stands in for
+ * MONARCHY, the Kingdom page shows these rather than the sample token's own. */
+export const MONARCHY_SETTINGS = {
+  burnBps: 2000,
+  holdersBps: 5000,
+  treasuryBps: 3000,
+  tokenToHolders: true,
+  tiers: [
+    { name: "Peasant", minDuration: 86400, multiplierBps: 5000 },
+    { name: "Knight", minDuration: 3 * 86400, multiplierBps: 10000 },
+    { name: "Duke", minDuration: 7 * 86400, multiplierBps: 20000 },
+    { name: "Monarch", minDuration: 30 * 86400, multiplierBps: 40000 },
+  ],
+};
+
+/** Whether a token is MONARCHY itself rather than a sample token standing in for it. */
+export const isMonarchy = (token?: string) => !!token && !!MONARCHY_CA && token.toLowerCase() === MONARCHY_CA.toLowerCase();

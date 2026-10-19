@@ -7,7 +7,7 @@ import { GateGlyph, HourglassGlyph, PageMark, StarGlyph } from "../components/Na
 import { NoDeployment } from "../components/States";
 import { tagline, TierBadge } from "../components/Tiers";
 import { Addr, Amt, Badge, Card, Skel, Stat } from "../components/Ui";
-import { MONARCHY_CA } from "../lib/constants";
+import { isMonarchy, MONARCHY_SETTINGS } from "../lib/constants";
 import { useDeployment } from "../lib/deployments";
 import { fmt, label, mult } from "../lib/format";
 import { POLL, usePageTitle } from "../lib/hooks";
@@ -17,7 +17,7 @@ import { days } from "./Home";
 // Lodestar burns to this address; Ascend tokens reject 0x…dEaD
 const DEAD = "0xdEAD000000000000000042069420694206942069";
 
-/** The overview the landing page leaves out: the promises, where fees go, live numbers, the three tools and the court. */
+/** The overview the landing page leaves out: the promises, where fees go, live numbers, the three features and the court. */
 export function KingdomPage() {
   usePageTitle("Kingdom");
   const d = useDeployment();
@@ -51,7 +51,10 @@ export function KingdomPage() {
   const locked = useLockedTotal(core.token);
   // until MONARCHY is the token this deployment's Lodestar routes for, the sample token's numbers fill the card
   const live = !!d && !!core.lodestar;
-  const standIn = !!ts && !!core.token && core.token.toLowerCase() !== MONARCHY_CA?.toLowerCase();
+  const standIn = !!ts && !!core.token && !isMonarchy(core.token);
+  // the court shows the tiers MONARCHY will launch with until its own router is live
+  const tiers = isMonarchy(core.token) && pool ? pool.tiers.map((t) => ({ ...t, name: label(t.label) })) : MONARCHY_SETTINGS.tiers;
+  const topBps = Math.max(...tiers.map((t) => t.multiplierBps));
   const burnShare = dead !== undefined && supply ? `${fmt((dead * 10_000n) / supply, 2, 2)}% of supply` : undefined;
 
   return (
@@ -72,7 +75,7 @@ export function KingdomPage() {
         <li className="seal seal-main">
           <span className="seal-big">0%</span>
           <span className="seal-text">
-            <b>No fees.</b> Monarchy takes nothing, on any tool.
+            <b>No fees.</b> Monarchy takes nothing, on any feature.
           </span>
         </li>
         <li className="seal">
@@ -107,9 +110,9 @@ export function KingdomPage() {
           }
         >
           <p className="kingdom-lead">
-            Most tokens ask holders to trust the team with the fees. <b>MONARCHY runs on its own tools instead</b>, the same
+            Most tokens ask holders to trust the team with the fees. <b>MONARCHY runs on its own features instead</b>, the same
             contracts it offers every Ascend token, with the same zero fees and the same timelocks. Nothing here is special to it,
-            and each tool below shows how MONARCHY uses it.
+            and each feature below shows how MONARCHY uses it.
             {standIn && <span className="faint"> Until MONARCHY launches, the sample token {ts} stands in.</span>}
           </p>
           <div className="stats stats-3">
@@ -192,20 +195,17 @@ export function KingdomPage() {
 
       <Card title="The court" right={<span className="muted small">Lock longer, earn more</span>}>
         <div className="tiers">
-          {(pool?.tiers ?? DEFAULT_TIERS).map((t) => {
-            const name = label(t.label);
-            return (
-              <div key={name} className={`tier tier-${name.toLowerCase()}`}>
-                <TierBadge name={name} />
-                <div className="tier-bars" aria-hidden="true">
-                  {tierBars(t.multiplierBps)}
-                </div>
-                <div className="tier-mult">{mult(t.multiplierBps)}</div>
-                <div className="tier-len">{days(t.minDuration)} lock</div>
-                <div className="tier-tag">{tagline(name) ?? ""}</div>
+          {tiers.map((t) => (
+            <div key={t.name} className={`tier tier-${t.name.toLowerCase()}`}>
+              <TierBadge name={t.name} />
+              <div className="tier-bars" aria-hidden="true">
+                {tierBars(t.multiplierBps, topBps)}
               </div>
-            );
-          })}
+              <div className="tier-mult">{mult(t.multiplierBps)}</div>
+              <div className="tier-len">{days(t.minDuration)} lock</div>
+              <div className="tier-tag">{tagline(t.name) ?? ""}</div>
+            </div>
+          ))}
         </div>
         <p className="muted small">No lock, no rewards. Rewards stop the moment a lock ends.</p>
       </Card>
@@ -213,13 +213,13 @@ export function KingdomPage() {
   );
 }
 
-/** A tier's multiplier as signal bars: one bar per half x, up to eight. */
-function tierBars(bps: number): string {
-  const n = Math.max(1, Math.min(8, Math.round(bps / 5000)));
+/** A tier's multiplier as eight signal bars, scaled so the top tier fills them all. */
+function tierBars(bps: number, topBps: number): string {
+  const n = Math.max(1, Math.min(8, Math.round((bps * 8) / topBps)));
   return "▮".repeat(n) + "▯".repeat(8 - n);
 }
 
-/** One tool, and under it how MONARCHY itself uses it. The "Open" link stretches over the whole card, and the links
+/** One feature, and under it how MONARCHY itself uses it. The "Open" link stretches over the whole card, and the links
  * inside the MONARCHY part sit above it. */
 function Feature({ to, title, kicker, icon, cls, ours, children }: { to: string; title: string; kicker: string; icon: ReactNode; cls: string; ours?: ReactNode; children: ReactNode }) {
   return (
@@ -244,11 +244,3 @@ function Feature({ to, title, kicker, icon, cls, ours, children }: { to: string;
     </div>
   );
 }
-
-const enc = (s: string) => ("0x" + [...s].map((c) => c.charCodeAt(0).toString(16)).join("").padEnd(64, "0")) as `0x${string}`;
-const DEFAULT_TIERS = [
-  { minDuration: 86400, multiplierBps: 5000, label: enc("Peasant") },
-  { minDuration: 3 * 86400, multiplierBps: 10000, label: enc("Knight") },
-  { minDuration: 7 * 86400, multiplierBps: 20000, label: enc("Duke") },
-  { minDuration: 30 * 86400, multiplierBps: 40000, label: enc("Monarch") },
-];
