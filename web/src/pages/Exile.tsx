@@ -16,6 +16,7 @@ import { dayLabel, useDripDays, useLockedTotal, useLodestarCore, useTokenMeta, t
 import { days } from "./Home";
 
 type Tier = { minDuration: number; multiplierBps: number; label: `0x${string}` };
+type Rates = { totalPoints: bigint; rewardRate: bigint; periodFinish: bigint | number; stakeRewardRate: bigint; stakePeriodFinish: bigint | number };
 // a tx can sit in the mempool for a bit; pad so the chosen tier still qualifies when it lands
 const BUFFER = 10 * 60;
 
@@ -77,7 +78,7 @@ export function ExilePage() {
       >
         <div key={mode} className="swap-in">
           {mode === "main" ? (
-            <LockForm exile={d.exile} token={core.token} tokenMeta={core.tokenMeta} poolId={poolId} tiers={tiers} tiersLoading={tiersLoading} />
+            <LockForm exile={d.exile} token={core.token} tokenMeta={core.tokenMeta} poolId={poolId} tiers={tiers} tiersLoading={tiersLoading} rates={pool.data} rewardMeta={rewardMeta} />
           ) : (
             <SomethingElse exile={d.exile} factory={d.factory} />
           )}
@@ -124,6 +125,8 @@ function LockForm({
   poolId,
   tiers,
   tiersLoading,
+  rates,
+  rewardMeta,
 }: {
   exile: Address;
   token?: Address;
@@ -131,6 +134,9 @@ function LockForm({
   poolId?: bigint;
   tiers: readonly Tier[];
   tiersLoading: boolean;
+  /** The pool's live points and drip rates, for the earnings estimate. */
+  rates?: Rates;
+  rewardMeta?: TokenMeta;
 }) {
   const { address } = useConnection();
   const [amount, setAmount] = useState("");
@@ -154,6 +160,8 @@ function LockForm({
   // Exile rounds every unlock time up to the next hour, so the preview does too
   const unlockAt = ceilHour(Math.floor(Date.now() / 1000) + seconds + BUFFER);
   const overBalance = balance !== undefined && value > (balance as bigint);
+  const points = tier ? (value * BigInt(tier.multiplierBps)) / 10_000n : 0n;
+  const earns = rates && rewards ? estimate(rates, points, unlockAt - Math.floor(Date.now() / 1000)) : undefined;
   const reason = !token ? "Enter the token or LP address" : tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : overBalance ? "More than your balance" : undefined;
 
   return (
@@ -215,9 +223,30 @@ function LockForm({
                 )
               }
             />
-            {rewards && value > 0n && tier && <Row k="Points" v={fmt((value * BigInt(tier.multiplierBps)) / 10_000n, Number(decimals))} />}
+            {rewards && value > 0n && tier && <Row k="Points" v={fmt(points, Number(decimals))} />}
             <Row k="Cancellable" v={<Badge tone="green">Not cancellable</Badge>} />
           </div>
+          {earns && (
+            <div className="lock-est">
+              <div className="lock-est-k">Estimated earnings</div>
+              <div className="lock-est-v">
+                {earns.quote > 0n || earns.stake > 0n ? (
+                  <>
+                    {earns.quote > 0n && <Amt value={earns.quote} decimals={rewardMeta?.decimals ?? 6} symbol={rewardMeta?.symbol} />}
+                    {earns.quote > 0n && earns.stake > 0n && <span className="faint"> + </span>}
+                    {earns.stake > 0n && <Amt value={earns.stake} decimals={Number(decimals)} digits={0} symbol={symbol} />}
+                  </>
+                ) : (
+                  "Nothing dripping right now"
+                )}
+              </div>
+              <div className="muted small">Over the {seconds >= 86400 ? `${Math.round(seconds / 86400)} day` : duration(seconds)} lock, at today's drip rate.</div>
+              <p className="lock-est-note small">
+                <b>A rough estimate, not a promise.</b> Real earnings will differ: they rise and fall with the drip rate, trading volume and how
+                much everyone has locked.
+              </p>
+            </div>
+          )}
           {/* Approve is only offered once the lock itself could go through */}
           <WithApproval token={token} spender={exile} amount={reason ? 0n : value}>
             <TxButton
@@ -242,6 +271,17 @@ function LockForm({
       </div>
     </>
   );
+}
+
+/** What a lock with these points would earn over `seconds` if both streams kept dripping at today's rate:
+ * its share of all points, after it joins, times each stream's rate. A stream that has run dry counts as zero. */
+function estimate(r: Rates, points: bigint, seconds: number): { quote: bigint; stake: bigint } | undefined {
+  if (points === 0n || seconds <= 0) return undefined;
+  const now = Math.floor(Date.now() / 1000);
+  const total = r.totalPoints + points;
+  // rates are scaled by 1e18 (Exile's RATE_PREC)
+  const over = (rate: bigint, finish: bigint | number) => (Number(finish) > now ? (rate * BigInt(seconds) * points) / total / 10n ** 18n : 0n);
+  return { quote: over(r.rewardRate, r.periodFinish), stake: over(r.stakeRewardRate, r.stakePeriodFinish) };
 }
 
 /** "Something else": any token or LP (with rewards when it has a Lodestar), or an NFT. */

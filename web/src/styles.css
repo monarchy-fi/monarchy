@@ -454,6 +454,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .check-list .check input { margin-top: 3px; }
 /* key and value rows: one column in a narrow box, side by side columns once the box is wide enough */
 .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 8px 64px; align-content: start; margin: 18px 0; padding: 14px 16px; border: 1px dashed var(--line-2); background: #000; }
+.lock-est { margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--line-2); background: #000; display: grid; gap: 4px; }
+.lock-est-k { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); }
+.lock-est-v { font: 800 22px/1.25 var(--mono); letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.lock-est-note { margin: 8px 0 0; padding-top: 8px; border-top: 1px dashed var(--line-2); color: var(--muted); }
+.lock-est-note b { color: var(--amber); font-weight: 600; }
 /* a note under a summary box, tied to an asterisk inside it */
 .footnote { margin: -8px 0 18px; font-size: 12.5px; line-height: 1.6; color: var(--faint); }
 .footnote a { color: var(--muted); }
@@ -690,6 +695,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .table-search { max-width: none; }
   .card { padding: 18px; }
   .grid3 > .feature { padding: 22px 20px 42px; }
+  .lock-est-v { font-size: 18px; }
   .flow { padding: 20px 16px; }
   .flow-group ul { grid-template-columns: 1fr; }
   .landing-sub { font-size: 15.5px; }
