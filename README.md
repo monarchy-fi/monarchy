@@ -4,7 +4,7 @@
 
 # Monarchy
 
-### Fee routing, locks and vesting for tokens launched on Ascend
+### Lock to earn on Ascend. Every token sets its own rules.
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
 [![Tests: 171 passing](https://img.shields.io/badge/Foundry-171%20tests%20passing-111111.svg)](contracts/test)
@@ -13,11 +13,11 @@
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-111111.svg)](#how-it-works)
 [![License: MIT](https://img.shields.io/badge/License-MIT-111111.svg)](LICENSE)
 
-**Every creator fee burned, bought back, paid to locked holders or streamed to the team in the open. Monarchy takes nothing.**
+**Holders who lock earn a share of every creator fee, more the longer they lock. Each creator decides how the rest is burned, bought back or streamed to the team, and every change happens in public. Monarchy takes nothing.**
 
 [Website](https://monarchy.fi) · [Docs](https://docs.monarchy.fi) · [X](https://x.com/monarchyfi) · [Architecture](docs/ARCHITECTURE.md) · [Demo script](docs/DEMO.md) · [Testnet contracts](#live-on-elysium-testnet)
 
-<img src="docs/img/site-home.png" alt="The Monarchy home page: four tabs around a crown along the top with the CA chip on the right, the name MONARCHY above a large spinning crown drawn in text characters, and Steal the Crown in gold with the line The kingdom shares everything. The Monarch doesn't tax. below it" width="840" />
+<img src="docs/img/site-home.png" alt="The Monarchy home page: four tabs around a crown along the top with the CA chip on the right, the name MONARCHY above a large spinning crown drawn in text characters, and Steal the Crown in gold with the line Lock to earn. The kingdom shares everything with those who stay. below it" width="840" />
 
 </div>
 
@@ -27,7 +27,10 @@
 
 Ascend has no token, and its NFT is capped at 500. People who want a piece of Ascend usually reach for the launchpad's own token, and here there isn't one. Monarchy aims to be that token: a liquid coin whose trading fees flow back to the holders who lock it, built on the same tools it offers every other Ascend project.
 
-On Ascend the creator role collects half of every 1% swap fee, in both the token and the quote asset. Without Monarchy that money sits in one wallet, holders earn nothing for holding, and promises about buybacks or vesting can't be checked on chain. Monarchy replaces those promises with contracts.
+On Ascend the creator role collects half of every 1% swap fee, in both the token and the quote asset. Without Monarchy that money sits in one wallet, holders earn nothing for holding, and promises about buybacks or vesting can't be checked on chain. Monarchy replaces those promises with contracts, built on two ideas:
+
+- **Lock to earn.** Holding a token earns nothing on its own. Holders who lock it in Exile earn a share of every fee, by tier from Peasant (0.5x for a day) to Monarch (4x for a month), so rewards go to the people who stay, not to wallets that sell the next day.
+- **Your token, your rules.** Each creator sets the split between buyback and burn, lockers and the Team Treasury, where token-side fees go, the four lock tiers and how fast the treasury streams. Splits, routes and tiers stay adjustable, but only in public: every change waits 12 hours on chain where anyone can see it coming.
 
 ## Monarchy runs on Monarchy
 

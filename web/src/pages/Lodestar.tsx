@@ -42,9 +42,9 @@ export function LodestarPage() {
           Lodestar
         </h1>
         <p className="muted">
-          A fee router for one Ascend token. It holds the token's creator role, so every creator fee lands here. Anyone
-          can route it. Token-side fees are paid to Exile lockers, or, if the creator chooses, all burned. Quote-side
-          fees split between buyback and burn, holder rewards in Exile and a Team Treasury streamed through Sandfall.
+          Your token, your rules. A Lodestar holds your token's creator role and routes every fee the way you set it: to
+          Exile lockers, into buyback and burn, or to a Team Treasury streamed through Sandfall. You pick the split, where
+          token-side fees go and the lock tiers, and anyone can trigger a distribute. Later changes wait 12 hours, in public.
           No fees.
         </p>
       </header>

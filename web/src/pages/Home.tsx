@@ -12,7 +12,7 @@ export function Home() {
       <h1 className="wordmark">Monarchy</h1>
       <AsciiCrown className="landing-crown" />
       <p className="tagline">Steal the Crown</p>
-      <p className="landing-sub">The kingdom shares everything. The Monarch doesn't tax.</p>
+      <p className="landing-sub">Lock to earn. The kingdom shares everything with those who stay.</p>
       <div className="landing-links">
         <span className="landing-note">Built on Ascend. No fees.</span>
         <span className="landing-out">
