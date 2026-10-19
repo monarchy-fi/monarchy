@@ -228,7 +228,7 @@ function LockForm({
           </div>
           {earns && (
             <div className="lock-est">
-              <div className="lock-est-k">This lock would earn about</div>
+              <div className="lock-est-k">Estimated earnings</div>
               <div className="lock-est-v">
                 {earns.quote > 0n || earns.stake > 0n ? (
                   <>
@@ -240,9 +240,11 @@ function LockForm({
                   "Nothing dripping right now"
                 )}
               </div>
-              <div className="muted small">
-                Over the {seconds >= 86400 ? `${Math.round(seconds / 86400)} day` : duration(seconds)} lock, if rewards keep dripping at today's rate and the locked total stays where it is.
-              </div>
+              <div className="muted small">Over the {seconds >= 86400 ? `${Math.round(seconds / 86400)} day` : duration(seconds)} lock, at today's drip rate.</div>
+              <p className="lock-est-note small">
+                <b>A rough estimate, not a promise.</b> Real earnings will differ: they rise and fall with the drip rate, trading volume and how
+                much everyone has locked.
+              </p>
             </div>
           )}
           {/* Approve is only offered once the lock itself could go through */}
