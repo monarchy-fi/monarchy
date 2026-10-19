@@ -414,13 +414,17 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .tx-link { font-weight: 600; }
 
 /* why a grey button can't be pressed yet: a popup over it, typed out on hover or on a tap */
-.tx-btn { position: relative; display: inline-flex; }
+/* a long label (the steward's "Propose (takes effect after 12 hours)") wraps rather than run out of a phone's card */
+.tx-btn { position: relative; display: inline-flex; max-width: 100%; }
+.tx-btn > .btn { white-space: normal; text-align: center; }
 .tx-btn.has-tip { cursor: not-allowed; }
 .tx-btn.has-tip > .btn:disabled { pointer-events: none; }
-.tip { position: absolute; bottom: calc(100% + 10px); left: 50%; z-index: 5; transform: translate(-50%, 4px); padding: 7px 11px; background: #000; border: 1px solid var(--white); color: var(--text); font: 600 11.5px/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.15s, transform 0.2s var(--ease); }
-.tip::after { content: ""; position: absolute; top: 100%; left: 50%; width: 8px; height: 8px; background: #000; border-right: 1px solid var(--white); border-bottom: 1px solid var(--white); transform: translate(-50%, -4px) rotate(45deg); }
+/* --dx slides the popup back on screen near an edge (set in TxButton); the arrow stays over the button.
+   One line wherever it fits, wrapping only when it is wider than the screen. */
+.tip { position: absolute; bottom: calc(100% + 10px); left: 50%; z-index: 5; transform: translate(calc(-50% + var(--dx, 0px)), 4px); width: max-content; max-width: calc(100vw - 16px); padding: 7px 11px; background: #000; border: 1px solid var(--white); color: var(--text); font: 600 11.5px/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; white-space: normal; pointer-events: none; opacity: 0; transition: opacity 0.15s, transform 0.2s var(--ease); }
+.tip::after { content: ""; position: absolute; top: 100%; left: calc(50% - var(--dx, 0px)); width: 8px; height: 8px; background: #000; border-right: 1px solid var(--white); border-bottom: 1px solid var(--white); transform: translate(-50%, -4px) rotate(45deg); }
 .tip-text { display: inline-block; clip-path: inset(0 100% 0 0); }
-.tx-btn.has-tip:hover .tip, .tx-btn.show-tip .tip { opacity: 1; transform: translate(-50%, 0); }
+.tx-btn.has-tip:hover .tip, .tx-btn.show-tip .tip { opacity: 1; transform: translate(calc(-50% + var(--dx, 0px)), 0); }
 .tx-btn.has-tip:hover .tip-text, .tx-btn.show-tip .tip-text { animation: type-in 0.55s steps(var(--n, 12)) 0.05s forwards; }
 @keyframes type-in { to { clip-path: inset(0 0 0 0); } }
 .connect-hint { display: inline-flex; align-items: center; gap: 6px; font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); padding: 6px 10px; border: 1px dashed var(--line-2); }
@@ -558,7 +562,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .tier-pick select { width: 100%; }
 .tier-pick select[aria-invalid="true"] { border-color: var(--amber); }
 .tier-diff { margin: 12px 0 14px; }
-.pending-list { display: inline-flex; flex-wrap: wrap; gap: 4px; text-decoration: none; }
+/* one change per line, so the column stays one badge wide */
+.pending-list { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; text-decoration: none; }
 
 /* ------------------------------------------------------------------ charts */
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
@@ -573,11 +578,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 /* ------------------------------------------------------------------ garden (analytics) */
 .table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--line); -webkit-overflow-scrolling: touch; }
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-.table th { text-align: left; padding: 10px 14px; font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; white-space: nowrap; border-bottom: 1px solid var(--line); background: #000; }
+/* a header breaks where its label says (a "\n"), and wraps further only when the table is still too wide for its card */
+.table th { text-align: left; vertical-align: bottom; padding: 10px 14px; font: 500 10.5px/1.4 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; white-space: pre-line; border-bottom: 1px solid var(--line); background: #000; }
 .table td { padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--card-2); }
 .table th.n, .table tbody.n1 td:nth-child(2), .table tbody.n2 td:nth-child(3), .table tbody.n3 td:nth-child(4), .table tbody.n4 td:nth-child(5), .table tbody.n5 td:nth-child(6), .table tbody.n6 td:nth-child(7), .table tbody.n7 td:nth-child(8), .table tbody.n8 td:nth-child(9) { text-align: right; font-family: var(--mono); font-size: 12.5px; }
+.table .cell-sub { display: block; margin-top: 2px; }
 .table-search { max-width: 420px; margin-bottom: 14px; }
 .table-more { margin-top: 14px; }
 /* the lists card: a tab per token along an underline, then the wallet filter with the count beside it */
@@ -728,6 +735,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .rolls .card-head .tabs { display: flex; width: 100%; }
   .rolls .card-head .tab { flex: 1; padding: 9px 8px; }
   .summary .row-v { min-width: 0; }
+  /* a long badge ("All paid to Exile lockers") wraps instead of running over its row's label */
+  .summary .row-v .badge { white-space: normal; text-align: right; }
   .choice, .choice-4 { grid-template-columns: 1fr 1fr; }
   /* too narrow for five labels: keep every tick but name only every other one */
   .dur.cliff .dur-mark:nth-child(even):not(:last-child) { font-size: 0; }

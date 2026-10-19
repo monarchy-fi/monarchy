@@ -10,6 +10,8 @@ export function fmt(value: bigint | undefined, decimals = 18, digits = 2): strin
 export function compact(value: bigint | undefined, decimals = 18): string {
   if (value === undefined) return "…";
   const n = Number(formatUnits(value, decimals));
+  // a few wei still vesting would otherwise round to a bare "0" next to a count of active streams
+  if (n !== 0 && Math.abs(n) < 0.01) return "<0.01";
   return Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 2 }).format(n);
 }
 

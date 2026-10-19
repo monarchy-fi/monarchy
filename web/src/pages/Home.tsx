@@ -36,7 +36,12 @@ function XLogo() {
   );
 }
 
+/** A tier's lock length: "1 month", "7 days", or hours for a tier shorter than whole days (Exile allows tiers from one hour). */
 export function days(seconds: number): string {
+  if (seconds % 86400 !== 0) {
+    const h = +(seconds / 3600).toFixed(2);
+    return `${h} hour${h === 1 ? "" : "s"}`;
+  }
   const d = seconds / 86400;
   if (d === 30) return "1 month";
   return `${d} day${d === 1 ? "" : "s"}`;

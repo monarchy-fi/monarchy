@@ -226,9 +226,13 @@ function CreateStream({ sandfall, quote, token, quoteSymbol, tokenSymbol }: { sa
 
   const overBalance = balance !== undefined && value > balance;
   const reason = !asset
-    ? "Pick a token"
+    ? assetChoice === "other" && other !== ""
+      ? "That token address isn't valid"
+      : "Pick a token"
     : !isAddress(recipient)
-      ? "Enter a recipient"
+      ? recipient === ""
+        ? "Enter a recipient"
+        : "That recipient isn't a valid address"
       : value === 0n
         ? "Enter an amount"
         : overBalance
