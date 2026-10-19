@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
 import type { Address } from "viem";
 import { exileAbi, lodestarAbi, mockERC20Abi } from "../abi";
@@ -66,4 +67,35 @@ export function useDripDays(): number {
 /** "7 day" style label for a number of days. */
 export function dayLabel(days: number): string {
   return `${Number.isInteger(days) ? days : days.toFixed(1)} day`;
+}
+
+/** How much of `token` sits in Exile locks that are still running, from the newest 2,000 locks (the Garden reads the same
+ * ones). Exile keeps no per-token total, so it is summed here. */
+export function useLockedTotal(token?: Address) {
+  const d = useDeployment();
+  const count = useReadContract({ address: d?.exile, abi: exileAbi, functionName: "lockCount", query: { enabled: !!d, refetchInterval: 30_000 } });
+  const ids = useMemo(() => {
+    const out: bigint[] = [];
+    for (let i = count.data ?? 0n; i >= 1n && out.length < 2000; i--) out.push(i);
+    return out;
+  }, [count.data]);
+  const reads = useReadContracts({
+    allowFailure: false,
+    contracts: ids.map((id) => ({ address: d?.exile, abi: exileAbi, functionName: "lockInfo", args: [id] }) as const),
+    query: { enabled: !!d && ids.length > 0, refetchInterval: 30_000 },
+  });
+  if (!token || count.data === undefined || (ids.length > 0 && !reads.data)) return undefined;
+  const now = Math.floor(Date.now() / 1000);
+  let amount = 0n;
+  let locks = 0;
+  const owners = new Set<string>();
+  // a dynamic list of reads loses its row type, the same as on the Garden
+  const rows = (reads.data ?? []) as unknown as { kind: number; withdrawn: boolean; unlockAt: bigint; asset: Address; amount: bigint; owner: Address }[];
+  for (const l of rows) {
+    if (l.kind !== 0 || l.withdrawn || Number(l.unlockAt) <= now || l.asset.toLowerCase() !== token.toLowerCase()) continue;
+    amount += l.amount;
+    locks++;
+    owners.add(l.owner.toLowerCase());
+  }
+  return { amount, locks, lockers: owners.size };
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { isAddress, stringToHex, type Address } from "viem";
 import { exileAbi, iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
@@ -20,8 +21,10 @@ const EXECUTION_WINDOW = 7 * 86400;
 export function LodestarPage() {
   usePageTitle("Lodestar");
   const d = useDeployment();
-  const [input, setInput] = useState("");
-  const [quoteInput, setQuoteInput] = useState("");
+  // ?token= (and ?quote=) open a given router, so the Garden can link straight to one
+  const [params] = useSearchParams();
+  const [input, setInput] = useState(() => params.get("token") ?? "");
+  const [quoteInput, setQuoteInput] = useState(() => params.get("quote") ?? "");
   const defaultToken = d && isSet(d.token) ? d.token : undefined;
   const [defaultMeta, defaultQuoteMeta] = useTokenMeta([defaultToken, d?.quote]);
   if (!d) return <NoDeployment />;
