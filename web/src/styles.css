@@ -551,6 +551,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .tier-pick-head { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); }
 .tier-pick-name { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .tier-pick select { width: 100%; }
+.tier-pick select[aria-invalid="true"] { border-color: var(--amber); }
 .tier-diff { margin: 12px 0 14px; }
 .pending-list { display: inline-flex; flex-wrap: wrap; gap: 4px; text-decoration: none; }
 
