@@ -207,10 +207,10 @@ export function KingdomPage() {
   );
 }
 
-/** A tier's multiplier as signal bars: one bar per half x, up to six. */
+/** A tier's multiplier as signal bars: one bar per half x, up to eight. */
 function tierBars(bps: number): string {
-  const n = Math.max(1, Math.min(6, Math.round(bps / 5000)));
-  return "▮".repeat(n) + "▯".repeat(6 - n);
+  const n = Math.max(1, Math.min(8, Math.round(bps / 5000)));
+  return "▮".repeat(n) + "▯".repeat(8 - n);
 }
 
 /** One tool, and under it how MONARCHY itself uses it. The "Open" link stretches over the whole card, and the links
@@ -243,6 +243,6 @@ const enc = (s: string) => ("0x" + [...s].map((c) => c.charCodeAt(0).toString(16
 const DEFAULT_TIERS = [
   { minDuration: 86400, multiplierBps: 5000, label: enc("Peasant") },
   { minDuration: 3 * 86400, multiplierBps: 10000, label: enc("Knight") },
-  { minDuration: 7 * 86400, multiplierBps: 15000, label: enc("Duke") },
-  { minDuration: 30 * 86400, multiplierBps: 30000, label: enc("Monarch") },
+  { minDuration: 7 * 86400, multiplierBps: 20000, label: enc("Duke") },
+  { minDuration: 30 * 86400, multiplierBps: 40000, label: enc("Monarch") },
 ];
