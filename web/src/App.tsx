@@ -18,8 +18,8 @@ import { SandfallPage } from "./pages/Sandfall";
 
 const LINKS = [
   { to: "/kingdom", label: "Kingdom", hint: "How it works and live stats", key: "kingdom", glyph: <CastleGlyph /> },
-  { to: "/exile", label: "Exile", hint: "Locks and rewards", key: "exile", glyph: <GateGlyph /> },
   { to: "/lodestar", label: "Lodestar", hint: "Fee router", key: "lodestar", glyph: <StarGlyph /> },
+  { to: "/exile", label: "Exile", hint: "Locks and rewards", key: "exile", glyph: <GateGlyph /> },
   { to: "/sandfall", label: "Sandfall", hint: "Vesting", key: "sandfall", glyph: <HourglassGlyph /> },
 ];
 

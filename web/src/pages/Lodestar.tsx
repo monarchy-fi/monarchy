@@ -202,23 +202,21 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         <div className="summary">
           <Row k="Router" v={<Addr address={lodestar} />} />
           <Row k="Steward" v={<Addr address={core.steward} />} />
-          {Number(lockedUntil) > now && (
-            <Row
-              k="Creator role"
-              v={
-                <span className="muted small">
-                  Locked {lockForever ? "forever" : `until ${date(lockedUntil)}`}, apart from one exception: a move to this token's router on a newer Monarchy factory, which Monarchy and the steward
-                  both have to approve and which is announced here 7 days ahead.
-                </span>
-              }
-            />
-          )}
+          {Number(lockedUntil) > now && <Row k="Creator role" v={`Locked ${lockForever ? "forever" : `until ${date(lockedUntil)}`}*`} />}
           <Row k="Token-side fees" v={cfg.tokenToHolders ? <Badge tone="gold">All paid to Exile lockers</Badge> : <Badge tone="grey">All burned</Badge>} />
           <Row k="Buyback route" v={cfg.swapper === ZERO ? <Badge tone="amber">None: buybacks wait in reserve</Badge> : <Addr address={cfg.swapper} />} />
-          <Row k="Max slippage" v={`${pct(cfg.maxSlippageBps)} vs Ascend's EMA price`} />
-          <Row k="Listing set-aside" v={listingLive ? <><Badge tone="green">Enrolled</Badge> {fmt(owed, qd)} {qs} saved, {fmt(election >> 168n, qd)} {qs} to go</> : <Badge tone="grey">Not enrolled</Badge>} />
+          <Row k="Max slippage" v={`${pct(cfg.maxSlippageBps)} vs Ascend's EMA`} />
+          <Row k="Listing set-aside" v={listingLive ? <><Badge tone="green">Enrolled</Badge> {fmt(owed, qd)} of {fmt(owed + (election >> 168n), qd)} {qs} saved</> : <Badge tone="grey">Not enrolled</Badge>} />
           <Row k="Last distribute" v={Number(lastAt) ? `${duration(now - Number(lastAt))} ago` : "never"} />
         </div>
+        {Number(lockedUntil) > now && (
+          <p className="footnote">
+            * The one way out is a move to this token's router on a newer Monarchy factory, approved by Monarchy and the steward and announced here 7 days ahead.{" "}
+            <a href="https://github.com/monarchy-fi/monarchy#security-model" target="_blank" rel="noreferrer">
+              How upgrades work
+            </a>
+          </p>
+        )}
       </Card>
 
       <Card title="Distribute" right={<span className="muted small">Anyone can call this</span>}>

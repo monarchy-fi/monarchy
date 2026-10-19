@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useChainId } from "wagmi";
+import type { Address } from "viem";
+import { useAscendTokenUrl } from "../lib/ascend";
 import { explorerAddress } from "../lib/chains";
 import { compact as compactFmt, fmt, short } from "../lib/format";
 
@@ -78,6 +80,17 @@ export function Addr({ address }: { address?: string }) {
     <span className="mono" title={address}>
       {short(address)}
     </span>
+  );
+}
+
+/** A token's address: it opens the token's page on Ascend when the token launched there, and the explorer otherwise. */
+export function TokenAddr({ address }: { address?: Address }) {
+  const ascend = useAscendTokenUrl(address);
+  if (!address || !ascend) return <Addr address={address} />;
+  return (
+    <a className="mono" href={ascend} target="_blank" rel="noreferrer" title={`${address} on Ascend`}>
+      {short(address)}
+    </a>
   );
 }
 

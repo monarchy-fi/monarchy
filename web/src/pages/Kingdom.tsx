@@ -144,8 +144,8 @@ export function KingdomPage() {
           ours={
             live && (
               <>
-                <span>Holders lock MONARCHY here to earn the holder share of every fee, by tier.</span>
-                <Link className="feature-ours-go" to={core.token ? `/garden?q=${core.token}` : "/garden"}>
+                <span>Holders of MONARCHY can lock it in Exile for rewards: the holder share of every fee, bigger for longer locks.</span>
+                <Link className="feature-ours-go" to={core.token ? `/garden?token=${core.token}` : "/garden"}>
                   See its locks in the Garden <span aria-hidden="true">→</span>
                 </Link>
               </>
