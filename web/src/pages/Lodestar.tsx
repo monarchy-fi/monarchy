@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useConnection, useReadContract, useReadContracts } from "wagmi";
+import { useConnection, useReadContract, useReadContracts, useSimulateContract } from "wagmi";
 import { isAddress, stringToHex, type Address } from "viem";
 import { exileAbi, iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
 import { TierBadge, tagline } from "../components/Tiers";
@@ -17,6 +17,10 @@ import { PageMark } from "../components/NavGlyphs";
 
 /** Lodestar.EXECUTION_WINDOW: how long a ready proposal can still be executed. */
 const EXECUTION_WINDOW = 7 * 86400;
+/** As the keeper (tools/keeper-distribute.sh): a pool more than this many hours behind is caught up before a distribute. */
+const EXILE_CURRENT_WITHIN = 6n;
+/** Exile.MAX_BUCKETS_PER_CALL: one poke catches up at most this many hours. */
+const EXILE_MAX_BUCKETS = 720n;
 
 export function LodestarPage() {
   usePageTitle("Lodestar");
@@ -155,6 +159,25 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
     ],
     query: POLL.query,
   });
+  // what earlier distributes held back to pay next time; routers from before parking don't have these, so a failed read means none
+  const held = useReadContracts({
+    contracts: [
+      { ...l, functionName: "holdersReserve" },
+      { ...l, functionName: "treasuryReserve" },
+    ],
+    query: POLL.query,
+  });
+  // A read-only poke, as the keeper makes it: false while Exile's pool is far behind. A distribute then spends nearly all
+  // its gas catching the pool up, and with the limit a wallet estimates that catch-up runs out inside its try: the call
+  // succeeds, the lockers' share is held back and the pool doesn't move. So the page has the pool caught up first.
+  const pid = core.exilePoolId;
+  const current = useSimulateContract({
+    address: d.exile,
+    abi: exileAbi,
+    functionName: "poke",
+    args: pid !== undefined ? [pid, EXILE_CURRENT_WITHIN] : undefined,
+    query: { enabled: pid !== undefined, ...POLL.query },
+  });
   if (!r.data) return <LoadingCard />;
   const upTarget = up.data?.[0]?.result;
   const upEta = up.data?.[1]?.result ?? 0n;
@@ -173,6 +196,9 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
   const listingLive = election !== 0n && (election & ((1n << 160n) - 1n)) === BigInt(lodestar);
   const isSteward = !!address && address.toLowerCase() === core.steward?.toLowerCase();
   const lockForever = lockedUntil >= 2n ** 63n;
+  const heldHolders = held.data?.[0]?.result ?? 0n;
+  const heldTreasury = held.data?.[1]?.result ?? 0n;
+  const behind = pid !== undefined && current.data?.result === false;
 
   return (
     <>
@@ -227,12 +253,27 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         <div className="stats stats-4">
           <Stat label={cfg.tokenToHolders ? "Token fees to lockers" : "Token fees to burn"} value={<Amt value={preview[0]} digits={0} symbol={ts} />} />
           <Stat label="Buyback" value={<Amt value={preview[2] + reserve} decimals={qd} symbol={qs} />} hint={reserve > 0n ? `Includes ${fmt(reserve, qd)} waiting in reserve` : undefined} />
-          <Stat label="Holders" value={<Amt value={preview[3]} decimals={qd} symbol={qs} />} />
-          <Stat label="Treasury" value={<Amt value={preview[4]} decimals={qd} symbol={qs} />} />
+          <Stat label="Holders" value={<Amt value={preview[3] + heldHolders} decimals={qd} symbol={qs} />} hint={heldHolders > 0n ? `Includes ${fmt(heldHolders, qd)} held back from earlier` : undefined} />
+          <Stat label="Treasury" value={<Amt value={preview[4] + heldTreasury} decimals={qd} symbol={qs} />} hint={heldTreasury > 0n ? `Includes ${fmt(heldTreasury, qd)} held back from earlier` : undefined} />
         </div>
         <p className="muted small">Plus any fees still sitting in the pool, which distribute collects first.</p>
         <p className="small cadence">{DISTRIBUTE_NOTE}</p>
-        <TxButton request={() => ({ ...l, functionName: "distribute" })}>Distribute</TxButton>
+        {behind ? (
+          <>
+            <p className="warn small" style={{ marginBottom: 12 }}>
+              Exile's reward pool is more than {Number(EXILE_CURRENT_WITHIN)} hours behind, as after a pause in distributes. Catch it up first: until then a distribute holds the
+              lockers' share back. Each catch-up covers up to 30 days, so a long pause can take more than one.
+            </p>
+            <div className="lock-actions">
+              <TxButton request={() => ({ address: d.exile, abi: exileAbi, functionName: "poke", args: [pid, EXILE_MAX_BUCKETS] })}>Catch up Exile</TxButton>
+              <TxButton disabledReason="Catch Exile up first" request={() => ({ ...l, functionName: "distribute" })}>
+                Distribute
+              </TxButton>
+            </div>
+          </>
+        ) : (
+          <TxButton request={() => ({ ...l, functionName: "distribute" })}>Distribute</TxButton>
+        )}
       </Card>
 
       {eta > 0n && (

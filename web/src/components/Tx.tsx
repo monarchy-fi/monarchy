@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useChainId, useConnection, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Abi, Address } from "viem";
@@ -52,6 +52,21 @@ export function TxButton({ request, children, disabledReason, onDone, className 
     return () => clearTimeout(t);
   }, [tapped]);
   const tip = reason && !busy ? reason : undefined;
+  // the popup sits centred over the button, but a button near the edge of a phone would push half of it off the
+  // screen, so it is slid back inside (by --dx) each time it opens
+  const wrap = useRef<HTMLSpanElement>(null);
+  const tipEl = useRef<HTMLSpanElement>(null);
+  const [dx, setDx] = useState(0);
+  const place = () => {
+    const w = wrap.current;
+    const t = tipEl.current;
+    if (!w || !t) return;
+    const r = w.getBoundingClientRect();
+    const mid = r.left + r.width / 2;
+    const half = t.offsetWidth / 2;
+    const edge = 8;
+    setDx(Math.min(Math.max(mid, edge + half), document.documentElement.clientWidth - edge - half) - mid);
+  };
 
   async function send() {
     setError(undefined);
@@ -85,7 +100,16 @@ export function TxButton({ request, children, disabledReason, onDone, className 
   const done = !!hash && receipt.isSuccess;
   return (
     <div className="tx">
-      <span className={`tx-btn ${tip ? "has-tip" : ""} ${tapped ? "show-tip" : ""}`} onPointerDown={() => tip && setTapped(true)}>
+      <span
+        ref={wrap}
+        className={`tx-btn ${tip ? "has-tip" : ""} ${tapped ? "show-tip" : ""}`}
+        onPointerEnter={() => tip && place()}
+        onPointerDown={() => {
+          if (!tip) return;
+          place();
+          setTapped(true);
+        }}
+      >
         <button
           className={`${className ?? "btn"} ${busy ? "is-busy" : ""} ${done && !busy ? "is-done" : ""}`}
           disabled={!!reason || busy}
@@ -106,7 +130,7 @@ export function TxButton({ request, children, disabledReason, onDone, className 
           )}
         </button>
         {tip && (
-          <span className="tip" role="tooltip" id={tipId} key={tip} style={{ "--n": tip.length + (isConnected ? 0 : 2) } as CSSProperties}>
+          <span ref={tipEl} className="tip" role="tooltip" id={tipId} key={tip} style={{ "--n": tip.length + (isConnected ? 0 : 2), "--dx": `${dx}px` } as CSSProperties}>
             <span className="tip-text">
               {tip}
               {!isConnected && <span aria-hidden="true"> ↗</span>}

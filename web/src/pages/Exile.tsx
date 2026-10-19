@@ -151,16 +151,24 @@ function LockForm({
     contracts: [
       { address: token, abi: mockERC20Abi, functionName: "decimals" },
       { address: token, abi: mockERC20Abi, functionName: "symbol" },
-      { address: token, abi: mockERC20Abi, functionName: "balanceOf", args: [address ?? ZERO] },
     ],
-    query: { enabled: !!token, ...POLL.query },
+    query: { enabled: !!token, staleTime: Infinity },
   });
-  const [decimals, symbol, balance] = meta.data ?? [tokenMeta?.decimals ?? 18, tokenMeta?.symbol ?? "", undefined];
+  const [decimals, symbol] = meta.data ?? [tokenMeta?.decimals ?? 18, tokenMeta?.symbol ?? ""];
+  // only a connected wallet has a balance; without one there is no Max to offer
+  const bal = useReadContract({
+    address: token,
+    abi: mockERC20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: !!token && !!address, ...POLL.query },
+  });
+  const balance = address ? bal.data : undefined;
   const value = safeParse(amount, Number(decimals));
   const tier = rewards ? pickTier(tiers, seconds) : undefined;
   // Exile rounds every unlock time up to the next hour, so the preview does too
   const unlockAt = ceilHour(Math.floor(Date.now() / 1000) + seconds + BUFFER);
-  const overBalance = balance !== undefined && value > (balance as bigint);
+  const overBalance = balance !== undefined && value > balance;
   const points = tier ? (value * BigInt(tier.multiplierBps)) / 10_000n : 0n;
   const earns = rates && rewards ? estimate(rates, points, unlockAt - Math.floor(Date.now() / 1000)) : undefined;
   const reason = !token ? "Enter the token or LP address" : tiersLoading ? "Loading reward tiers" : value === 0n ? "Enter an amount" : overBalance ? "More than your balance" : undefined;
@@ -198,8 +206,8 @@ function LockForm({
             <div className="input-row">
               <input className="input" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} />
               {balance !== undefined && (
-                <button className="btn btn-ghost btn-sm" onClick={() => setAmount(fmtPlain(balance as bigint, Number(decimals)))}>
-                  Max {fmt(balance as bigint, Number(decimals))}
+                <button className="btn btn-ghost btn-sm" onClick={() => setAmount(fmtPlain(balance, Number(decimals)))}>
+                  Max {fmt(balance, Number(decimals))}
                 </button>
               )}
             </div>
@@ -241,7 +249,7 @@ function LockForm({
                   "Nothing dripping right now"
                 )}
               </div>
-              <div className="muted small">Over the {seconds >= 86400 ? `${Math.round(seconds / 86400)} day` : duration(seconds)} lock, at today's drip rate.</div>
+              <div className="muted small">Over the {seconds >= 86400 ? `${Math.round(seconds / 86400)} day` : `${Math.round(seconds / 3600)} hour`} lock, at today's drip rate.</div>
               <p className="lock-est-note small">
                 <b>A rough estimate, not a promise.</b> Real earnings will differ: they rise and fall with the drip rate, trading volume and how
                 much everyone has locked.

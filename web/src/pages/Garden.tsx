@@ -299,7 +299,7 @@ export function GardenPage() {
             {routerRows.length === 0 ? (
               <Empty title="No routers match" />
             ) : (
-              <Table label="Fee routers" head={["Token", "Router", "Burned from fees", "Bought back and burned", "To holders", "To treasury", "Creator role", "Waiting to take effect"]} num={[2, 3, 4, 5]}>
+              <Table label="Fee routers" head={["Token", "Router", "Burned\nfrom fees", "Bought back\nand burned", "To holders", "To treasury", "Creator role", "Waiting to\ntake effect"]} num={[2, 3, 4, 5]}>
                 {routerRows.slice(0, routerShown).map(({ r, i }) => {
                   const tm = metaOf(r.token);
                   const qm = metaOf(r.quote);
@@ -316,7 +316,7 @@ export function GardenPage() {
                       <td>{compact(r.buybackBurned, tm?.decimals ?? 18)}</td>
                       <td>
                         {fmt(r.holders, qm?.decimals ?? 18)} {qm?.symbol}
-                        {r.tokenToHolders > 0n && <span className="muted"> + {compact(r.tokenToHolders, tm?.decimals ?? 18)} {tm?.symbol}</span>}
+                        {r.tokenToHolders > 0n && <span className="muted cell-sub">+ {compact(r.tokenToHolders, tm?.decimals ?? 18)} {tm?.symbol}</span>}
                       </td>
                       <td>
                         {fmt(r.treasury, qm?.decimals ?? 18)} {qm?.symbol}
@@ -459,6 +459,16 @@ function Rolls({ locks, streams, loading, now, metaOf, tiersByPool, lockTotal, s
   const [q, setQ] = useState(linkedOther ? initialToken : "");
   const [shown, setShown] = useState(PAGE);
   const ref = useRef<HTMLElement>(null);
+  // on a cold load the kingdom's token is still being read when this mounts, so the link's tab is applied once it is known
+  const linkApplied = useRef(linkedOther || !initialToken);
+  useEffect(() => {
+    if (linkApplied.current || !main) return;
+    linkApplied.current = true;
+    if (initialToken !== main) {
+      setPicked(OTHERS);
+      setQ(initialToken!);
+    }
+  }, [main, initialToken]);
 
   const isMain = (asset: Address, nft = false) => !nft && !!main && asset.toLowerCase() === main;
   const ours = { locks: locks.filter((l) => isMain(l.asset, l.kind !== 0)), streams: streams.filter((x) => isMain(x.asset)) };
@@ -616,7 +626,8 @@ function TokenName({ asset, meta }: { asset: Address; meta?: TokenMeta }) {
   );
 }
 
-/** A plain table that scrolls sideways on a phone; `num` marks the columns that hold numbers. */
+/** A plain table that scrolls sideways on a phone; `num` marks the columns that hold numbers. A "\n" in a header is
+ * where it breaks onto a second line, so a wide table still fits a laptop screen. */
 function Table({ head, num = [], label, children }: { head: string[]; num?: number[]; label: string; children: ReactNode }) {
   return (
     <div className="table-wrap">

@@ -9,7 +9,7 @@ import { tagline, TierBadge } from "../components/Tiers";
 import { Addr, Amt, Badge, Card, Skel, Stat } from "../components/Ui";
 import { isMonarchy, MONARCHY_SETTINGS } from "../lib/constants";
 import { useDeployment } from "../lib/deployments";
-import { fmt, label, mult } from "../lib/format";
+import { compact, date, fmt, label, mult } from "../lib/format";
 import { POLL, usePageTitle } from "../lib/hooks";
 import { dayLabel, useDripDays, useLockedTotal, useLodestarCore } from "../lib/monarchy";
 import { days } from "./Home";
@@ -55,7 +55,10 @@ export function KingdomPage() {
   // the court shows the tiers MONARCHY will launch with until its own router is live
   const tiers = isMonarchy(core.token) && pool ? pool.tiers.map((t) => ({ ...t, name: label(t.label) })) : MONARCHY_SETTINGS.tiers;
   const topBps = Math.max(...tiers.map((t) => t.multiplierBps));
-  const burnShare = dead !== undefined && supply ? `${fmt((dead * 10_000n) / supply, 2, 2)}% of supply` : undefined;
+  // in millionths, so a burn under 0.01% reads "<0.01%" instead of rounding down to "0.00%"
+  const burnShare = dead !== undefined && supply ? `${fmt((dead * 1_000_000n) / supply, 4, 2)}% of supply` : undefined;
+  // until the router's config is read, label the token-side stat the way MONARCHY will launch
+  const toLockers = cfg ? cfg.tokenToHolders : MONARCHY_SETTINGS.tokenToHolders;
 
   return (
     <div className="page">
@@ -120,10 +123,19 @@ export function KingdomPage() {
             <Stat label="Paid to holders" value={<Amt value={holders} decimals={qd} symbol={qs} />} hint={dripPerDay === undefined ? <Skel w="8em" /> : `${fmt(dripPerDay, qd)} ${qs ?? ""} a day dripping now`} />
             <Stat label="Team Treasury" value={<Amt value={treasury} decimals={qd} symbol={qs} />} hint="Streamed through Sandfall" />
             <Stat label="Bought back and burned" value={<Amt value={buybackBurned} decimals={td} symbol={ts} compact />} hint={buybackQuote === undefined ? <Skel w="7em" /> : `${fmt(buybackQuote, qd)} ${qs ?? ""} spent`} />
-            {cfg?.tokenToHolders ? (
-              <Stat label="Token fees to lockers" value={<Amt value={tokenToHolders} decimals={td} symbol={ts} compact />} hint="Dripped to Exile lockers" />
+            {/* after a switch, the other route's total so far stays in the hint, as on the Lodestar page */}
+            {toLockers ? (
+              <Stat
+                label="Token fees to lockers"
+                value={<Amt value={tokenToHolders} decimals={td} symbol={ts} compact />}
+                hint={feeBurned ? `${compact(feeBurned, td)} ${ts ?? ""} burned before` : "Dripped to Exile lockers"}
+              />
             ) : (
-              <Stat label="Burned from token fees" value={<Amt value={feeBurned} decimals={td} symbol={ts} compact />} hint="Sent straight to the burn address" />
+              <Stat
+                label="Burned from token fees"
+                value={<Amt value={feeBurned} decimals={td} symbol={ts} compact />}
+                hint={tokenToHolders ? `${compact(tokenToHolders, td)} ${ts ?? ""} paid to lockers before` : "Sent straight to the burn address"}
+              />
             )}
             <Stat
               label={ts ? `Locked ${ts}` : "Locked"}
@@ -147,7 +159,15 @@ export function KingdomPage() {
                 <span>
                   Holds MONARCHY's creator role at <Addr address={core.lodestar} />.
                 </span>
-                {lockedUntil === undefined ? <Skel w="10em" /> : lockedUntil >= 2n ** 63n ? <Badge tone="gold">Locked to it forever</Badge> : <Badge tone="amber">Not locked yet</Badge>}
+                {lockedUntil === undefined ? (
+                  <Skel w="10em" />
+                ) : lockedUntil >= 2n ** 63n ? (
+                  <Badge tone="gold">Locked to it forever</Badge>
+                ) : lockedUntil > now ? (
+                  <Badge tone="gold">Locked to it until {date(lockedUntil)}</Badge>
+                ) : (
+                  <Badge tone="amber">Not locked yet</Badge>
+                )}
               </>
             )
           }
