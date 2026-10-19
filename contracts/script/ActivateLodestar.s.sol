@@ -3,7 +3,6 @@ pragma solidity ^0.8.24;
 
 import {BaseScript} from "./Base.s.sol";
 import {console2} from "forge-std/Script.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {LodestarFactory} from "../src/LodestarFactory.sol";
 import {ILodestar} from "../src/interfaces/ILodestar.sol";
 import {IAscendLaunchpad} from "../src/interfaces/IAscendLaunchpad.sol";
@@ -11,9 +10,9 @@ import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 
 /// @notice Hand the token's Ascend creator role to its Lodestar and activate it with MONARCH's defaults:
 /// 40% buyback and burn / 40% holders / 20% Team Treasury, Peasant-Knight-Duke-Monarch tiers,
-/// a 7-day rolling treasury stream, listing set-aside on (5,000 USDC cap), creator role locked forever.
-/// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER, MAX_SLIPPAGE_BPS, ENROL_LISTING,
-/// LISTING_CAP (in the quote's units; required unless the quote has 6 decimals), LOCK_FOREVER (false = no lock). The buyback route is the AscendSwapper recorded in
+/// a 7-day rolling treasury stream, no listing set-aside, creator role locked forever.
+/// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER, MAX_SLIPPAGE_BPS, ENROL_LISTING with
+/// LISTING_CAP (in the quote's units), LOCK_FOREVER (false = no lock). The buyback route is the AscendSwapper recorded in
 /// deployments/<chainId>.json unless SWAPPER names another one. It is never left to the factory's default
 /// silently: the factory owner can change that default (12 hours after setDefaultSwapper), and a re-run of
 /// this script would otherwise pick the new one up without warning. To keep buybacks in reserve instead,
@@ -51,13 +50,11 @@ contract ActivateLodestar is BaseScript {
         p.treasuryRecipient = vm.envAddress("TREASURY");
         p.treasuryWindow = 7 days;
         p.tiers = MonarchTiers.defaults();
-        p.enrolListing = vm.envOr("ENROL_LISTING", true);
-        // LISTING_CAP is in the quote asset's own units. 50,000 (enough for Hyperliquid's 500 HYPE listing floor)
-        // is a sensible default only for a 6-decimal dollar quote (USDC); for anything else (WHYPE, a tokenized stock)
-        // it must be given.
-        bool usdcLike = IERC20Metadata(d.quote).decimals() == 6;
-        require(!p.enrolListing || usdcLike || vm.envExists("LISTING_CAP"), "set LISTING_CAP in the quote's units");
-        p.listingCap = vm.envOr("LISTING_CAP", uint256(50_000e6));
+        // off by default, so the creator's whole quote share reaches the router. Opting in needs LISTING_CAP,
+        // in the quote asset's own units.
+        p.enrolListing = vm.envOr("ENROL_LISTING", false);
+        require(!p.enrolListing || vm.envExists("LISTING_CAP"), "set LISTING_CAP in the quote's units");
+        p.listingCap = p.enrolListing ? vm.envUint("LISTING_CAP") : 0;
         // locked to the router for good unless LOCK_FOREVER=false, like the checkbox on the site
         p.creatorLockUntil = vm.envOr("LOCK_FOREVER", true) ? type(uint64).max : 0;
 

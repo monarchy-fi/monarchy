@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useConnection, useReadContract, useReadContracts } from "wagmi";
-import { isAddress, parseUnits, stringToHex, type Address } from "viem";
+import { useConnection, useReadContracts } from "wagmi";
+import { isAddress, stringToHex, type Address } from "viem";
 import { iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
 import { TierBadge, tagline } from "../components/Tiers";
 import { TxButton } from "../components/Tx";
@@ -206,7 +206,7 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
           <Row k="Token-side fees" v={cfg.tokenToHolders ? <Badge tone="gold">All paid to Exile lockers</Badge> : <Badge tone="grey">All burned</Badge>} />
           <Row k="Buyback route" v={cfg.swapper === ZERO ? <Badge tone="amber">None: buybacks wait in reserve</Badge> : <Addr address={cfg.swapper} />} />
           <Row k="Max slippage" v={`${pct(cfg.maxSlippageBps)} vs Ascend's EMA`} />
-          <Row k="Listing set-aside" v={listingLive ? <><Badge tone="green">Enrolled</Badge> {fmt(owed, qd)} of {fmt(owed + (election >> 168n), qd)} {qs} saved</> : <Badge tone="grey">Not enrolled</Badge>} />
+          {listingLive && <Row k="Listing set-aside" v={<><Badge tone="green">Enrolled</Badge> {fmt(owed, qd)} of {fmt(owed + (election >> 168n), qd)} {qs} saved</>} />}
           <Row k="Last distribute" v={Number(lastAt) ? `${duration(now - Number(lastAt))} ago` : "never"} />
         </div>
         {Number(lockedUntil) > now && (
@@ -366,6 +366,10 @@ function Steward({
       {listingLive && (
         <>
           <h4>Listing set-aside</h4>
+          <p className="muted small">
+            This router still saves 20% of its creator quote fees toward a HyperCore listing. Leaving sends all of them through the split. What
+            is already saved stays on Ascend's listing desk, where anyone can send it back to the router.
+          </p>
           <TxButton className="btn btn-sm btn-ghost" request={() => ({ ...l, functionName: "closeListing" })}>
             Leave the listing set-aside
           </TxButton>
@@ -439,7 +443,6 @@ function TierPicker({ tiers, setTiers }: { tiers: TierChoice[]; setTiers: (t: Ti
 
 function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token: Address; quote: Address; predicted: Address; poolId: `0x${string}` }) {
   const { address } = useConnection();
-  const [quoteMeta] = useTokenMeta([quote]);
   const lp = { address: d.launchpad, abi: iAscendLaunchpadAbi } as const;
   const r = useReadContracts({
     allowFailure: false,
@@ -451,16 +454,11 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
     ],
     query: POLL.query,
   });
-  const deskOk = useReadContract({ ...lp, functionName: "listingDesk" });
   const [split, setSplit] = useState({ burn: 40, holders: 40, treasury: 20 });
   const [toHolders, setToHolders] = useState(false);
   const [treasury, setTreasury] = useState("");
   const [windowDays, setWindowDays] = useState(DEFAULT_TREASURY_WINDOW_DAYS);
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
-  const [listing, setListing] = useState(true);
-  // the cap is counted in the quote asset, so 50,000 only makes sense as a default for the deployment's USDC.
-  // It covers Hyperliquid's 500 HYPE listing floor with room to spare.
-  const [cap, setCap] = useState(quote.toLowerCase() === d.quote.toLowerCase() ? "50000" : "");
   const [lockForever, setLockForever] = useState(true);
 
   if (!r.data) return <LoadingCard />;
@@ -481,7 +479,6 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
   // the same rules Exile and Sandfall check on deploy, so the button never sends a deploy that has to revert
   const tierProblem = tierRules(tiers);
   const windowBad = !(windowDays >= 1 && windowDays <= 365);
-  const capOk = /^\d+(\.\d+)?$/.test(cap) && Number(cap) > 0;
 
   return (
     <Card title="Activate Lodestar" right={<Badge tone="grey">2 transactions</Badge>}>
@@ -561,29 +558,6 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
                 ? "Holders can see the fee stream can't be moved away from this router, and you can't unlock it later. One exception: a move to this token's router on a newer Monarchy factory, which Monarchy and you both have to approve, announced to holders 7 days ahead."
                 : "Without a lock the steward could hand the creator role away later. You can still lock it forever from the steward controls."}
             </p>
-            <h5>HyperCore listing savings</h5>
-            <label className="check">
-              <input type="checkbox" checked={listing} onChange={(e) => setListing(e.target.checked)} />
-              Save toward a HyperCore listing
-            </label>
-            <div className="note-box">
-              Ascend can list a token on <b>HyperCore</b>, Hyperliquid's own exchange. If you opt in, <b>20% of the creator's {quoteMeta?.symbol ?? "quote"} fees</b> are
-              saved toward that listing until they reach the goal below, and the rest is routed as usual. Reaching the goal doesn't list the token by itself: saving
-              stops, and the savings wait until Ascend lists it, then pay for the listing. After that the router also receives half the trading fees from the
-              token's HyperCore market. The steward can stop saving at any time, and unspent savings come back to the router.
-            </div>
-            {listing && (
-              <>
-                <label className="field">
-                  <span className="field-label">Savings goal{quoteMeta ? ` (${quoteMeta.symbol})` : ""}</span>
-                  <input className="input" style={{ maxWidth: 220 }} inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="Amount to save" />
-                </label>
-                <p className="muted small field-help">
-                  A listing costs at least 500 HYPE in Hyperliquid's listing auction. The savings pay for it up to this goal, and whether Ascend covers
-                  any rest is up to Ascend.
-                </p>
-              </>
-            )}
           </div>
           <TxButton
             disabledReason={
@@ -599,13 +573,7 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
                         ? "Enter the Team Treasury recipient"
                         : windowBad
                           ? "The stream window is 1 to 365 days"
-                          : listing && !quoteMeta
-                            ? "Reading the quote asset"
-                            : listing && !capOk
-                              ? "Enter a savings goal"
-                              : deskOk.data && deskOk.data !== d.desk
-                                ? "Listing desk mismatch"
-                                : undefined
+                          : undefined
             }
             request={() => recipient && ({
               address: d.factory,
@@ -621,9 +589,9 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
                   treasuryRecipient: recipient,
                   treasuryWindow: Math.round(windowDays * 86400),
                   tiers: tiers.map((t) => ({ minDuration: Math.round(t.days * 86400), multiplierBps: Math.round(t.mult * 10_000), label: stringToHex(t.name, { size: 32 }) })),
-                  enrolListing: listing,
-                  // the cap is in the pool's quote asset, whatever its decimals
-                  listingCap: listing ? parseUnits(cap || "0", quoteMeta?.decimals ?? 18) : 0n,
+                  // no HyperCore listing savings: the creator's whole fee share reaches the router
+                  enrolListing: false,
+                  listingCap: 0n,
                   // locked for good: the largest unlock time the router accepts
                   creatorLockUntil: lockForever ? 2n ** 64n - 1n : 0n,
                 },

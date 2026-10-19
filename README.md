@@ -56,7 +56,7 @@ flowchart LR
 
 | | What it does |
 |---|---|
-| **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`, and the team's keeper calls it every 3 hours so fees never pile up into one big payout: token-side fees are burned (or, if the creator chooses, all paid to Exile lockers in the token itself), and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Enrols in Ascend's listing set-aside by default. |
+| **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`, and the team's keeper calls it every 3 hours so fees never pile up into one big payout: token-side fees are burned (or, if the creator chooses, all paid to Exile lockers in the token itself), and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Ascend's listing set-aside stays off, so the creator's whole fee share reaches the router. |
 | **Exile** | Locks ERC-20s (including v2 LP), ERC-721s and ERC-1155s. Locks can be extended, never shortened, cancelled or transferred. ERC-20 locks earn holder rewards by tier, paid as a 3 day drip, and stop earning the second they unlock. |
 | **Sandfall** | Vesting streams (linear, with an optional cliff, or in daily, weekly or monthly steps) in any non-rebasing ERC-20 or native HYPE, each with a chart of what unlocks by when. The creator decides at creation whether a stream can be cancelled, and the site badges it. Rolling streams back Lodestar's Team Treasury. |
 
@@ -178,7 +178,7 @@ npm run launch:testnet
 npm run launch:testnet -- --broadcast
 
 # 3. Hand the creator role to the token's Lodestar and activate it (40/40/20 split, the four
-#    tiers, 7 day treasury stream, listing set-aside on, creator role locked forever).
+#    tiers, 7 day treasury stream, no listing set-aside, creator role locked forever).
 #    TREASURY is the address that receives the Team Treasury stream; it can never be changed.
 #    Buybacks go through the AscendSwapper from deployments/99801.json unless SWAPPER is set.
 TREASURY=0xYourTreasury npm run activate:testnet
