@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useReadContract } from "wagmi";
 import { lodestarAbi } from "../abi";
+import { isMonarchy, MONARCHY_SETTINGS } from "../lib/constants";
 import { pct } from "../lib/format";
 import { POLL } from "../lib/hooks";
 import { useDripDays, useLodestarCore } from "../lib/monarchy";
@@ -9,8 +10,9 @@ import { useDripDays, useLodestarCore } from "../lib/monarchy";
 export function TokenFeeFlow() {
   const core = useLodestarCore();
   const drip = useDripDays();
-  const cfg = useReadContract({ address: core.lodestar, abi: lodestarAbi, functionName: "config", query: { enabled: !!core.lodestar, ...POLL.query } });
-  const c = cfg.data;
+  const cfg = useReadContract({ address: core.lodestar, abi: lodestarAbi, functionName: "config", query: { enabled: !!core.lodestar && isMonarchy(core.token), ...POLL.query } });
+  // a sample token stands in for MONARCHY on testnet, so show the settings MONARCHY will launch with until it is live
+  const c = isMonarchy(core.token) ? cfg.data : MONARCHY_SETTINGS;
   return <FeeFlow drip={drip} burn={c?.burnBps} holders={c?.holdersBps} treasury={c?.treasuryBps} tokenToHolders={c?.tokenToHolders} />;
 }
 
