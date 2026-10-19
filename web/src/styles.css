@@ -220,8 +220,8 @@ main { flex: 1; }
 .page-mark.nl-exile { width: 46px; height: 30px; overflow: hidden; }
 .page-mark.nl-sandfall { width: 34px; height: 34px; }
 .page-mark.nl-sandfall svg { stroke-width: 0.9; }
-/* the intro runs three quarters of the page across, so it reads in a few long lines instead of a tall narrow block */
-.page-head p { max-width: 75%; margin: 0; font-size: 15px; color: var(--muted); }
+/* the intro runs the full width of the panels under it, so it reads in a few long lines instead of a tall narrow block */
+.page-head p { margin: 0; font-size: 15px; color: var(--muted); }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .gold { color: var(--white); }
@@ -538,9 +538,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .steps li h4 { margin-top: 0; }
 .steps li > p { margin: 4px 0 12px; }
 .form-block { margin: 12px 0 16px; }
-.tier-edit { display: flex; flex-direction: column; gap: 8px; }
-.tier-edit-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.tier-edit-row .input-sm:first-child { width: 120px; }
+/* the tier table on activation: fixed names, a lock length and a multiplier picked from lists */
+.tier-pick { display: grid; gap: 8px; max-width: 720px; margin: 4px 0 10px; }
+.tier-pick-row { display: grid; grid-template-columns: minmax(200px, 1.5fr) 1fr 1fr; gap: 12px; align-items: center; }
+.tier-pick-head { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); }
+.tier-pick-name { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.tier-pick select { width: 100%; }
 
 /* ------------------------------------------------------------------ charts */
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
@@ -631,6 +634,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .foot-links a { color: var(--muted); text-decoration: none; }
 .foot-links a:hover { color: var(--text); }
 .foot-links a::before { content: "↗ "; color: var(--faint); }
+/* X comes first and reads brightest: it is where announcements go */
+.foot-links a:first-child { color: var(--text); }
 
 /* ------------------------------------------------------------------ responsive */
 @media (max-width: 960px) {
@@ -664,7 +669,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .menu-ca { align-self: flex-start; margin-top: 14px; }
   .stats-3 { grid-template-columns: repeat(2, 1fr); }
   .stats-3 .stat-feature { grid-column: 1 / -1; }
-  .page-head p { max-width: none; }
 }
 @keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
 @media (max-width: 560px) {
@@ -692,6 +696,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .tab { flex: 1; }
   .summary .row { flex-wrap: nowrap; }
   .summary .row-k { white-space: nowrap; }
+  .tier-pick-head { display: none; }
+  .tier-pick-row { grid-template-columns: 1fr 1fr; gap: 8px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+  .tier-pick-name { grid-column: 1 / -1; }
   .rolls .card-head .tabs { display: flex; width: 100%; }
   .rolls .card-head .tab { flex: 1; padding: 9px 8px; }
   .summary .row-v { min-width: 0; }

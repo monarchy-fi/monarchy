@@ -188,14 +188,14 @@ export function App() {
             <span>Built on Ascend. No fees.</span>
           </div>
           <div className="foot-links">
+            <a href="https://x.com/monarchyfi" target="_blank" rel="noreferrer">
+              X
+            </a>
             <a href="https://docs.monarchy.fi" target="_blank" rel="noreferrer">
               Docs
             </a>
             <a href="https://github.com/monarchy-fi/monarchy" target="_blank" rel="noreferrer">
               GitHub
-            </a>
-            <a href="https://x.com/monarchyfi" target="_blank" rel="noreferrer">
-              X
             </a>
           </div>
         </footer>

@@ -190,7 +190,7 @@ export function GardenPage() {
         </Card>
       )}
 
-      <Card title="When it unlocks" right={mainToken && <span className="muted small">{mainMeta?.symbol ?? <Skel w="3em" />}, the kingdom's own token</span>}>
+      <Card title="The Harvest" right={mainToken && <span className="muted small">When locked and vesting {mainMeta?.symbol ?? <Skel w="3em" />} comes due</span>}>
         {loading || core.isLoading ? (
           <Skel block h="220px" w="100%" />
         ) : !mainToken || !mainSummary || (mainSummary.locked === 0n && mainSummary.unvested === 0n) ? (
