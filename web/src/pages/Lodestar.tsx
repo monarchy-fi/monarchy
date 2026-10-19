@@ -458,8 +458,9 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
   const [windowDays, setWindowDays] = useState(DEFAULT_TREASURY_WINDOW_DAYS);
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
   const [listing, setListing] = useState(true);
-  // the cap is counted in the quote asset, so 5,000 only makes sense as a default for the deployment's USDC
-  const [cap, setCap] = useState(quote.toLowerCase() === d.quote.toLowerCase() ? "5000" : "");
+  // the cap is counted in the quote asset, so 50,000 only makes sense as a default for the deployment's USDC.
+  // It covers Hyperliquid's 500 HYPE listing floor with room to spare.
+  const [cap, setCap] = useState(quote.toLowerCase() === d.quote.toLowerCase() ? "50000" : "");
   const [lockForever, setLockForever] = useState(true);
 
   if (!r.data) return <LoadingCard />;
@@ -572,10 +573,16 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
               token's HyperCore market. The steward can stop saving at any time, and unspent savings come back to the router.
             </div>
             {listing && (
-              <label className="field">
-                <span className="field-label">Savings goal{quoteMeta ? ` (${quoteMeta.symbol})` : ""}</span>
-                <input className="input" style={{ maxWidth: 220 }} inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="Amount to save" />
-              </label>
+              <>
+                <label className="field">
+                  <span className="field-label">Savings goal{quoteMeta ? ` (${quoteMeta.symbol})` : ""}</span>
+                  <input className="input" style={{ maxWidth: 220 }} inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="Amount to save" />
+                </label>
+                <p className="muted small field-help">
+                  A listing costs at least 500 HYPE in Hyperliquid's listing auction. The savings pay for it up to this goal, and whether Ascend covers
+                  any rest is up to Ascend.
+                </p>
+              </>
             )}
           </div>
           <TxButton

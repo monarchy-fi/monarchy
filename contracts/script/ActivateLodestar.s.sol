@@ -52,11 +52,12 @@ contract ActivateLodestar is BaseScript {
         p.treasuryWindow = 7 days;
         p.tiers = MonarchTiers.defaults();
         p.enrolListing = vm.envOr("ENROL_LISTING", true);
-        // LISTING_CAP is in the quote asset's own units. 5,000 is a sensible default only for a 6-decimal
-        // dollar quote (USDC); for anything else (WHYPE, a tokenized stock) it must be given.
+        // LISTING_CAP is in the quote asset's own units. 50,000 (enough for Hyperliquid's 500 HYPE listing floor)
+        // is a sensible default only for a 6-decimal dollar quote (USDC); for anything else (WHYPE, a tokenized stock)
+        // it must be given.
         bool usdcLike = IERC20Metadata(d.quote).decimals() == 6;
         require(!p.enrolListing || usdcLike || vm.envExists("LISTING_CAP"), "set LISTING_CAP in the quote's units");
-        p.listingCap = vm.envOr("LISTING_CAP", uint256(5_000e6));
+        p.listingCap = vm.envOr("LISTING_CAP", uint256(50_000e6));
         // locked to the router for good unless LOCK_FOREVER=false, like the checkbox on the site
         p.creatorLockUntil = vm.envOr("LOCK_FOREVER", true) ? type(uint64).max : 0;
 
