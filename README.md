@@ -7,7 +7,7 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 170 passing](https://img.shields.io/badge/Foundry-170%20tests%20passing-111111.svg)](contracts/test)
+[![Tests: 171 passing](https://img.shields.io/badge/Foundry-171%20tests%20passing-111111.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
 [![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-111111.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-111111.svg)](#how-it-works)
@@ -66,10 +66,10 @@ flowchart LR
 |---|---|---|---|
 | Peasant | 1 day | 0.5x | *Everyone starts somewhere.* |
 | Knight | 3 days | 1x | *Sworn to the kingdom.* |
-| Duke | 7 days | 1.5x | *Next in line.* |
-| Monarch | 1 month | 3x | *Steal the crown.* |
+| Duke | 7 days | 2x | *Next in line.* |
+| Monarch | 1 month | 4x | *Steal the crown.* |
 
-No lock, no rewards. With four holders each locking 10,000 tokens and fees dripping at 100 USDC a day, holders who keep re-locking for 30 days earn 250, 500, 750 and 1,500 USDC respectively.
+No lock, no rewards. With four holders each locking 10,000 tokens and fees dripping at 100 USDC a day, holders who keep re-locking for 30 days earn 200, 400, 800 and 1,600 USDC respectively: each tier earns twice the one below it.
 
 ## Security model
 
@@ -177,8 +177,9 @@ TOKEN=0xYourToken npm run launch:testnet
 npm run launch:testnet
 npm run launch:testnet -- --broadcast
 
-# 3. Hand the creator role to the token's Lodestar and activate it (40/40/20 split, the four
-#    tiers, 7 day treasury stream, no listing set-aside, creator role locked forever).
+# 3. Hand the creator role to the token's Lodestar and activate it (50% holders, 20% buyback,
+#    30% treasury, token-side fees to lockers, the four tiers, 7 day treasury stream, no listing
+#    set-aside, creator role locked forever).
 #    TREASURY is the address that receives the Team Treasury stream; it can never be changed.
 #    Buybacks go through the AscendSwapper from deployments/99801.json unless SWAPPER is set.
 TREASURY=0xYourTreasury npm run activate:testnet

@@ -457,8 +457,8 @@ function Steward({
 const DEFAULT_TIERS = [
   { name: "Peasant", days: 1, mult: 0.5 },
   { name: "Knight", days: 3, mult: 1 },
-  { name: "Duke", days: 7, mult: 1.5 },
-  { name: "Monarch", days: 30, mult: 3 },
+  { name: "Duke", days: 7, mult: 2 },
+  { name: "Monarch", days: 30, mult: 4 },
 ];
 type TierChoice = (typeof DEFAULT_TIERS)[number];
 /** The lock lengths and multipliers a tier can pick from. Every step stays inside Exile's rules: at least an hour, at most 5x. */
@@ -529,7 +529,7 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
     ],
     query: POLL.query,
   });
-  const [split, setSplit] = useState({ burn: 40, holders: 40, treasury: 20 });
+  const [split, setSplit] = useState({ burn: 20, holders: 50, treasury: 30 });
   const [toHolders, setToHolders] = useState(true);
   const [treasury, setTreasury] = useState("");
   const [windowDays, setWindowDays] = useState(DEFAULT_TREASURY_WINDOW_DAYS);

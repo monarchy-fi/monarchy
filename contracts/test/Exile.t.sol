@@ -27,7 +27,7 @@ contract ExileTest is Test {
         exile = new Exile();
         monarch = new MockERC20("Monarch", "MONARCH", 18);
         reward = new MockERC20("Reward", "RWD", 18);
-        poolId = exile.createPool(address(monarch), address(reward), MonarchTiers.defaults(), admin);
+        poolId = exile.createPool(address(monarch), address(reward), _tiers(), admin);
 
         address[3] memory users = [alice, bob, carol];
         for (uint256 i; i < users.length; ++i) {
@@ -61,6 +61,16 @@ contract ExileTest is Test {
         vm.warp(block.timestamp + secs);
     }
 
+    /// The tier table these tests' numbers are worked out against, kept fixed so they test Exile's mechanics
+    /// rather than whatever MONARCH's defaults are today: 1 day 0.5x, 3 days 1x, 7 days 1.5x, 30 days 3x.
+    function _tiers() internal pure returns (IExile.Tier[] memory t) {
+        t = new IExile.Tier[](4);
+        t[0] = IExile.Tier({minDuration: 1 days, multiplierBps: 5_000, label: "Peasant"});
+        t[1] = IExile.Tier({minDuration: 3 days, multiplierBps: 10_000, label: "Knight"});
+        t[2] = IExile.Tier({minDuration: 7 days, multiplierBps: 15_000, label: "Duke"});
+        t[3] = IExile.Tier({minDuration: 30 days, multiplierBps: 30_000, label: "Monarch"});
+    }
+
     // ---------------------------------------------------------------- tiers
 
     function test_tierSelection() public {
@@ -73,6 +83,19 @@ contract ExileTest is Test {
         assertEq(exile.lockInfo(_lock(alice, 1000e18, 31 days)).points, 3000e18, "Monarch points");
         (, bytes32 label) = exile.tierFor(poolId, 30 days);
         assertEq(label, bytes32("Monarch"));
+    }
+
+    function test_monarchDefaultsDoubleEachTier() public {
+        IExile.Tier[] memory t = MonarchTiers.defaults();
+        assertEq(t.length, 4);
+        for (uint256 i = 1; i < t.length; ++i) {
+            assertGt(t[i].minDuration, t[i - 1].minDuration, "each tier locks longer");
+            assertEq(t[i].multiplierBps, t[i - 1].multiplierBps * 2, "each tier earns twice the one below");
+        }
+        uint256 pid = exile.createPool(address(monarch), address(reward), t, admin);
+        vm.prank(alice);
+        uint256 id = exile.lockERC20(address(monarch), 1000e18, uint64(block.timestamp + 30 days), pid);
+        assertEq(exile.lockInfo(id).multiplierBps, 40_000, "Monarch is 4x");
     }
 
     function test_unlockRoundsUpToHour() public {
@@ -356,7 +379,7 @@ contract ExileTest is Test {
 
     function test_readyTiersExpire() public {
         vm.prank(admin);
-        exile.proposeTiers(poolId, MonarchTiers.defaults());
+        exile.proposeTiers(poolId, _tiers());
         _skip(12 hours + 7 days + 1);
         vm.expectRevert(Exile.ProposalExpired.selector);
         exile.executeTiers(poolId);
@@ -386,7 +409,7 @@ contract ExileTest is Test {
     }
 
     function test_cancelTiers() public {
-        IExile.Tier[] memory t = MonarchTiers.defaults();
+        IExile.Tier[] memory t = _tiers();
         vm.startPrank(admin);
         exile.proposeTiers(poolId, t);
         exile.cancelTiers(poolId);
@@ -498,7 +521,7 @@ contract ExileTest is Test {
 
     function test_sixDecimalRewardPrecision() public {
         MockERC20 usdc = new MockERC20("USDC", "USDC", 6);
-        uint256 pid = exile.createPool(address(monarch), address(usdc), MonarchTiers.defaults(), admin);
+        uint256 pid = exile.createPool(address(monarch), address(usdc), _tiers(), admin);
         vm.prank(alice);
         uint256 a = exile.lockERC20(address(monarch), 400_000e18, uint64(block.timestamp + 30 days), pid);
         vm.prank(bob);

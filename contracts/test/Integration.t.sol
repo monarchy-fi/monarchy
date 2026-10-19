@@ -23,7 +23,7 @@ contract IntegrationTest is MonarchyFixture {
         Lodestar l = _activate(p);
         assertTrue(l.isCreator());
 
-        // holders buy and lock: Alice for a month (Monarch 3x), Bob for a day (Peasant 0.5x)
+        // holders buy and lock: Alice for a month (Monarch 4x), Bob for a day (Peasant 0.5x)
         uint256 aliceTokens = _buy(poolId, alice, 2_000e6);
         uint256 bobTokens = _buy(poolId, bob, 2_000e6);
         uint256 exilePool = l.exilePoolId();
@@ -35,7 +35,7 @@ contract IntegrationTest is MonarchyFixture {
         monarch.approve(address(exile), bobTokens);
         uint256 bobLock = exile.lockERC20(address(monarch), bobTokens, uint64(block.timestamp + 1 days), exilePool);
         vm.stopPrank();
-        assertEq(exile.lockInfo(aliceLock).multiplierBps, 30_000);
+        assertEq(exile.lockInfo(aliceLock).multiplierBps, 40_000);
         assertEq(exile.lockInfo(bobLock).multiplierBps, 5_000);
 
         // trading generates fees
@@ -55,12 +55,12 @@ contract IntegrationTest is MonarchyFixture {
         assertGt(launchpad.listingOwed(poolId), 0, "listing set-aside accrues for the router");
         assertEq(usdc.balanceOf(address(l)), 0);
 
-        // rewards drip per second; Alice (3x) out-earns Bob (0.5x) 6:1 while both are locked
+        // rewards drip per second; Alice (4x) out-earns Bob (0.5x) 8:1 while both are locked
         vm.warp(block.timestamp + 12 hours);
         uint256 a = exile.pendingRewards(aliceLock);
         uint256 b = exile.pendingRewards(bobLock);
         assertGt(b, 0);
-        assertApproxEqRel(a * bobTokens, b * aliceTokens * 6, 1e15);
+        assertApproxEqRel(a * bobTokens, b * aliceTokens * 8, 1e15);
 
         // Bob's lock ends after a day and stops earning; Alice keeps going
         vm.warp(block.timestamp + 2 days);
