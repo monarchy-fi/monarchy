@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useReadContract } from "wagmi";
 import { lodestarAbi } from "../abi";
-import { DISTRIBUTE_EVERY_HOURS } from "../lib/constants";
 import { pct } from "../lib/format";
 import { POLL } from "../lib/hooks";
 import { useDripDays, useLodestarCore } from "../lib/monarchy";
@@ -57,7 +56,7 @@ export function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { dri
         <div className="flow-node flow-hub ascii-box">
           <span className="flow-glyph" aria-hidden="true">*</span>
           <div className="flow-title">Lodestar</div>
-          <p>Called every {DISTRIBUTE_EVERY_HOURS} hours by the team. Anyone can call it. It takes 0%.</p>
+          <p>It takes 0% of the fees.</p>
         </div>
         <div ref={branch} className="flow-branch" aria-hidden="true">
           <svg viewBox={`0 0 64 ${h}`} preserveAspectRatio="none">
