@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useReadContracts } from "wagmi";
 import { formatUnits, type Address } from "viem";
 import { exileAbi, lodestarAbi, lodestarFactoryAbi, sandfallAbi } from "../abi";
@@ -9,7 +9,7 @@ import { NoDeployment } from "../components/States";
 import { unlockedAt } from "../components/UnlockChart";
 import { Addr, Badge, Card, Empty, Skel, Stat, TokenAddr } from "../components/Ui";
 import { useDeployment, ZERO } from "../lib/deployments";
-import { compact, fmt, label, mult, short } from "../lib/format";
+import { compact, duration, fmt, label, mult, short } from "../lib/format";
 import { useNow, usePageTitle } from "../lib/hooks";
 import { useLodestarCore, useTokenMeta, type TokenMeta } from "../lib/monarchy";
 
@@ -20,6 +20,8 @@ const SLOW = { query: { refetchInterval: 30_000 } } as const;
 const PAGE = 20;
 /** The unlock chart looks this far ahead; anything unlocking later is counted in a note under it. */
 const HORIZON = 2 * 365 * 86400;
+/** A timelocked change can be carried out for this long once its wait ends (Lodestar and Exile EXECUTION_WINDOW). */
+const EXECUTION_WINDOW = 7 * 86400;
 const STEPS = 240;
 
 type Lock = { id: bigint; owner: Address; kind: number; withdrawn: boolean; multiplierBps: number; unlockAt: bigint; asset: Address; tokenId: bigint; amount: bigint; poolId: bigint };
@@ -51,6 +53,10 @@ export function GardenPage() {
   // ?token= opens the lists on that token's tab, so another page can link straight to one token's locks and streams
   const [params] = useSearchParams();
   const token0 = params.get("token")?.toLowerCase() ?? undefined;
+  const [tokenQ, setTokenQ] = useState("");
+  const [tokenShown, setTokenShown] = useState(PAGE);
+  const [routerQ, setRouterQ] = useState("");
+  const [routerShown, setRouterShown] = useState(PAGE);
 
   const counts = useReadContracts({
     allowFailure: false,
@@ -102,6 +108,12 @@ export function GardenPage() {
     contracts: routerList.flatMap((a) => RF.map((functionName) => ({ address: a, abi: lodestarAbi, functionName }) as const)),
     query: { enabled: routerList.length > 0, ...SLOW.query },
   });
+  // what each router has waiting behind its timelocks; routers from before the upgrade path lack upgradeEta, so a failed read means none
+  const PF = ["pendingConfig", "upgradeEta", "exilePoolId"] as const;
+  const pendingReads = useReadContracts({
+    contracts: routerList.flatMap((a) => PF.map((functionName) => ({ address: a, abi: lodestarAbi, functionName }) as const)),
+    query: { enabled: routerList.length > 0, ...SLOW.query },
+  });
 
   const locks: Lock[] = useMemo(() => {
     const raw = (lockReads.data ?? []) as unknown as Omit<Lock, "id">[];
@@ -118,6 +130,22 @@ export function GardenPage() {
     ((poolReads.data ?? []) as unknown as { tiers: readonly Tier[] }[]).forEach((p, i) => m.set(poolIds[i], p.tiers));
     return m;
   }, [poolReads.data, poolIds]);
+  const tiersEtaByPool = useMemo(() => {
+    const m = new Map<bigint, number>();
+    ((poolReads.data ?? []) as unknown as { tiersEta: bigint }[]).forEach((p, i) => m.set(poolIds[i], Number(p.tiersEta)));
+    return m;
+  }, [poolReads.data, poolIds]);
+  const pendingOf = (i: number): Change[] => {
+    const v = pendingReads.data?.slice(i * PF.length, (i + 1) * PF.length);
+    if (!v) return [];
+    const cfg = v[0]?.result as readonly [unknown, bigint] | undefined;
+    const pool = v[2]?.result as bigint | undefined;
+    return [
+      { what: "Split change", eta: Number(cfg?.[1] ?? 0n) },
+      { what: "Tier change", eta: pool === undefined ? 0 : (tiersEtaByPool.get(pool) ?? 0) },
+      { what: "Upgrade", eta: Number((v[1]?.result as bigint | undefined) ?? 0n) },
+    ];
+  };
   const routers: Router[] = useMemo(() => {
     const raw = (routerReads.data ?? []) as unknown[];
     return routerList.map((address, i) => {
@@ -169,6 +197,12 @@ export function GardenPage() {
   const recipients = new Set(activeStreams.map((s) => s.recipient.toLowerCase())).size;
   const forever = routers.filter((r) => r.lockedUntil >= 2n ** 63n).length;
   const capped = (lockCount ?? 0n) > BigInt(CAP) || (streamCount ?? 0n) > BigInt(CAP);
+  const tokenRows = filter(mainFirst(byToken, mainToken), tokenQ, (b) => [b.asset, metaOf(b.asset)?.symbol]);
+  const routerRows = filter(
+    routers.map((r, i) => ({ r, i })),
+    routerQ,
+    ({ r }) => [r.token, r.address, metaOf(r.token)?.symbol],
+  );
 
   return (
     <div className="page">
@@ -213,24 +247,37 @@ export function GardenPage() {
         ) : byToken.length === 0 ? (
           <Empty title="Nothing locked or vesting yet" />
         ) : (
-          <Table label="Locked and vesting by token" head={["Token", "Locked now", "Active locks", "Unlocks in 30 days", "Still vesting", "Active streams"]} num={[1, 2, 3, 4, 5]}>
-            {mainFirst(byToken, mainToken).map((b) => {
-              const m = metaOf(b.asset);
-              const dec = m?.decimals ?? 18;
-              return (
-                <tr key={b.asset}>
-                  <td>
-                    <TokenName asset={b.asset} meta={m} />
-                  </td>
-                  <td>{compact(b.locked, dec)}</td>
-                  <td>{b.locks}</td>
-                  <td>{compact(b.unlocking30, dec)}</td>
-                  <td>{compact(b.unvested, dec)}</td>
-                  <td>{b.streams}</td>
-                </tr>
-              );
-            })}
-          </Table>
+          <>
+            <div className="rolls-bar">
+              <Search value={tokenQ} onChange={(v) => (setTokenQ(v), setTokenShown(PAGE))} placeholder="Filter by token address or symbol" label="Filter tokens" />
+              <span className="muted small">
+                {tokenRows.length.toLocaleString()} of {byToken.length.toLocaleString()} {byToken.length === 1 ? "token" : "tokens"}
+              </span>
+            </div>
+            {tokenRows.length === 0 ? (
+              <Empty title="No tokens match" />
+            ) : (
+              <Table label="Locked and vesting by token" head={["Token", "Locked now", "Active locks", "Unlocks in 30 days", "Still vesting", "Active streams"]} num={[1, 2, 3, 4, 5]}>
+                {tokenRows.slice(0, tokenShown).map((b) => {
+                  const m = metaOf(b.asset);
+                  const dec = m?.decimals ?? 18;
+                  return (
+                    <tr key={b.asset}>
+                      <td>
+                        <TokenName asset={b.asset} meta={m} />
+                      </td>
+                      <td>{compact(b.locked, dec)}</td>
+                      <td>{b.locks}</td>
+                      <td>{compact(b.unlocking30, dec)}</td>
+                      <td>{compact(b.unvested, dec)}</td>
+                      <td>{b.streams}</td>
+                    </tr>
+                  );
+                })}
+              </Table>
+            )}
+            <More shown={tokenShown} total={tokenRows.length} onMore={() => setTokenShown(tokenShown + PAGE)} />
+          </>
         )}
       </Card>
 
@@ -242,37 +289,73 @@ export function GardenPage() {
         ) : routers.length === 0 ? (
           <Empty title="No routers yet" />
         ) : (
-          <Table label="Fee routers" head={["Token", "Router", "Burned from fees", "Bought back and burned", "To holders", "To treasury", "Creator role"]} num={[2, 3, 4, 5]}>
-            {routers.map((r) => {
-              const tm = metaOf(r.token);
-              const qm = metaOf(r.quote);
-              return (
-                <tr key={r.address}>
-                  <td>
-                    <TokenName asset={r.token} meta={tm} />
-                  </td>
-                  <td>
-                    <Addr address={r.address} />
-                  </td>
-                  <td>{compact(r.feeBurned, tm?.decimals ?? 18)}</td>
-                  <td>{compact(r.buybackBurned, tm?.decimals ?? 18)}</td>
-                  <td>
-                    {fmt(r.holders, qm?.decimals ?? 18)} {qm?.symbol}
-                    {r.tokenToHolders > 0n && <span className="muted"> + {compact(r.tokenToHolders, tm?.decimals ?? 18)} {tm?.symbol}</span>}
-                  </td>
-                  <td>
-                    {fmt(r.treasury, qm?.decimals ?? 18)} {qm?.symbol}
-                  </td>
-                  <td>{r.lockedUntil >= 2n ** 63n ? <Badge tone="gold">Locked forever</Badge> : Number(r.lockedUntil) > now ? <Badge tone="silver">Until {day(r.lockedUntil)}</Badge> : <Badge tone="amber">Not locked</Badge>}</td>
-                </tr>
-              );
-            })}
-          </Table>
+          <>
+            <div className="rolls-bar">
+              <Search value={routerQ} onChange={(v) => (setRouterQ(v), setRouterShown(PAGE))} placeholder="Filter by token address, symbol or router" label="Filter fee routers" />
+              <span className="muted small">
+                {routerRows.length.toLocaleString()} of {routers.length.toLocaleString()} {routers.length === 1 ? "router" : "routers"}
+              </span>
+            </div>
+            {routerRows.length === 0 ? (
+              <Empty title="No routers match" />
+            ) : (
+              <Table label="Fee routers" head={["Token", "Router", "Burned from fees", "Bought back and burned", "To holders", "To treasury", "Creator role", "Waiting to take effect"]} num={[2, 3, 4, 5]}>
+                {routerRows.slice(0, routerShown).map(({ r, i }) => {
+                  const tm = metaOf(r.token);
+                  const qm = metaOf(r.quote);
+                  const to = `/lodestar?token=${r.token}${r.quote.toLowerCase() === d.quote.toLowerCase() ? "" : `&quote=${r.quote}`}`;
+                  return (
+                    <tr key={r.address}>
+                      <td>
+                        <TokenName asset={r.token} meta={tm} />
+                      </td>
+                      <td>
+                        <Addr address={r.address} />
+                      </td>
+                      <td>{compact(r.feeBurned, tm?.decimals ?? 18)}</td>
+                      <td>{compact(r.buybackBurned, tm?.decimals ?? 18)}</td>
+                      <td>
+                        {fmt(r.holders, qm?.decimals ?? 18)} {qm?.symbol}
+                        {r.tokenToHolders > 0n && <span className="muted"> + {compact(r.tokenToHolders, tm?.decimals ?? 18)} {tm?.symbol}</span>}
+                      </td>
+                      <td>
+                        {fmt(r.treasury, qm?.decimals ?? 18)} {qm?.symbol}
+                      </td>
+                      <td>{r.lockedUntil >= 2n ** 63n ? <Badge tone="gold">Locked forever</Badge> : Number(r.lockedUntil) > now ? <Badge tone="silver">Until {day(r.lockedUntil)}</Badge> : <Badge tone="amber">Not locked</Badge>}</td>
+                      <td>
+                        <Pending changes={pendingOf(i)} now={now} loading={!pendingReads.data} to={to} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </Table>
+            )}
+            <More shown={routerShown} total={routerRows.length} onMore={() => setRouterShown(routerShown + PAGE)} />
+          </>
         )}
       </Card>
 
       {capped && <p className="muted small">Showing the newest {CAP.toLocaleString()} locks and streams; the totals above count those.</p>}
     </div>
+  );
+}
+
+type Change = { what: string; eta: number };
+
+/** The timelocked changes a router has waiting, each with its countdown, linking to the router's page where anyone can
+ * carry it out once the wait ends. A change past its 7 day window has lapsed and isn't shown. */
+function Pending({ changes, now, loading, to }: { changes: Change[]; now: number; loading: boolean; to: string }) {
+  if (loading) return <Skel w="5em" />;
+  const live = changes.filter((c) => c.eta > 0 && now <= c.eta + EXECUTION_WINDOW);
+  if (live.length === 0) return <span className="muted">Nothing</span>;
+  return (
+    <Link to={to} className="pending-list">
+      {live.map((c) => (
+        <Badge key={c.what} tone="amber">
+          {c.what} {c.eta > now ? `in ${duration(c.eta - now)}` : "ready"}
+        </Badge>
+      ))}
+    </Link>
   );
 }
 
@@ -360,36 +443,31 @@ function Outlook({ asset, meta, locks, streams, now }: { asset: Address; meta?: 
   );
 }
 
-const NFT = "nft";
-const ALL = "all";
+const MAIN = "main";
+const OTHERS = "others";
 type Kind = "locks" | "streams";
 
-/** Every lock and every vesting stream, one token at a time: a tab per token (the kingdom's own first), a switch between
- * Exile locks and Sandfall streams, and a wallet filter. NFT locks share one tab, and the last tab shows everything. */
+/** Every lock and every vesting stream in two tabs, the kingdom's own token and everything else, so the tabs stay two
+ * however many tokens use Monarchy. A switch picks Exile locks or Sandfall streams, and a search narrows by wallet (and,
+ * under Others, by token address or symbol). */
 function Rolls({ locks, streams, loading, now, metaOf, tiersByPool, lockTotal, streamTotal, mainToken, initialToken }: { locks: Lock[]; streams: Stream[]; loading: boolean; now: number; metaOf: (a: Address) => TokenMeta | undefined; tiersByPool: Map<bigint, readonly Tier[]>; lockTotal?: bigint; streamTotal?: bigint; mainToken?: Address; initialToken?: string }) {
-  const [picked, setPicked] = useState(initialToken);
+  const main = mainToken?.toLowerCase();
+  // ?token= with another token's address opens Others, already filtered to that token
+  const linkedOther = !!initialToken && !!main && initialToken !== main;
+  const [picked, setPicked] = useState<string>(linkedOther ? OTHERS : MAIN);
   const [kind, setKind] = useState<Kind>();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(linkedOther ? initialToken : "");
   const [shown, setShown] = useState(PAGE);
   const ref = useRef<HTMLElement>(null);
 
-  const keyOf = (l: Lock) => (l.kind === 0 ? l.asset.toLowerCase() : NFT);
-  // one tab per token with any lock or stream: the kingdom's own token first, then the busiest
-  const tabs = useMemo(() => {
-    const m = new Map<string, { key: string; asset?: Address; locks: number; streams: number }>();
-    const get = (key: string, asset?: Address) => m.get(key) ?? m.set(key, { key, asset, locks: 0, streams: 0 }).get(key)!;
-    if (mainToken) get(mainToken.toLowerCase(), mainToken);
-    for (const l of locks) get(keyOf(l), l.kind === 0 ? l.asset : undefined).locks++;
-    for (const x of streams) get(x.asset.toLowerCase(), x.asset).streams++;
-    const main = mainToken?.toLowerCase();
-    return [...m.values()].sort((a, b) => Number(b.key === main) - Number(a.key === main) || Number(a.key === NFT) - Number(b.key === NFT) || b.locks + b.streams - (a.locks + a.streams));
-  }, [locks, streams, mainToken]);
-
-  const tab = tabs.find((t) => t.key === picked) ?? (picked === ALL ? undefined : tabs[0]);
-  const key = tab?.key ?? ALL;
-  // a token with only streams (or only locks) opens on the side it has
-  const has = tab ?? { locks: locks.length, streams: streams.length };
-  const view: Kind = kind ?? (has.locks === 0 && has.streams > 0 ? "streams" : "locks");
+  const isMain = (asset: Address, nft = false) => !nft && !!main && asset.toLowerCase() === main;
+  const ours = { locks: locks.filter((l) => isMain(l.asset, l.kind !== 0)), streams: streams.filter((x) => isMain(x.asset)) };
+  const rest = { locks: locks.filter((l) => !isMain(l.asset, l.kind !== 0)), streams: streams.filter((x) => !isMain(x.asset)) };
+  // with no kingdom token known, everything sits under one tab
+  const key = main ? picked : OTHERS;
+  const set = key === MAIN ? ours : rest;
+  // a side with nothing to show opens on the side that has something
+  const view: Kind = kind ?? (set.locks.length === 0 && set.streams.length > 0 ? "streams" : "locks");
 
   // a link from another page lands on this card once the lists have loaded
   useEffect(() => {
@@ -397,15 +475,15 @@ function Rolls({ locks, streams, loading, now, metaOf, tiersByPool, lockTotal, s
   }, [initialToken, loading]);
 
   const choose = (k: string) => {
-    const t = tabs.find((x) => x.key === k);
     setPicked(k);
     setShown(PAGE);
-    if (t && kind && t[kind] === 0) setKind(kind === "locks" ? "streams" : "locks");
+    setQ("");
   };
-  const name = (t: (typeof tabs)[number]) => (t.key === NFT ? "NFTs" : t.asset === ZERO ? "HYPE" : (metaOf(t.asset!)?.symbol ?? short(t.asset!)));
+  const mainName = (mainToken && metaOf(mainToken)?.symbol) ?? "Our token";
+  const tabs = main ? [{ key: MAIN, name: mainName, n: ours }, { key: OTHERS, name: "Others", n: rest }] : [];
 
-  const lockRows = filter(key === ALL ? locks : locks.filter((l) => keyOf(l) === key), q, (l) => [l.owner, ...(key === ALL ? [l.asset, metaOf(l.asset)?.symbol] : [])]);
-  const streamRows = filter(key === ALL ? streams : streams.filter((x) => x.asset.toLowerCase() === key), q, (x) => [x.creator, x.recipient, ...(key === ALL ? [x.asset, metaOf(x.asset)?.symbol] : [])]);
+  const lockRows = filter(set.locks, q, (l) => [l.owner, ...(key === OTHERS ? [l.asset, metaOf(l.asset)?.symbol] : [])]);
+  const streamRows = filter(set.streams, q, (x) => [x.creator, x.recipient, ...(key === OTHERS ? [x.asset, metaOf(x.asset)?.symbol] : [])]);
   const rows = view === "locks" ? lockRows : streamRows;
   const total = view === "locks" ? lockTotal : streamTotal;
 
@@ -425,26 +503,22 @@ function Rolls({ locks, streams, loading, now, metaOf, tiersByPool, lockTotal, s
         <Skel block h="200px" w="100%" />
       ) : (
         <>
-          <div className="token-tabs" role="tablist" aria-label="Token">
-            {tabs.map((t) => (
-              <button key={t.key} role="tab" aria-selected={t.key === key} className={t.key === key ? "token-tab active" : "token-tab"} onClick={() => choose(t.key)}>
-                {name(t)}
-                <span className="token-tab-n">{t[view]}</span>
-              </button>
-            ))}
-            {tabs.length > 1 && (
-              <button role="tab" aria-selected={key === ALL} className={key === ALL ? "token-tab active" : "token-tab"} onClick={() => choose(ALL)}>
-                All
-                <span className="token-tab-n">{view === "locks" ? locks.length : streams.length}</span>
-              </button>
-            )}
-          </div>
+          {tabs.length > 0 && (
+            <div className="token-tabs" role="tablist" aria-label="Token">
+              {tabs.map((t) => (
+                <button key={t.key} role="tab" aria-selected={t.key === key} className={t.key === key ? "token-tab active" : "token-tab"} onClick={() => choose(t.key)}>
+                  {t.name}
+                  <span className="token-tab-n">{t.n[view].length}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="rolls-bar">
-            <Search value={q} onChange={(v) => (setQ(v), setShown(PAGE))} placeholder={key === ALL ? "Filter by wallet, token address or symbol" : "Filter by wallet"} label={`Filter ${view}`} />
-            {total !== undefined && <span className="muted small">{key === ALL ? `${total.toLocaleString()} in total` : `${rows.length.toLocaleString()} of ${total.toLocaleString()}`}, newest first</span>}
+            <Search value={q} onChange={(v) => (setQ(v), setShown(PAGE))} placeholder={key === OTHERS ? "Filter by token address, symbol or wallet" : "Filter by wallet"} label={`Filter ${view}`} />
+            {total !== undefined && <span className="muted small">{`${rows.length.toLocaleString()} of ${total.toLocaleString()}`}, newest first</span>}
           </div>
           {rows.length === 0 ? (
-            <Empty title={q ? `No ${view} match` : `No ${view === "locks" ? "Exile locks" : "Sandfall streams"}${tab ? ` for ${name(tab)}` : ""} yet`} />
+            <Empty title={q ? `No ${view} match` : `No ${view === "locks" ? "Exile locks" : "Sandfall streams"}${key === MAIN ? ` for ${mainName}` : " for other tokens"} yet`} />
           ) : (
             <>
               {view === "locks" ? <LockTable locks={lockRows.slice(0, shown)} now={now} metaOf={metaOf} tiersByPool={tiersByPool} /> : <StreamTable streams={streamRows.slice(0, shown)} now={now} metaOf={metaOf} />}

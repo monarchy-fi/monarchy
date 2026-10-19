@@ -12,7 +12,7 @@ import { useDeployment, ZERO } from "../lib/deployments";
 import { date, duration, fmt, label, mult } from "../lib/format";
 import { POLL, useNow, usePageTitle, useTicking } from "../lib/hooks";
 import { DISTRIBUTE_NOTE } from "../lib/constants";
-import { dayLabel, useDripDays, useLodestarCore, useTokenMeta, type TokenMeta } from "../lib/monarchy";
+import { dayLabel, useDripDays, useLockedTotal, useLodestarCore, useTokenMeta, type TokenMeta } from "../lib/monarchy";
 import { days } from "./Home";
 
 type Tier = { minDuration: number; multiplierBps: number; label: `0x${string}` };
@@ -40,6 +40,7 @@ export function ExilePage() {
   const dripPerDay = pool.data ? (Number(pool.data.periodFinish) > now ? (pool.data.rewardRate * 86400n) / 10n ** 18n : 0n) : undefined;
   const rd = rewardMeta?.decimals ?? 6;
   const drip = useDripDays();
+  const locked = useLockedTotal(core.token);
   // token-side fees paid in the token itself, when the creator chose to send them to lockers
   const stakeMeta = core.tokenMeta;
   const sd = stakeMeta?.decimals ?? 18;
@@ -94,7 +95,11 @@ export function ExilePage() {
         <div className="stats stats-4">
           <Stat label="Dripping now" value={<><Amt value={dripPerDay} decimals={rd} symbol={rewardMeta?.symbol} /><span className="amt-sym"> a day</span></>} hint={`Each deposit drips out over ${drip} days`} />
           <Stat label="Paid in so far" value={<Amt value={pool.data?.totalDistributed} decimals={rd} symbol={rewardMeta?.symbol} />} hint="Sent here by Lodestar" />
-          <Stat label="Locked points" value={<Amt value={pool.data?.totalPoints} decimals={core.tokenMeta?.decimals ?? 18} digits={0} />} hint="Amount times multiplier" />
+          <Stat
+            label={core.tokenMeta ? `Locked ${core.tokenMeta.symbol}` : "Locked"}
+            value={<Amt value={locked?.amount} decimals={core.tokenMeta?.decimals ?? 18} digits={0} symbol={core.tokenMeta?.symbol} />}
+            hint={locked ? `${locked.locks} ${locked.locks === 1 ? "lock" : "locks"} by ${locked.lockers} ${locked.lockers === 1 ? "holder" : "holders"}` : <Skel w="9em" />}
+          />
           <Stat label="Drip ends" value={pool.data ? (Number(pool.data.periodFinish) > now ? duration(Number(pool.data.periodFinish) - now) : "Idle") : <Skel w="5em" />} hint="Refills on every distribute" />
         </div>
         {hasStakeRewards && (

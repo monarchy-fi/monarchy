@@ -11,7 +11,7 @@ import { MONARCHY_CA } from "../lib/constants";
 import { useDeployment } from "../lib/deployments";
 import { fmt, label, mult } from "../lib/format";
 import { POLL, usePageTitle } from "../lib/hooks";
-import { dayLabel, useDripDays, useLodestarCore } from "../lib/monarchy";
+import { dayLabel, useDripDays, useLockedTotal, useLodestarCore } from "../lib/monarchy";
 import { days } from "./Home";
 
 // Lodestar burns to this address; Ascend tokens reject 0x…dEaD
@@ -46,6 +46,7 @@ export function KingdomPage() {
   const now = BigInt(Math.floor(Date.now() / 1000));
   const dripPerDay = pool ? (pool.periodFinish > now ? (pool.rewardRate * 86400n) / 10n ** 18n : 0n) : undefined;
   const drip = useDripDays();
+  const locked = useLockedTotal(core.token);
   // until MONARCHY is the token this deployment's Lodestar routes for, the sample token's numbers fill the card
   const live = !!d && !!core.lodestar;
   const standIn = !!ts && !!core.token && core.token.toLowerCase() !== MONARCHY_CA?.toLowerCase();
@@ -109,7 +110,11 @@ export function KingdomPage() {
             <Stat label="Team Treasury" value={<Amt value={treasury} decimals={qd} symbol={qs} />} hint="Streamed through Sandfall" />
             <Stat label="Bought back and burned" value={<Amt value={buybackBurned} decimals={td} symbol={ts} compact />} hint={buybackQuote === undefined ? <Skel w="7em" /> : `${fmt(buybackQuote, qd)} ${qs ?? ""} spent`} />
             <Stat label="Burned from token fees" value={<Amt value={feeBurned} decimals={td} symbol={ts} compact />} hint="Sent straight to the burn address" />
-            <Stat label="Locked points" value={<Amt value={pool?.totalPoints} decimals={td} compact />} hint="Amount times tier multiplier" />
+            <Stat
+              label={ts ? `Locked ${ts}` : "Locked"}
+              value={<Amt value={locked?.amount} decimals={td} symbol={ts} compact />}
+              hint={locked ? `${locked.locks} ${locked.locks === 1 ? "lock" : "locks"} by ${locked.lockers} ${locked.lockers === 1 ? "holder" : "holders"}` : <Skel w="9em" />}
+            />
           </div>
         </Card>
       )}

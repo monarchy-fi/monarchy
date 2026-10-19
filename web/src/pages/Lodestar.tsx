@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { useConnection, useReadContracts } from "wagmi";
+import { useSearchParams } from "react-router-dom";
+import { useConnection, useReadContract, useReadContracts } from "wagmi";
 import { isAddress, stringToHex, type Address } from "viem";
-import { iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
+import { exileAbi, iAscendLaunchpadAbi, lodestarAbi, lodestarFactoryAbi } from "../abi";
 import { TierBadge, tagline } from "../components/Tiers";
 import { TxButton } from "../components/Tx";
 import { Addr, Amt, Badge, Card, Empty, Row, Skel, Stat, Sym } from "../components/Ui";
 import { DEFAULT_TREASURY_WINDOW_DAYS, DISTRIBUTE_NOTE } from "../lib/constants";
 import { isSet, useDeployment, ZERO, type Deployment } from "../lib/deployments";
-import { date, duration, fmt, pct } from "../lib/format";
+import { date, duration, fmt, label, mult, pct } from "../lib/format";
 import { POLL, useNow, usePageTitle } from "../lib/hooks";
 import { useLodestarCore, useTokenMeta } from "../lib/monarchy";
 import { NoDeployment } from "../components/States";
@@ -20,8 +21,10 @@ const EXECUTION_WINDOW = 7 * 86400;
 export function LodestarPage() {
   usePageTitle("Lodestar");
   const d = useDeployment();
-  const [input, setInput] = useState("");
-  const [quoteInput, setQuoteInput] = useState("");
+  // ?token= (and ?quote=) open a given router, so the Garden can link straight to one
+  const [params] = useSearchParams();
+  const [input, setInput] = useState(() => params.get("token") ?? "");
+  const [quoteInput, setQuoteInput] = useState(() => params.get("quote") ?? "");
   const defaultToken = d && isSet(d.token) ? d.token : undefined;
   const [defaultMeta, defaultQuoteMeta] = useTokenMeta([defaultToken, d?.quote]);
   if (!d) return <NoDeployment />;
@@ -250,6 +253,8 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
         </Card>
       )}
 
+      {core.exilePoolId !== undefined && <PendingTiers d={d} lodestar={lodestar} poolId={core.exilePoolId} isSteward={isSteward} now={now} />}
+
       {upEta > 0n && upTarget && (
         <Card title="Pending upgrade" right={<Badge tone="amber">7 day notice</Badge>}>
           <p className="muted small">
@@ -279,6 +284,74 @@ function Router({ d, lodestar }: { d: Deployment; lodestar: Address }) {
       {isSteward && <Steward lodestar={lodestar} cfg={cfg} lockedUntil={lockedUntil} listingLive={listingLive} successor={successor} upgradePending={upEta > 0n} />}
     </>
   );
+}
+
+/** A tier change the steward proposed, shown to everyone for its 12 hours, next to the tiers it replaces. Exile carries it
+ * out for anyone once the wait is over, and the steward can cancel it through the router until then. */
+function PendingTiers({ d, lodestar, poolId, isSteward, now }: { d: Deployment; lodestar: Address; poolId: bigint; isSteward: boolean; now: number }) {
+  const pool = useReadContract({ address: d.exile, abi: exileAbi, functionName: "poolInfo", args: [poolId], query: POLL.query });
+  const eta = Number(pool.data?.tiersEta ?? 0n);
+  if (!pool.data || eta === 0) return null;
+  const expired = now > eta + EXECUTION_WINDOW;
+  const before = new Map(pool.data.tiers.map((t) => [label(t.label), t]));
+  return (
+    <Card title="Pending tier change" right={<Badge tone="amber">12 hour timelock</Badge>}>
+      <p className="muted small">
+        The steward has proposed new Exile reward tiers. They apply to new locks and extensions only: locks already running keep the tier they have.
+      </p>
+      <div className="table-wrap tier-diff">
+        <table className="table" aria-label="Proposed tiers">
+          <thead>
+            <tr>
+              <th scope="col">Tier</th>
+              <th scope="col">Lock at least</th>
+              <th scope="col">Multiplier</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pool.data.pendingTiers.map((t) => {
+              const name = label(t.label);
+              const was = before.get(name);
+              const lenChanged = !was || was.minDuration !== t.minDuration;
+              const multChanged = !was || was.multiplierBps !== t.multiplierBps;
+              return (
+                <tr key={name}>
+                  <td>
+                    <TierBadge name={name} />
+                  </td>
+                  <td>
+                    {lockLen(t.minDuration)} {was && lenChanged && <span className="faint tier-was">(was {lockLen(was.minDuration)})</span>}
+                  </td>
+                  <td>
+                    {mult(t.multiplierBps)} {was && multChanged && <span className="faint tier-was">(was {mult(was.multiplierBps)})</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <Row k="Executable" v={eta > now ? `in ${duration(eta - now)} (${date(eta)})` : expired ? `expired ${date(eta + EXECUTION_WINDOW)}` : `now, until ${date(eta + EXECUTION_WINDOW)}`} />
+      <div className="lock-actions">
+        <TxButton
+          disabledReason={eta > now ? "Timelock still running" : expired ? "Expired, the steward can propose it again" : undefined}
+          request={() => ({ address: d.exile, abi: exileAbi, functionName: "executeTiers", args: [poolId] })}
+        >
+          Execute
+        </TxButton>
+        {isSteward && (
+          <TxButton className="btn btn-ghost" request={() => ({ address: lodestar, abi: lodestarAbi, functionName: "cancelTiers" })}>
+            Cancel change
+          </TxButton>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** A tier's minimum lock: whole days as days, anything shorter in hours (Exile allows tiers from one hour). */
+function lockLen(seconds: number): string {
+  return seconds % 86400 === 0 ? dayCount(seconds / 86400) : `${+(seconds / 3600).toFixed(2)} hour${seconds === 3600 ? "" : "s"}`;
 }
 
 type Cfg = { burnBps: number; holdersBps: number; treasuryBps: number; swapper: Address; maxSlippageBps: number; tokenToHolders: boolean };

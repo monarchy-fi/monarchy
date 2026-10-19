@@ -13,7 +13,13 @@
   /* kept for the few places that signal state; everything else is black, white and grey */
   --green: #9be0b0;
   --amber: #e6c27a;
-  --gold: #e9c46a;
+  --gold: #e2b33f;
+  /* the crown's metal: highlights (the feature stat, the Monarch tier, gold badges) use it in place of white */
+  --gold-hi: #f6dc8c;
+  --gold-lo: #b88a2b;
+  --gold-fill: linear-gradient(135deg, var(--gold-hi) 0%, var(--gold) 48%, var(--gold-lo) 100%);
+  --gold-ink: #1c1405;
+  --gold-ink-soft: #5c4413;
   --red: #ff8080;
   --radius: 3px;
   --radius-sm: 2px;
@@ -346,8 +352,8 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .stat-label { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; }
 .stat-value { font: 700 22px var(--mono); margin-top: 10px; font-variant-numeric: tabular-nums; line-height: 1.2; min-height: 26px; overflow-wrap: anywhere; letter-spacing: -0.02em; }
 .stat-hint { font-size: 12.5px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
-.stat-feature { background: var(--white); color: #000; }
-.stat-feature .stat-label, .stat-feature .stat-hint, .stat-feature .amt-sym { color: #444; }
+.stat-feature { background: var(--gold-fill); color: var(--gold-ink); }
+.stat-feature .stat-label, .stat-feature .stat-hint, .stat-feature .amt-sym { color: var(--gold-ink-soft); }
 .amt-sym { color: var(--muted); font-weight: 500; font-size: 0.66em; letter-spacing: 0.04em; }
 .stats + .stats { border-top: 0; }
 
@@ -360,11 +366,11 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 .tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-bottom: 4px; border: 1px solid var(--line); }
 .tier { text-align: left; background: transparent; border: 0; box-shadow: -1px 0 0 var(--line); padding: 18px 16px; color: var(--text); font: inherit; display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative; }
 .tier-bars { font: 700 12px var(--mono); letter-spacing: 1px; color: var(--muted); }
-.tier-monarch { background: var(--white); color: #000; }
-.tier-monarch .tier-len, .tier-monarch .tier-bars { color: #444; }
+.tier-monarch { background: var(--gold-fill); color: var(--gold-ink); }
+.tier-monarch .tier-len, .tier-monarch .tier-bars { color: var(--gold-ink-soft); }
 .tiers.pick .tier { cursor: pointer; transition: background 0.15s, color 0.15s; }
 .tiers.pick .tier:hover { background: #121212; }
-.tiers.pick .tier-monarch:hover { background: #e8e8e8; }
+.tiers.pick .tier-monarch:hover { background: var(--gold-fill); filter: brightness(1.06); }
 .tier.active, .tiers.pick .tier.active:hover { outline: 1px solid var(--white); outline-offset: -1px; }
 .tier-monarch.active { outline-color: #000; outline-offset: -4px; }
 .tier-mult { font: 800 30px/1.1 var(--mono); margin-top: 4px; letter-spacing: -0.03em; }
@@ -374,14 +380,14 @@ p.small { margin: 10px 0 0; line-height: 1.5; }
 
 /* ------------------------------------------------------------------ badges */
 .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--radius-sm); font: 600 10.5px/1.6 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; border: 1px solid var(--line-2); color: var(--muted); white-space: nowrap; }
-.badge-gold { color: #000; background: var(--white); border-color: var(--white); }
+.badge-gold { color: var(--gold-ink); background: var(--gold); border-color: var(--gold); }
 .badge-green { color: var(--green); border-color: rgba(155, 224, 176, 0.45); }
 .badge-amber { color: var(--amber); border-color: rgba(230, 194, 122, 0.45); }
 .badge-red { color: var(--red); border-color: rgba(255, 128, 128, 0.45); white-space: normal; }
 .badge-grey { color: var(--muted); }
 .badge-silver { color: var(--text); border-color: var(--muted); }
 .badge-purple { color: var(--text); border-color: var(--text); }
-.tier-monarch .badge-gold { background: #000; color: #fff; border-color: #000; }
+.tier-monarch .badge-gold { background: var(--gold-ink); color: var(--gold-hi); border-color: var(--gold-ink); }
 
 /* ------------------------------------------------------------------ buttons */
 .btn { position: relative; background: var(--white); color: #000; border: 1px solid var(--white); padding: 10px 18px; border-radius: var(--radius-sm); font: 700 12.5px/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; text-decoration: none; transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s; }
@@ -544,6 +550,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .tier-pick-head { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); }
 .tier-pick-name { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .tier-pick select { width: 100%; }
+.tier-diff { margin: 12px 0 14px; }
+.pending-list { display: inline-flex; flex-wrap: wrap; gap: 4px; text-decoration: none; }
 
 /* ------------------------------------------------------------------ charts */
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
@@ -699,6 +707,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .tier-pick-head { display: none; }
   .tier-pick-row { grid-template-columns: 1fr 1fr; gap: 8px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
   .tier-pick-name { grid-column: 1 / -1; }
+  .tier-diff .table th, .tier-diff .table td { white-space: normal; padding: 10px 8px; }
+  .tier-diff .tier-was { display: block; }
   .rolls .card-head .tabs { display: flex; width: 100%; }
   .rolls .card-head .tab { flex: 1; padding: 9px 8px; }
   .summary .row-v { min-width: 0; }
