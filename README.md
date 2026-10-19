@@ -88,19 +88,19 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [SECURI
 
 ## Live on Elysium testnet
 
-Sample Token (SMPL) is launched on Ascend's live testnet launchpad, with its creator role held by a Lodestar. Every feature has been exercised on chain through the real PancakeSwap Infinity pool: fee burns, an EMA-guarded buyback, holder rewards dripping to Exile locks at several tiers, the Team Treasury stream, lock extension, a config change waiting out its 12 hour timelock, and a creator role locked to the router forever that refuses to move except through the 7 day upgrade path. A second token, Sample Stock Token (SMPLS), is quoted in a mock stock token and sends its token-side fees to Exile lockers, so lockers earn and claim both SMPLS and the stock token, while the buyback, holder rewards and treasury run in the stock token. Contract sources are verified on the explorer.
+Sample Token (SMPL) is launched on Ascend's live testnet launchpad with MONARCHY's planned settings: a 20/50/30 split of quote fees between buyback and burn, holders and the Team Treasury, token-side fees paid to Exile lockers, and the 0.5x/1x/2x/4x tiers. Its creator role is held by a Lodestar and locked to it forever. Every feature has been exercised on chain through the real PancakeSwap Infinity pool: an EMA-guarded buyback and burn, holder rewards in both the quote and the token dripping to Exile locks at all four tiers, the Team Treasury stream, lock extension, a config change held by its 12 hour timelock, and a creator role that refuses to move except through the 7 day upgrade path. A second token, Sample Stock Token (SMPLS), is quoted in a mock stock token and burns its token-side fees instead, so both routes are live; its buyback, holder rewards and treasury run in the stock token. Contract sources are verified on the explorer.
 
 | Contract | Address |
 |---|---|
-| LodestarFactory | [`0x500E6E78AeBAc7b4a8e0684beFC33868126D706c`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x500E6E78AeBAc7b4a8e0684beFC33868126D706c) |
-| Lodestar implementation | [`0x7e78E4EAf2371240091b8CC2b7f6754212763c64`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x7e78E4EAf2371240091b8CC2b7f6754212763c64) |
-| Exile | [`0x3A3b2500f252BDa21B38fD9260abB7B482E0e2ca`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x3A3b2500f252BDa21B38fD9260abB7B482E0e2ca) |
-| Sandfall | [`0x24975F29B1a11E9718ACeD3A25cd6cdbcbc88AFF`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x24975F29B1a11E9718ACeD3A25cd6cdbcbc88AFF) |
-| AscendSwapper | [`0x39Cc4Dd18d4D00e996AfE06c7180c173aa768aD0`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x39Cc4Dd18d4D00e996AfE06c7180c173aa768aD0) |
-| Sample Token (SMPL) | [`0x3abA3a1FC9ea0AfF716b4663b48e0fe5bf7992DA`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x3abA3a1FC9ea0AfF716b4663b48e0fe5bf7992DA) |
-| SMPL Lodestar | [`0x2859676A7ee0125a3c41557D3524e309B29bF84d`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x2859676A7ee0125a3c41557D3524e309B29bF84d) |
-| Sample Stock Token (SMPLS, quoted in a mock stock token) | [`0x828CDD440dc05a429c6153ff46c9491fdb2bedae`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x828CDD440dc05a429c6153ff46c9491fdb2bedae) |
-| SMPLS Lodestar | [`0xb977Da1493be24762B349F3dB9257B4AAdF74F13`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xb977Da1493be24762B349F3dB9257B4AAdF74F13) |
+| LodestarFactory | [`0x5BAF464E44d395FFCFCA8b8b254686772F038d57`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x5BAF464E44d395FFCFCA8b8b254686772F038d57) |
+| Lodestar implementation | [`0x42c65E78f98C5Fe08c4ab1BcdD16f091347Af627`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x42c65E78f98C5Fe08c4ab1BcdD16f091347Af627) |
+| Exile | [`0x6B798DBD934eFA0350fc0A0964EdE5E7F369d013`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x6B798DBD934eFA0350fc0A0964EdE5E7F369d013) |
+| Sandfall | [`0xCf7080960BB9E9e02a71a8264dB07380Fe7dE844`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xCf7080960BB9E9e02a71a8264dB07380Fe7dE844) |
+| AscendSwapper | [`0xE993233316565bBC12F5397d6705446162FC5894`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xE993233316565bBC12F5397d6705446162FC5894) |
+| Sample Token (SMPL) | [`0x99095be831E48a9D32340577ED6937B5CE4918BB`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x99095be831E48a9D32340577ED6937B5CE4918BB) |
+| SMPL Lodestar | [`0x94FBB86DC8F17cED9821e421039b385Ac7Ea296e`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x94FBB86DC8F17cED9821e421039b385Ac7Ea296e) |
+| Sample Stock Token (SMPLS, quoted in a mock stock token) | [`0x463f6EBC7D9C3A303877151c4B213871d68B79FB`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x463f6EBC7D9C3A303877151c4B213871d68B79FB) |
+| SMPLS Lodestar | [`0x63E050E43758826244DC49cF134b461f208B57d2`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x63E050E43758826244DC49cF134b461f208B57d2) |
 
 <details>
 <summary>Ascend addresses used</summary>
