@@ -544,6 +544,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
 .tier-pick-head { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); }
 .tier-pick-name { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .tier-pick select { width: 100%; }
+.tier-diff { margin: 12px 0 14px; }
 
 /* ------------------------------------------------------------------ charts */
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
@@ -699,6 +700,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--white); width:
   .tier-pick-head { display: none; }
   .tier-pick-row { grid-template-columns: 1fr 1fr; gap: 8px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
   .tier-pick-name { grid-column: 1 / -1; }
+  .tier-diff .table th, .tier-diff .table td { white-space: normal; padding: 10px 8px; }
+  .tier-diff .tier-was { display: block; }
   .rolls .card-head .tabs { display: flex; width: 100%; }
   .rolls .card-head .tab { flex: 1; padding: 9px 8px; }
   .summary .row-v { min-width: 0; }
