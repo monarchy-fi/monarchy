@@ -22,10 +22,10 @@ export function FeeFlow({ drip, burn, holders, treasury, tokenToHolders }: { dri
   const share = (bps?: number) => (bps === undefined ? "Quote share" : `${pct(bps)} for MONARCHY`);
   const tokenSide: Dest = {
     key: "fire",
-    mark: "[x|+]",
-    title: "Burned / sent to lockers",
+    mark: "[+|x]",
+    title: "Sent to lockers / burned",
     tag: tokenToHolders === undefined ? "All token-side fees" : `All token-side fees, ${tokenToHolders ? "sent to lockers" : "burned"} for MONARCHY`,
-    body: `Burned by default. The creator can send all of it to Exile lockers instead, paid in the token itself over ${drip} days.`,
+    body: `Sent to Exile lockers by default, paid in the token itself over ${drip} days. The creator can burn all of it instead.`,
   };
   const quoteSide: Dest[] = [
     { key: "burn", mark: "[∞]", title: "Buyback and burn", tag: share(burn), body: "Buys the token on Ascend, then burns it." },

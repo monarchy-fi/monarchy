@@ -43,7 +43,7 @@ export function LodestarPage() {
         </h1>
         <p className="muted">
           A fee router for one Ascend token. It holds the token's creator role, so every creator fee lands here. Anyone
-          can route it. Token-side fees are burned, or, if the creator chooses, all paid to Exile lockers. Quote-side
+          can route it. Token-side fees are paid to Exile lockers, or, if the creator chooses, all burned. Quote-side
           fees split between buyback and burn, holder rewards in Exile and a Team Treasury streamed through Sandfall.
           No fees.
         </p>
@@ -356,17 +356,17 @@ function lockLen(seconds: number): string {
 
 type Cfg = { burnBps: number; holdersBps: number; treasuryBps: number; swapper: Address; maxSlippageBps: number; tokenToHolders: boolean };
 
-/** Burn the token-side fees, or pay all of them to Exile lockers. One choice per token, behind the timelock. */
+/** Pay all the token-side fees to Exile lockers, or burn them. One choice per token, behind the timelock. */
 function TokenRoute({ value, onChange, name }: { value: boolean; onChange: (v: boolean) => void; name: string }) {
   return (
     <div className="check-list">
       <label className="check">
-        <input type="radio" name={name} checked={!value} onChange={() => onChange(false)} />
-        Burn all token-side fees
-      </label>
-      <label className="check">
         <input type="radio" name={name} checked={value} onChange={() => onChange(true)} />
         Pay all token-side fees to Exile lockers (dripped over 3 days, in the token itself)
+      </label>
+      <label className="check">
+        <input type="radio" name={name} checked={!value} onChange={() => onChange(false)} />
+        Burn all token-side fees
       </label>
     </div>
   );
@@ -457,8 +457,8 @@ function Steward({
 const DEFAULT_TIERS = [
   { name: "Peasant", days: 1, mult: 0.5 },
   { name: "Knight", days: 3, mult: 1 },
-  { name: "Duke", days: 7, mult: 1.5 },
-  { name: "Monarch", days: 30, mult: 3 },
+  { name: "Duke", days: 7, mult: 2 },
+  { name: "Monarch", days: 30, mult: 4 },
 ];
 type TierChoice = (typeof DEFAULT_TIERS)[number];
 /** The lock lengths and multipliers a tier can pick from. Every step stays inside Exile's rules: at least an hour, at most 5x. */
@@ -468,9 +468,9 @@ const TIER_MULTS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 const WINDOW_DAYS = [1, 3, 7, 14, 30, 60, 90, 180, 365];
 const dayCount = (n: number) => (n === 365 ? "1 year" : `${n} day${n === 1 ? "" : "s"}`);
 
-/** The four tiers with their names fixed: each picks a lock length and a multiplier from a list. A choice that would
- * break the order (each tier longer than the one before, its multiplier no lower) is greyed out, so the table is
- * always one Exile accepts. */
+/** The four tiers with their names fixed: each picks a lock length and a multiplier from a list. Every choice stays
+ * pickable; one that breaks the order (each tier longer than the one before, its multiplier no lower) is outlined,
+ * and `tierRules` says what to fix before the table can be activated. */
 function TierPicker({ tiers, setTiers }: { tiers: TierChoice[]; setTiers: (t: TierChoice[]) => void }) {
   const edit = (i: number, patch: Partial<TierChoice>) => setTiers(tiers.map((t, j) => (j === i ? { ...t, ...patch } : t)));
   return (
@@ -483,6 +483,8 @@ function TierPicker({ tiers, setTiers }: { tiers: TierChoice[]; setTiers: (t: Ti
       {tiers.map((t, i) => {
         const prev = tiers[i - 1];
         const next = tiers[i + 1];
+        const daysBad = (!!prev && t.days <= prev.days) || (!!next && next.days <= t.days);
+        const multBad = (!!prev && t.mult < prev.mult) || (!!next && next.mult < t.mult);
         return (
           <div key={t.name} className="tier-pick-row" role="row">
             <span className="tier-pick-name" role="cell">
@@ -490,18 +492,18 @@ function TierPicker({ tiers, setTiers }: { tiers: TierChoice[]; setTiers: (t: Ti
               <span className="muted small">{tagline(t.name)}</span>
             </span>
             <span role="cell">
-              <select className="input input-sm" aria-label={`${t.name} lock length`} value={t.days} onChange={(e) => edit(i, { days: Number(e.target.value) })}>
+              <select className="input input-sm" aria-label={`${t.name} lock length`} aria-invalid={daysBad} value={t.days} onChange={(e) => edit(i, { days: Number(e.target.value) })}>
                 {TIER_DAYS.map((n) => (
-                  <option key={n} value={n} disabled={(!!prev && n <= prev.days) || (!!next && n >= next.days)}>
+                  <option key={n} value={n}>
                     {dayCount(n)}
                   </option>
                 ))}
               </select>
             </span>
             <span role="cell">
-              <select className="input input-sm" aria-label={`${t.name} multiplier`} value={t.mult} onChange={(e) => edit(i, { mult: Number(e.target.value) })}>
+              <select className="input input-sm" aria-label={`${t.name} multiplier`} aria-invalid={multBad} value={t.mult} onChange={(e) => edit(i, { mult: Number(e.target.value) })}>
                 {TIER_MULTS.map((m) => (
-                  <option key={m} value={m} disabled={(!!prev && m < prev.mult) || (!!next && m > next.mult)}>
+                  <option key={m} value={m}>
                     {m}x
                   </option>
                 ))}
@@ -527,8 +529,8 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
     ],
     query: POLL.query,
   });
-  const [split, setSplit] = useState({ burn: 40, holders: 40, treasury: 20 });
-  const [toHolders, setToHolders] = useState(false);
+  const [split, setSplit] = useState({ burn: 20, holders: 50, treasury: 30 });
+  const [toHolders, setToHolders] = useState(true);
   const [treasury, setTreasury] = useState("");
   const [windowDays, setWindowDays] = useState(DEFAULT_TREASURY_WINDOW_DAYS);
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
@@ -693,8 +695,8 @@ function tierRules(tiers: { name: string; days: number; mult: number }[]): strin
     if (new TextEncoder().encode(t.name).length > 32) return `"${t.name}" is too long: names fit 32 bytes.`;
     if (!(sec(t) >= 3600)) return `${t.name} must be at least 1 hour long.`;
     if (!(bps(t) >= 1 && bps(t) <= 50_000)) return `${t.name}'s multiplier must be above 0x and at most 5x.`;
-    if (i > 0 && !(sec(t) > sec(tiers[i - 1]))) return `${t.name} must be longer than ${tiers[i - 1].name}.`;
-    if (i > 0 && bps(t) < bps(tiers[i - 1])) return `${t.name}'s multiplier can't be lower than ${tiers[i - 1].name}'s.`;
+    if (i > 0 && !(sec(t) > sec(tiers[i - 1]))) return `${t.name}'s lock must be longer than ${tiers[i - 1].name}'s (${dayCount(tiers[i - 1].days)}).`;
+    if (i > 0 && bps(t) < bps(tiers[i - 1])) return `${t.name}'s multiplier can't be lower than ${tiers[i - 1].name}'s (${tiers[i - 1].mult}x).`;
   }
   return undefined;
 }

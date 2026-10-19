@@ -39,7 +39,7 @@ contract DemoFlow is BaseScript {
         require(aliceKey != 0 && bobKey != 0, "set ALICE_KEY and BOB_KEY");
         address alice = vm.addr(aliceKey);
 
-        // holders buy and lock: Alice takes the crown (30 days, 3x), Bob starts as a Peasant (1 day, 0.5x)
+        // holders buy and lock: Alice takes the crown (30 days, 4x), Bob starts as a Peasant (1 day, 0.5x)
         uint256 aliceTokens = _buy(aliceKey, 2_000e6);
         uint256 bobTokens = _buy(bobKey, 1_000e6);
         vm.startBroadcast(aliceKey);

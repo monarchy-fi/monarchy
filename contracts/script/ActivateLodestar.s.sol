@@ -9,7 +9,7 @@ import {IAscendLaunchpad} from "../src/interfaces/IAscendLaunchpad.sol";
 import {MonarchTiers} from "../src/libraries/MonarchTiers.sol";
 
 /// @notice Hand the token's Ascend creator role to its Lodestar and activate it with MONARCH's defaults:
-/// 40% buyback and burn / 40% holders / 20% Team Treasury, Peasant-Knight-Duke-Monarch tiers,
+/// 20% buyback and burn / 50% holders / 30% Team Treasury, token-side fees to lockers, Peasant-Knight-Duke-Monarch tiers,
 /// a 7-day rolling treasury stream, no listing set-aside, creator role locked forever.
 /// Override with BURN_BPS, HOLDERS_BPS, TREASURY_BPS, TREASURY, SWAPPER, MAX_SLIPPAGE_BPS, ENROL_LISTING with
 /// LISTING_CAP (in the quote's units), LOCK_FOREVER (false = no lock). The buyback route is the AscendSwapper recorded in
@@ -39,13 +39,13 @@ contract ActivateLodestar is BaseScript {
         p.token = d.token;
         p.quote = d.quote;
         p.cfg = ILodestar.Config({
-            burnBps: uint16(vm.envOr("BURN_BPS", uint256(4_000))),
-            holdersBps: uint16(vm.envOr("HOLDERS_BPS", uint256(4_000))),
-            treasuryBps: uint16(vm.envOr("TREASURY_BPS", uint256(2_000))),
+            burnBps: uint16(vm.envOr("BURN_BPS", uint256(2_000))),
+            holdersBps: uint16(vm.envOr("HOLDERS_BPS", uint256(5_000))),
+            treasuryBps: uint16(vm.envOr("TREASURY_BPS", uint256(3_000))),
             swapper: swapper,
             maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(1_000))),
-            // token-side fees: burn them (default) or send them all to Exile lockers
-            tokenToHolders: vm.envOr("TOKEN_TO_HOLDERS", false)
+            // token-side fees: send them all to Exile lockers (default) or burn them
+            tokenToHolders: vm.envOr("TOKEN_TO_HOLDERS", true)
         });
         p.treasuryRecipient = vm.envAddress("TREASURY");
         p.treasuryWindow = 7 days;

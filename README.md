@@ -7,7 +7,7 @@
 ### Fee routing, locks and vesting for tokens launched on Ascend
 
 [![CI](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml/badge.svg)](https://github.com/monarchy-fi/monarchy/actions/workflows/ci.yml)
-[![Tests: 170 passing](https://img.shields.io/badge/Foundry-170%20tests%20passing-111111.svg)](contracts/test)
+[![Tests: 171 passing](https://img.shields.io/badge/Foundry-171%20tests%20passing-111111.svg)](contracts/test)
 [![Solidity 0.8.28](https://img.shields.io/badge/Solidity-0.8.28-363636.svg)](foundry.toml)
 [![Elysium testnet](https://img.shields.io/badge/Elysium%20testnet-chain%2099801-111111.svg)](https://elysium.kinetiq.xyz/testnet-explorer)
 [![Protocol fees: none](https://img.shields.io/badge/protocol%20fees-none-111111.svg)](#how-it-works)
@@ -35,7 +35,7 @@ The MONARCHY token gets no special treatment. It launches on Ascend like any oth
 
 | | How MONARCHY uses it |
 |---|---|
-| **Lodestar** | Its creator role goes to its own Lodestar, locked there forever. Token-side fees are burned or paid to lockers, and the quote side splits into buyback and burn, holder rewards and the Team Treasury. |
+| **Lodestar** | Its creator role goes to its own Lodestar, locked there forever. Token-side fees are paid to lockers or burned, and the quote side splits into buyback and burn, holder rewards and the Team Treasury. |
 | **Exile** | Holders lock MONARCHY to earn the holder share of every fee, by tier from Peasant to Monarch. |
 | **Sandfall** | The Team Treasury share streams to the team in the open, never in one lump. |
 | **Garden** | Monarchy's analytics page lists every lock, vesting stream and fee router, MONARCHY's included, live from the contracts at [monarchy.fi/garden](https://monarchy.fi/garden). Locks and streams sit under MONARCHY and Others, every table filters by token address or symbol, and each router shows any change still waiting out its timelock. |
@@ -47,8 +47,8 @@ On testnet, Sample Token (SMPL) stands in for MONARCHY with exactly this setup.
 ```mermaid
 flowchart LR
     A[Ascend pool<br/>creator fees] --> L(Lodestar)
-    L -->|token side, default| B[Burned]
-    L -->|token side, if chosen| E
+    L -->|token side, default| E
+    L -->|token side, if chosen| B[Burned]
     L -->|quote, burn share| S[AscendSwapper] --> B
     L -->|quote, holder share| E[Exile<br/>3 day drip to lockers]
     L -->|quote, treasury share| T[Sandfall<br/>rolling Team Treasury stream]
@@ -56,7 +56,7 @@ flowchart LR
 
 | | What it does |
 |---|---|
-| **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`, and the team's keeper calls it every 3 hours so fees never pile up into one big payout: token-side fees are burned (or, if the creator chooses, all paid to Exile lockers in the token itself), and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Ascend's listing set-aside stays off, so the creator's whole fee share reaches the router. |
+| **Lodestar** | A fee router for one Ascend token. The creator launches on Ascend's own site and keeps the dev buy, then hands the token's *creator role* to its Lodestar. Anyone can call `distribute()`, and the team's keeper calls it every 3 hours so fees never pile up into one big payout: token-side fees are all paid to Exile lockers in the token itself (or, if the creator chooses, burned), and quote-side fees split by the creator's percentages into **buyback and burn**, **holder rewards** (Exile) and a **Team Treasury** (streamed through Sandfall). Ascend's listing set-aside stays off, so the creator's whole fee share reaches the router. |
 | **Exile** | Locks ERC-20s (including v2 LP), ERC-721s and ERC-1155s. Locks can be extended, never shortened, cancelled or transferred. ERC-20 locks earn holder rewards by tier, paid as a 3 day drip, and stop earning the second they unlock. |
 | **Sandfall** | Vesting streams (linear, with an optional cliff, or in daily, weekly or monthly steps) in any non-rebasing ERC-20 or native HYPE, each with a chart of what unlocks by when. The creator decides at creation whether a stream can be cancelled, and the site badges it. Rolling streams back Lodestar's Team Treasury. |
 
@@ -66,10 +66,10 @@ flowchart LR
 |---|---|---|---|
 | Peasant | 1 day | 0.5x | *Everyone starts somewhere.* |
 | Knight | 3 days | 1x | *Sworn to the kingdom.* |
-| Duke | 7 days | 1.5x | *Next in line.* |
-| Monarch | 1 month | 3x | *Steal the crown.* |
+| Duke | 7 days | 2x | *Next in line.* |
+| Monarch | 1 month | 4x | *Steal the crown.* |
 
-No lock, no rewards. With four holders each locking 10,000 tokens and fees dripping at 100 USDC a day, holders who keep re-locking for 30 days earn 250, 500, 750 and 1,500 USDC respectively.
+No lock, no rewards. With four holders each locking 10,000 tokens and fees dripping at 100 USDC a day, holders who keep re-locking for 30 days earn 200, 400, 800 and 1,600 USDC respectively: each tier earns twice the one below it.
 
 ## Security model
 
@@ -177,8 +177,9 @@ TOKEN=0xYourToken npm run launch:testnet
 npm run launch:testnet
 npm run launch:testnet -- --broadcast
 
-# 3. Hand the creator role to the token's Lodestar and activate it (40/40/20 split, the four
-#    tiers, 7 day treasury stream, no listing set-aside, creator role locked forever).
+# 3. Hand the creator role to the token's Lodestar and activate it (50% holders, 20% buyback,
+#    30% treasury, token-side fees to lockers, the four tiers, 7 day treasury stream, no listing
+#    set-aside, creator role locked forever).
 #    TREASURY is the address that receives the Team Treasury stream; it can never be changed.
 #    Buybacks go through the AscendSwapper from deployments/99801.json unless SWAPPER is set.
 TREASURY=0xYourTreasury npm run activate:testnet
