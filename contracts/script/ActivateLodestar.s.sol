@@ -44,8 +44,8 @@ contract ActivateLodestar is BaseScript {
             treasuryBps: uint16(vm.envOr("TREASURY_BPS", uint256(2_000))),
             swapper: swapper,
             maxSlippageBps: uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(1_000))),
-            // token-side fees: burn them (default) or send them all to Exile lockers
-            tokenToHolders: vm.envOr("TOKEN_TO_HOLDERS", false)
+            // token-side fees: send them all to Exile lockers (default) or burn them
+            tokenToHolders: vm.envOr("TOKEN_TO_HOLDERS", true)
         });
         p.treasuryRecipient = vm.envAddress("TREASURY");
         p.treasuryWindow = 7 days;

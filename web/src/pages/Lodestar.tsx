@@ -43,7 +43,7 @@ export function LodestarPage() {
         </h1>
         <p className="muted">
           A fee router for one Ascend token. It holds the token's creator role, so every creator fee lands here. Anyone
-          can route it. Token-side fees are burned, or, if the creator chooses, all paid to Exile lockers. Quote-side
+          can route it. Token-side fees are paid to Exile lockers, or, if the creator chooses, all burned. Quote-side
           fees split between buyback and burn, holder rewards in Exile and a Team Treasury streamed through Sandfall.
           No fees.
         </p>
@@ -356,17 +356,17 @@ function lockLen(seconds: number): string {
 
 type Cfg = { burnBps: number; holdersBps: number; treasuryBps: number; swapper: Address; maxSlippageBps: number; tokenToHolders: boolean };
 
-/** Burn the token-side fees, or pay all of them to Exile lockers. One choice per token, behind the timelock. */
+/** Pay all the token-side fees to Exile lockers, or burn them. One choice per token, behind the timelock. */
 function TokenRoute({ value, onChange, name }: { value: boolean; onChange: (v: boolean) => void; name: string }) {
   return (
     <div className="check-list">
       <label className="check">
-        <input type="radio" name={name} checked={!value} onChange={() => onChange(false)} />
-        Burn all token-side fees
-      </label>
-      <label className="check">
         <input type="radio" name={name} checked={value} onChange={() => onChange(true)} />
         Pay all token-side fees to Exile lockers (dripped over 3 days, in the token itself)
+      </label>
+      <label className="check">
+        <input type="radio" name={name} checked={!value} onChange={() => onChange(false)} />
+        Burn all token-side fees
       </label>
     </div>
   );
@@ -528,7 +528,7 @@ function Activate({ d, token, quote, predicted, poolId }: { d: Deployment; token
     query: POLL.query,
   });
   const [split, setSplit] = useState({ burn: 40, holders: 40, treasury: 20 });
-  const [toHolders, setToHolders] = useState(false);
+  const [toHolders, setToHolders] = useState(true);
   const [treasury, setTreasury] = useState("");
   const [windowDays, setWindowDays] = useState(DEFAULT_TREASURY_WINDOW_DAYS);
   const [tiers, setTiers] = useState(DEFAULT_TIERS);

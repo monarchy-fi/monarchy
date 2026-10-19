@@ -39,10 +39,12 @@ export function KingdomPage() {
       { address: core.token, abi: mockERC20Abi, functionName: "totalSupply" },
       { address: d?.exile, abi: exileAbi, functionName: "poolInfo", args: [core.exilePoolId ?? 0n] },
       { ...l, functionName: "creatorLockedUntil" },
+      { ...l, functionName: "totalTokenToHolders" },
+      { ...l, functionName: "config" },
     ],
     query: { enabled: !!core.lodestar && !!core.token && core.exilePoolId !== undefined, ...POLL.query },
   });
-  const [feeBurned, buybackBurned, holders, treasury, buybackQuote, dead, supply, pool, lockedUntil] = stats.data ?? [];
+  const [feeBurned, buybackBurned, holders, treasury, buybackQuote, dead, supply, pool, lockedUntil, tokenToHolders, cfg] = stats.data ?? [];
   const now = BigInt(Math.floor(Date.now() / 1000));
   const dripPerDay = pool ? (pool.periodFinish > now ? (pool.rewardRate * 86400n) / 10n ** 18n : 0n) : undefined;
   const drip = useDripDays();
@@ -109,7 +111,11 @@ export function KingdomPage() {
             <Stat label="Paid to holders" value={<Amt value={holders} decimals={qd} symbol={qs} />} hint={dripPerDay === undefined ? <Skel w="8em" /> : `${fmt(dripPerDay, qd)} ${qs ?? ""} a day dripping now`} />
             <Stat label="Team Treasury" value={<Amt value={treasury} decimals={qd} symbol={qs} />} hint="Streamed through Sandfall" />
             <Stat label="Bought back and burned" value={<Amt value={buybackBurned} decimals={td} symbol={ts} compact />} hint={buybackQuote === undefined ? <Skel w="7em" /> : `${fmt(buybackQuote, qd)} ${qs ?? ""} spent`} />
-            <Stat label="Burned from token fees" value={<Amt value={feeBurned} decimals={td} symbol={ts} compact />} hint="Sent straight to the burn address" />
+            {cfg?.tokenToHolders ? (
+              <Stat label="Token fees to lockers" value={<Amt value={tokenToHolders} decimals={td} symbol={ts} compact />} hint="Dripped to Exile lockers" />
+            ) : (
+              <Stat label="Burned from token fees" value={<Amt value={feeBurned} decimals={td} symbol={ts} compact />} hint="Sent straight to the burn address" />
+            )}
             <Stat
               label={ts ? `Locked ${ts}` : "Locked"}
               value={<Amt value={locked?.amount} decimals={td} symbol={ts} compact />}
